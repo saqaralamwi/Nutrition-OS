@@ -1,25 +1,50 @@
 {
   "expo": {
-    "name": "clinical-nutrition-app",
+    "name": "التغذية السريرية",
     "slug": "clinical-nutrition-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "clinical-nutrition",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "يستخدم هذا التطبيق الكاميرا لتصوير المستندات الطبية."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1B6B4A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.clinical.nutrition.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "root": "./app"
+        }
+      ],
+      "expo-sqlite",
+      "expo-font",
+      "expo-splash-screen"
+    ],
+    "extra": {
+      "router": {
+        "origin": false,
+        "root": "./app"
+      },
+      "eas": {
+        "projectId": "75cbdc8b-145f-40b3-9962-3efaa7977257"
+      }
     }
   }
 }
