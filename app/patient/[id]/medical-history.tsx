@@ -2,9 +2,9 @@ import {
   View,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -19,6 +19,7 @@ import DropdownField from '../../../src/presentation/components/DropdownField';
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import MultiSelect from '../../../src/presentation/components/MultiSelect';
 import Button from '../../../src/presentation/components/Button';
+import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 
 const COMORBIDITY_OPTIONS = [
   { label: 'سكري', value: 'diabetes' },
@@ -69,8 +70,9 @@ export default function MedicalHistoryScreen() {
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isValid },
   } = useForm<MedicalHistoryFormValues>({
+    mode: 'onChange',
     resolver: zodResolver(medicalHistorySchema),
     defaultValues: {
       chiefComplaint: '',
@@ -128,31 +130,35 @@ export default function MedicalHistoryScreen() {
     }
   }
 
-  const onSubmit = useCallback(async (values: MedicalHistoryFormValues) => {
-    try {
-      setIsSaving(true);
-      const { SaveMedicalHistoryUseCase } = await import('../../../src/domain/use-cases/SaveMedicalHistoryUseCase');
-      const useCase = new SaveMedicalHistoryUseCase();
-      await useCase.execute({
-        patientId,
-        chiefComplaint: values.chiefComplaint,
-        currentDiagnosis: values.currentDiagnosis,
-        icd10Code: values.icd10Code || undefined,
-        comorbidities: values.comorbidities.length > 0 ? JSON.stringify(values.comorbidities) : undefined,
-        surgicalHistory: values.surgicalHistory || undefined,
-        pastMedicalHistory: values.pastMedicalHistory || undefined,
-        familyHistory: values.familyHistory || undefined,
-        medicationAllergies: values.medicationAllergies || undefined,
-        covid19Status: values.covid19Status,
-        comments: values.comments || undefined,
-      });
-      router.replace({ pathname: "/patient/[id]/social-history", params: { id: patientId } });
-    } catch {
-      /* error handled via toast */
-    } finally {
-      setIsSaving(false);
-    }
-  }, [patientId, router]);
+  const handleSave = async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
+    let success = false;
+    await handleSubmit(async (values) => {
+      try {
+        setIsSaving(true);
+        const { SaveMedicalHistoryUseCase } = await import('../../../src/domain/use-cases/SaveMedicalHistoryUseCase');
+        const useCase = new SaveMedicalHistoryUseCase();
+        await useCase.execute({
+          patientId,
+          chiefComplaint: values.chiefComplaint,
+          currentDiagnosis: values.currentDiagnosis,
+          icd10Code: values.icd10Code || undefined,
+          comorbidities: values.comorbidities.length > 0 ? JSON.stringify(values.comorbidities) : undefined,
+          surgicalHistory: values.surgicalHistory || undefined,
+          pastMedicalHistory: values.pastMedicalHistory || undefined,
+          familyHistory: values.familyHistory || undefined,
+          medicationAllergies: values.medicationAllergies || undefined,
+          covid19Status: values.covid19Status,
+          comments: values.comments || undefined,
+        });
+        success = true;
+      } catch {
+        /* error handled via toast */
+      } finally {
+        setIsSaving(false);
+      }
+    })();
+    return success ? patientId : undefined;
+  };
 
   const renderDropdown = (name: keyof MedicalHistoryFormValues, label: string, options: readonly { label: string; value: string }[]) => (
     <DropdownField
@@ -251,22 +257,13 @@ export default function MedicalHistoryScreen() {
           {renderTextInput('comments', 'ملاحظات إضافية', { multiline: true })}
         </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <Button
-            title="حفظ"
-            onPress={handleSubmit(onSubmit)}
-            loading={isSaving}
-            disabled={isSaving}
-            icon={<Ionicons name="checkmark" size={20} color={colors.primaryContrast} />}
-          />
-          <Button
-            title="إلغاء"
-            onPress={() => router.back()}
-            variant="secondary"
-            disabled={isSaving}
-          />
-        </View>
+      <TripleActionFooter
+        patientId={patientId}
+        screenKey="medical-history"
+        onSave={handleSave}
+        isSaving={isSaving}
+        isValid={isValid}
+      />
 
         <View style={styles.spacer} />
       </ScrollView>

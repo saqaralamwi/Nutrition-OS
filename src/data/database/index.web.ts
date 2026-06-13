@@ -1,6 +1,7 @@
 import { Database } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { schema } from './schema';
+import { migrations } from './migrations';
 import { seedDatabase } from './seed';
 import Patient from '../models/Patient';
 import SocialHistory from '../models/SocialHistory';
@@ -20,6 +21,8 @@ import LaboratoryRecord from '../models/LaboratoryRecord';
 import DischargeSummary from '../models/DischargeSummary';
 import FoodItem from '../models/FoodItem';
 import MealPlan from '../models/MealPlan';
+import AuditLog from '../models/AuditLog';
+import { setupAuditTriggers } from './auditTrigger';
 
 const modelClasses = [
   Patient,
@@ -40,6 +43,7 @@ const modelClasses = [
   DischargeSummary,
   FoodItem,
   MealPlan,
+  AuditLog,
 ];
 
 const DB_KEY = '__WATERMELONDB_WEB__';
@@ -53,11 +57,14 @@ export async function getDatabase(): Promise<Database> {
   const adapter = new LokiJSAdapter({
     dbName: 'clinical_nutrition',
     schema,
+    migrations,
     useWebWorker: false,
     useIncrementalIndexedDB: true,
   });
 
   console.log('[WatermelonDB] Initializing LokiJS adapter for web...');
+
+  setupAuditTriggers();
 
   const db = new Database({
     adapter,

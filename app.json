@@ -35,7 +35,21 @@
       ],
       "expo-sqlite",
       "expo-font",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "يستخدم التطبيق معرض الصور لرفع تقارير التحاليل الطبية.",
+          "cameraPermission": "يستخدم التطبيق الكاميرا لتصوير تقارير التحاليل الطبية مباشرة."
+        }
+      ],
+      [
+        "rn-mlkit-ocr",
+        {
+          "ocrModels": ["latin"],
+          "ocrUseBundled": true
+        }
+      ]
     ],
     "extra": {
       "router": {

@@ -17,6 +17,7 @@ import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import Button from '../../../src/presentation/components/Button';
+import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 
 const NUTRITION_DIAGNOSIS_OPTIONS = [
@@ -129,8 +130,9 @@ export default function InterventionScreen() {
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isValid },
   } = useForm<InterventionFormData>({
+    mode: 'onChange',
     resolver: zodResolver(interventionSchema),
     defaultValues: {
       nutritionDiagnosis: '',
@@ -209,48 +211,51 @@ export default function InterventionScreen() {
     }
   }
 
-  const onSubmit = useCallback(async (data: InterventionFormData) => {
-    try {
-      setIsSaving(true);
-      const { SaveInterventionUseCase } = await import('../../../src/domain/use-cases/SaveInterventionUseCase');
-      const uc = new SaveInterventionUseCase();
+  const handleSave = async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
+    let success = false;
+    await handleSubmit(async (data) => {
+      try {
+        setIsSaving(true);
+        const { SaveInterventionUseCase } = await import('../../../src/domain/use-cases/SaveInterventionUseCase');
+        const uc = new SaveInterventionUseCase();
 
-      const parseNum = (v: string) => {
-        const n = parseFloat(v);
-        return isNaN(n) ? undefined : n;
-      };
+        const parseNum = (v: string) => {
+          const n = parseFloat(v);
+          return isNaN(n) ? undefined : n;
+        };
 
-      await uc.execute({
-        id: existingId ?? undefined,
-        patientId,
-        nutritionDiagnosis: data.nutritionDiagnosis,
-        mainGoal: data.mainGoal,
-        dietType: data.dietType,
-        foodTexture: data.foodTexture,
-        routeOfFeeding: data.routeOfFeeding,
-        followUpInterval: data.followUpInterval,
-        targetCalories: parseNum(data.targetCalories),
-        targetProtein: parseNum(data.targetProtein),
-        targetCarbohydrates: parseNum(data.targetCarbohydrates),
-        targetFat: parseNum(data.targetFat),
-        fluidAllowance: parseNum(data.fluidAllowance),
-        dietModifications: data.dietModifications || undefined,
-        dietRecommendations: data.dietRecommendations || undefined,
-        supplementPlan: data.supplementPlan || undefined,
-        behavioralInstructions: data.behavioralInstructions || undefined,
-        linkedFindings: data.linkedFindings || undefined,
-        status: 'active',
-        comments: data.comments || undefined,
-      });
+        await uc.execute({
+          id: existingId ?? undefined,
+          patientId,
+          nutritionDiagnosis: data.nutritionDiagnosis,
+          mainGoal: data.mainGoal,
+          dietType: data.dietType,
+          foodTexture: data.foodTexture,
+          routeOfFeeding: data.routeOfFeeding,
+          followUpInterval: data.followUpInterval,
+          targetCalories: parseNum(data.targetCalories),
+          targetProtein: parseNum(data.targetProtein),
+          targetCarbohydrates: parseNum(data.targetCarbohydrates),
+          targetFat: parseNum(data.targetFat),
+          fluidAllowance: parseNum(data.fluidAllowance),
+          dietModifications: data.dietModifications || undefined,
+          dietRecommendations: data.dietRecommendations || undefined,
+          supplementPlan: data.supplementPlan || undefined,
+          behavioralInstructions: data.behavioralInstructions || undefined,
+          linkedFindings: data.linkedFindings || undefined,
+          status: 'active',
+          comments: data.comments || undefined,
+        });
 
-      showToast('تم حفظ خطة التدخل', 'success');
-      router.replace({ pathname: "/patient/[id]/diet-plan", params: { id: patientId } });
-    } catch {
-      showToast('فشل في الحفظ', 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [existingId, patientId, showToast, router]);
+        success = true;
+      } catch {
+        /* error handled via toast */
+      } finally {
+        setIsSaving(false);
+      }
+    })();
+    return success ? patientId : undefined;
+  };
 
   const w = watch;
 
@@ -480,22 +485,13 @@ export default function InterventionScreen() {
           />
         </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <Button
-            title="حفظ خطة التدخل"
-            onPress={handleSubmit(onSubmit)}
-            loading={isSaving}
-            disabled={isSaving}
-            icon={<Ionicons name="checkmark" size={20} color={colors.primaryContrast} />}
-          />
-          <Button
-            title="إلغاء"
-            onPress={() => router.back()}
-            variant="secondary"
-            disabled={isSaving}
-          />
-        </View>
+        <TripleActionFooter
+          patientId={patientId}
+          screenKey="intervention"
+          onSave={handleSave}
+          isSaving={isSaving}
+          isValid={isValid}
+        />
 
         <View style={styles.spacer} />
       </ScrollView>

@@ -5,6 +5,14 @@ import { Patient, CreatePatientInput } from '../../domain/entities/Patient';
 import { IPatientRepository, PatientSearchQuery, SortOrder } from '../../domain/repositories/IPatientRepository';
 
 function toDomain(model: PatientModel): Patient {
+  let incompleteArr: string[] = [];
+  if (model.incompleteSections) {
+    try {
+      incompleteArr = JSON.parse(model.incompleteSections);
+    } catch {
+      incompleteArr = [];
+    }
+  }
   return {
     id: model.id,
     fileNumber: model.fileNumber,
@@ -23,6 +31,7 @@ function toDomain(model: PatientModel): Patient {
     patientType: model.patientType as any,
     status: model.status as any,
     notes: model.notes || null,
+    incompleteSections: incompleteArr,
     createdAt: model.createdAt?.toISOString() || new Date().toISOString(),
     updatedAt: model.updatedAt?.toISOString() || new Date().toISOString(),
   };
@@ -47,7 +56,15 @@ export class PatientRepository implements IPatientRepository {
     const db = await getDatabase();
     const conditions: any[] = [];
 
-    if (query.name) conditions.push(Q.where('full_name', Q.like(`%${query.name}%`)));
+    if (query.name) {
+      conditions.push(
+        Q.or(
+          Q.where('full_name', Q.like(`%${query.name}%`)),
+          Q.where('file_number', Q.like(`%${query.name}%`)),
+          Q.where('primary_diagnosis', Q.like(`%${query.name}%`))
+        )
+      );
+    }
     if (query.department) conditions.push(Q.where('department', query.department));
     if (query.status) conditions.push(Q.where('status', query.status));
     if (query.diagnosis) conditions.push(Q.where('primary_diagnosis', Q.like(`%${query.diagnosis}%`)));
@@ -96,8 +113,9 @@ export class PatientRepository implements IPatientRepository {
         if (input.referringPhysician) record.referringPhysician = input.referringPhysician;
         record.primaryDiagnosis = input.primaryDiagnosis;
         record.patientType = input.patientType;
-        record.status = 'active';
+        record.status = input.status || 'active';
         if (input.notes) record.notes = input.notes;
+        if (input.incompleteSections) record.incompleteSections = JSON.stringify(input.incompleteSections);
       });
     });
     return toDomain(result);
@@ -123,6 +141,7 @@ export class PatientRepository implements IPatientRepository {
         record.patientType = patient.patientType;
         record.status = patient.status;
         if (patient.notes) record.notes = patient.notes;
+        record.incompleteSections = patient.incompleteSections ? JSON.stringify(patient.incompleteSections) : '';
       });
     });
   }

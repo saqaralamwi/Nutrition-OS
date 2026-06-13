@@ -1,5 +1,5 @@
 export type PatientGender = 'male' | 'female';
-export type PatientStatus = 'active' | 'discharged' | 'follow-up';
+export type PatientStatus = 'active' | 'discharged' | 'follow-up' | 'complete' | 'incomplete';
 export type PatientType = 'inpatient' | 'outpatient' | 'consultation';
 
 export interface Patient {
@@ -21,6 +21,7 @@ export interface Patient {
   patientType: PatientType;
   status: PatientStatus;
   notes: string | null;
+  incompleteSections?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -41,4 +42,6 @@ export interface CreatePatientInput {
   primaryDiagnosis: string;
   patientType: PatientType;
   notes?: string | null;
+  status?: PatientStatus;
+  incompleteSections?: string[] | null;
 }

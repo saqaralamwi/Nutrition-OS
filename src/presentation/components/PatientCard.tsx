@@ -34,10 +34,18 @@ export default function PatientCard({ patient, onPress, onDelete }: PatientCardP
   const statusLabel = STATUS_LABELS[patient.status] || patient.status;
   const statusColor = STATUS_COLORS[patient.status] || colors.textDisabled;
 
-  const admissionDate = new Date(patient.admissionDate).toLocaleDateString(
-    'ar-SA',
-    { day: '2-digit', month: '2-digit', year: 'numeric' }
-  );
+  const getDisplayDate = (dateVal: any) => {
+    if (!dateVal) {
+      return new Date().toLocaleDateString('ar-YE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime()) || d.getTime() <= 0 || d.getFullYear() === 1970) {
+      return new Date().toLocaleDateString('ar-YE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+    return d.toLocaleDateString('ar-YE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const admissionDate = getDisplayDate(patient.admissionDate);
 
   return (
     <TouchableOpacity

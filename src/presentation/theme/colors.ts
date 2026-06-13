@@ -1,21 +1,21 @@
 export const colors = {
-  primary: '#1B6B4A',
+  primary: '#1B6B4A', // Forest Green Action Blocks
   primaryDark: '#145237',
-  primaryLight: '#E8F5EE',
+  primaryLight: '#1E293B',
   primaryContrast: '#FFFFFF',
 
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F8F9FA',
-  border: '#DEE2E6',
+  surface: '#1E293B', // Dark slate surface
+  surfaceSecondary: '#0F172A', // Midnight-slate background
+  border: '#334155', // Slate border
 
-  textPrimary: '#1A1A1A',
-  textSecondary: '#6C757D',
-  textDisabled: '#ADB5BD',
+  textPrimary: '#F8FAFC', // Crisp white/light-gray text
+  textSecondary: '#94A3B8', // Muted slate text
+  textDisabled: '#64748B',
 
-  success: '#28A745',
-  warning: '#FFC107',
-  danger: '#DC3545',
-  info: '#17A2B8',
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+  info: '#3B82F6',
 
   overlay: 'rgba(0, 0, 0, 0.5)',
 };

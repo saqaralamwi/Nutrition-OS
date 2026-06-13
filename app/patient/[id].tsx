@@ -8,12 +8,16 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../../src/presentation/stores/patientStore';
 import { colors, spacing } from '../../src/presentation/theme';
+import { formatSafeDate } from '../../src/utils/date';
 import { Patient } from '../../src/domain/entities/Patient';
 import { ActivityLevel } from '../../src/domain/entities/NutritionPlan';
 import { ACTIVITY_LEVELS } from '../../src/domain/entities/NutritionPlan';
@@ -39,6 +43,72 @@ const GENDER_LABELS: Record<string, string> = {
   female: 'أنثى',
 };
 
+const FREQUENCY_LABELS: Record<string, string> = {
+  once_daily: 'مرة يومياً',
+  twice_daily: 'مرتين يومياً',
+  three_times_daily: 'ثلاث مرات يومياً',
+  four_times_daily: 'أربع مرات يومياً',
+  prn: 'عند الحاجة',
+  weekly: 'أسبوعياً',
+  monthly: 'شهرياً',
+};
+
+const SUPPLEMENT_TYPE_LABELS: Record<string, string> = {
+  vitamin: 'فيتامين',
+  mineral: 'معدن',
+  protein: 'بروتين',
+  amino_acid: 'أحماض أمينية',
+  herbal: 'أعشاب',
+  oil: 'زيوت',
+  other: 'أخرى',
+};
+
+const MAIN_GOAL_OPTIONS = [
+  { label: 'إنقاص الوزن', value: 'weight_loss' },
+  { label: 'زيادة الوزن', value: 'weight_gain' },
+  { label: 'المحافظة على الوزن', value: 'maintenance' },
+  { label: 'السيطرة على السكر', value: 'glycemic_control' },
+  { label: 'النظام الكلوي', value: 'renal_diet' },
+  { label: 'بناء العضلات', value: 'muscle_building' },
+  { label: 'تحسين الصحة العامة', value: 'general_health' },
+  { label: 'تعديل السلوك الغذائي', value: 'behavioral' },
+  { label: 'تعويض نقص التغذية', value: 'repletion' },
+];
+
+const DIET_TYPE_OPTIONS = [
+  { label: 'عادي', value: 'regular' },
+  { label: 'سكري', value: 'diabetic' },
+  { label: 'قليل الصوديوم', value: 'low_sodium' },
+  { label: 'قليل الدهون', value: 'low_fat' },
+  { label: 'عالي البروتين', value: 'high_protein' },
+  { label: 'قليل البروتين', value: 'low_protein' },
+  { label: 'كلوي', value: 'renal' },
+  { label: 'كبدي', value: 'liver' },
+  { label: 'لين', value: 'soft' },
+  { label: 'سائل', value: 'liquid' },
+  { label: 'DASH', value: 'dash' },
+  { label: 'البحر المتوسط', value: 'mediterranean' },
+  { label: 'نباتي', value: 'vegetarian' },
+];
+
+const FOOD_TEXTURE_OPTIONS = [
+  { label: 'عادي', value: 'regular' },
+  { label: 'لين', value: 'soft' },
+  { label: 'مفروم', value: 'minced' },
+  { label: 'مهروس', value: 'pureed' },
+  { label: 'سائل', value: 'liquid' },
+  { label: 'سائل كثيف', value: 'thickened_liquid' },
+];
+
+const ROUTE_OF_FEEDING_OPTIONS = [
+  { label: 'عن طريق الفم', value: 'oral' },
+  { label: 'أنبوب أنفي معدي (NGT)', value: 'ng_tube' },
+  { label: 'فغر المعدة (PEG)', value: 'peg' },
+  { label: 'فغر الصائم (Jejunostomy)', value: 'jejunostomy' },
+  { label: 'تغذية وريدية كلية (TPN)', value: 'tpn' },
+  { label: 'تغذية وريدية جزئية (PPN)', value: 'ppn' },
+];
+
 export default function PatientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -48,6 +118,84 @@ export default function PatientDetailScreen() {
   const [heightCm, setHeightCm] = useState('');
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('sedentary');
   const [dietitianNotes, setDietitianNotes] = useState('');
+
+  const [medicalHistory, setMedicalHistory] = useState<any>(null);
+  const [socialHistory, setSocialHistory] = useState<any>(null);
+  const [physicalExam, setPhysicalExam] = useState<any[]>([]);
+  const [labResults, setLabResults] = useState<any[]>([]);
+  const [medications, setMedications] = useState<any[]>([]);
+  const [supplements, setSupplements] = useState<any[]>([]);
+  const [intervention, setIntervention] = useState<any>(null);
+
+  const getLatestLabResult = (testNameEn: string) => {
+    const filtered = labResults.filter(
+      (r) => r.testName?.toLowerCase() === testNameEn.toLowerCase()
+    );
+    if (filtered.length === 0) return null;
+    return filtered.sort((a, b) => new Date(b.testDate).getTime() - new Date(a.testDate).getTime())[0];
+  };
+
+  const getLabResultStyleClass = (resultVal: number, lowBound: number | null, highBound: number | null) => {
+    if (lowBound !== null && resultVal < lowBound) {
+      return 'print-bg-danger';
+    }
+    if (highBound !== null && resultVal > highBound) {
+      return 'print-bg-danger';
+    }
+    return 'print-bg-normal';
+  };
+
+  const getLabResultStatusLabel = (resultVal: number, lowBound: number | null, highBound: number | null) => {
+    if (lowBound !== null && resultVal < lowBound) {
+      return 'منخفض ⚠️';
+    }
+    if (highBound !== null && resultVal > highBound) {
+      return 'مرتفع ⚠️';
+    }
+    return 'طبيعي ✓';
+  };
+
+  async function loadClinicalData(patientId: string) {
+    try {
+      const [
+        medHistMod,
+        socHistMod,
+        physExamMod,
+        labMod,
+        medsMod,
+        supsMod,
+        intervMod
+      ] = await Promise.all([
+        import('../../src/domain/use-cases/GetMedicalHistoryUseCase'),
+        import('../../src/domain/use-cases/GetSocialHistoryUseCase'),
+        import('../../src/domain/use-cases/GetPhysicalExamUseCase'),
+        import('../../src/domain/use-cases/GetLabResultsUseCase'),
+        import('../../src/domain/use-cases/GetMedicationsUseCase'),
+        import('../../src/domain/use-cases/GetSupplementsUseCase'),
+        import('../../src/domain/use-cases/GetActiveInterventionUseCase')
+      ]);
+
+      const [medHist, socHist, physExam, labs, meds, sups, interv] = await Promise.all([
+        new medHistMod.GetMedicalHistoryUseCase().execute(patientId).catch(() => null),
+        new socHistMod.GetSocialHistoryUseCase().execute(patientId).catch(() => null),
+        new physExamMod.GetPhysicalExamUseCase().execute(patientId).catch(() => []),
+        new labMod.GetLabResultsUseCase().execute(patientId).catch(() => []),
+        new medsMod.GetMedicationsUseCase().execute(patientId).catch(() => []),
+        new supsMod.GetSupplementsUseCase().execute(patientId).catch(() => []),
+        new intervMod.GetActiveInterventionUseCase().execute(patientId).catch(() => null)
+      ]);
+
+      setMedicalHistory(medHist);
+      setSocialHistory(socHist);
+      setPhysicalExam(physExam);
+      setLabResults(labs);
+      setMedications(meds);
+      setSupplements(sups);
+      setIntervention(interv);
+    } catch (e) {
+      console.error('Failed to load clinical data for report:', e);
+    }
+  }
 
   const scrollViewRef = useRef<ScrollView>(null);
   const clinicalAnalysisYRef = useRef<number>(0);
@@ -71,10 +219,368 @@ export default function PatientDetailScreen() {
   const loadPlanForPatient = usePatientStore((s) => s.loadPlanForPatient);
   const showToast = usePatientStore((s) => s.showToast);
 
+  const handlePrintReport = useCallback(async () => {
+    try {
+      const activeLabs = labResults.filter(
+        (r) => r.testName && r.resultValue !== undefined && r.resultValue !== null
+      );
+      
+      const labRows = activeLabs.length > 0 ? activeLabs.map(r => {
+        const isHigh = r.referenceRangeHigh && r.resultValue > r.referenceRangeHigh;
+        const isLow = r.referenceRangeLow && r.resultValue < r.referenceRangeLow;
+        const statusText = isHigh ? 'مرتفع' : isLow ? 'منخفض' : 'طبيعي';
+        const statusColor = isHigh || isLow ? 'red' : 'green';
+        return `
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${r.testName}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${r.resultValue} ${r.unit || ''}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${r.referenceRangeLow !== null && r.referenceRangeLow !== undefined ? r.referenceRangeLow : '-'} - ${r.referenceRangeHigh !== null && r.referenceRangeHigh !== undefined ? r.referenceRangeHigh : '-'}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${statusColor}; font-weight: bold;">${statusText}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${r.testDate ? formatSafeDate(r.testDate) : '-'}</td>
+          </tr>
+        `;
+      }).join('') : '<tr><td colspan="5" style="text-align: center; border: 1px solid #ddd; padding: 8px;">لا توجد فحوصات مخبرية مسجلة</td></tr>';
+
+      const medRows = medications.length > 0 ? medications.map(m => `
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${m.drugName}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${m.dosage || '-'}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${FREQUENCY_LABELS[m.frequency] || m.frequency || '-'}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${m.route || '-'}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="4" style="text-align: center; border: 1px solid #ddd; padding: 8px;">لا توجد أدوية مسجلة</td></tr>';
+
+      const supRows = supplements.length > 0 ? supplements.map(s => `
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${s.supplementName}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${s.dosage || '-'}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${SUPPLEMENT_TYPE_LABELS[s.supplementType] || s.supplementType || '-'}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="3" style="text-align: center; border: 1px solid #ddd; padding: 8px;">لا توجد مكملات مسجلة</td></tr>';
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="utf-8">
+          <title>التقرير الطبي الشامل</title>
+          <style>
+            body {
+              font-family: 'system-ui', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+              color: #333;
+              padding: 20px;
+              line-height: 1.6;
+              direction: rtl;
+              text-align: right;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 3px solid #3F51B5;
+              padding-bottom: 10px;
+              margin-bottom: 25px;
+            }
+            .header h1 {
+              color: #3F51B5;
+              margin: 0;
+              font-size: 22px;
+            }
+            .header h2 {
+              color: #555;
+              margin: 5px 0 0 0;
+              font-size: 15px;
+            }
+            .section {
+              margin-bottom: 20px;
+              background: #fff;
+              border: 1.5px solid #ddd;
+              border-radius: 8px;
+              padding: 15px;
+            }
+            .section-title {
+              font-size: 15px;
+              font-weight: bold;
+              color: #3F51B5;
+              border-bottom: 1.5px solid #3F51B5;
+              padding-bottom: 5px;
+              margin-bottom: 12px;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 12px;
+            }
+            .info-item {
+              margin: 0;
+              font-size: 13px;
+            }
+            .info-label {
+              font-weight: bold;
+              color: #444;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+            }
+            th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: right;
+              font-size: 12px;
+            }
+            th {
+              background-color: #f8f9fa;
+              color: #333;
+              font-weight: bold;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 11px;
+              color: #777;
+              border-top: 1px solid #eee;
+              padding-top: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>نظام إدارة التغذية العلاجية المتكامل - Clinical-ADCN</h1>
+            <h2>التقرير السريري التغذوي الشامل للحالة</h2>
+          </div>
+
+          <!-- Basic Data -->
+          <div class="section">
+            <div class="section-title">معلومات المريض الأساسية</div>
+            <div class="grid">
+              <p class="info-item"><span class="info-label">اسم المريض:</span> ${patient?.fullName || '-'}</p>
+              <p class="info-item"><span class="info-label">رقم الملف:</span> ${patient?.fileNumber || '-'}</p>
+              <p class="info-item"><span class="info-label">العمر:</span> ${patient?.age ? `${patient.age} سنة` : '-'}</p>
+              <p class="info-item"><span class="info-label">الجنس:</span> ${patient?.gender === 'male' ? 'ذكر' : patient?.gender === 'female' ? 'أنثى' : '-'}</p>
+              <p class="info-item"><span class="info-label">القسم:</span> ${DEPARTMENT_LABELS[patient?.department || ''] || patient?.department || '-'}</p>
+              <p class="info-item"><span class="info-label">رقم السرير:</span> ${patient?.bedNumber || '-'}</p>
+              <p class="info-item"><span class="info-label">التشخيص الرئيسي:</span> ${patient?.primaryDiagnosis || '-'}</p>
+              <p class="info-item"><span class="info-label">نوع المريض:</span> ${PATIENT_TYPE_LABELS[patient?.patientType || ''] || patient?.patientType || '-'}</p>
+            </div>
+          </div>
+
+          <!-- Medical/Social History -->
+          <div class="section">
+            <div class="section-title">التاريخ المرضي والاجتماعي</div>
+            <div class="grid">
+              <p class="info-item"><span class="info-label">الشكوى الرئيسية:</span> ${medicalHistory?.chiefComplaint || '-'}</p>
+              <p class="info-item"><span class="info-label">التشخيص الحالي:</span> ${medicalHistory?.currentDiagnosis || '-'}</p>
+              <p class="info-item"><span class="info-label">الحساسية للدواء/الغذاء:</span> ${medicalHistory?.medicationAllergies || 'لا يوجد'}</p>
+              <p class="info-item"><span class="info-label">النشاط البدني:</span> ${socialHistory?.physicalActivity || '-'}</p>
+              <p class="info-item"><span class="info-label">النظام الغذائي المتبع قبل الدخول:</span> ${socialHistory?.specialDietBeforeAdmission || '-'}</p>
+              <p class="info-item"><span class="info-label">التدخين:</span> ${socialHistory?.smoking === 'yes' ? 'نعم' : 'لا'}</p>
+            </div>
+          </div>
+
+          <!-- Lab Records -->
+          <div class="section">
+            <div class="section-title">الفحوصات المخبرية المسجلة</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>اسم الفحص</th>
+                  <th>النتيجة</th>
+                  <th>المدى الطبيعي</th>
+                  <th>الحالة</th>
+                  <th>تاريخ الفحص</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${labRows}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Medications & Supplements -->
+          <div class="section">
+            <div class="section-title">الأدوية والمكملات الغذائية</div>
+            <div class="grid">
+              <div>
+                <p style="font-weight: bold; font-size: 13px; margin: 0 0 5px 0;">الأدوية الحالية:</p>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>اسم الدواء</th>
+                      <th>الجرعة</th>
+                      <th>التكرار</th>
+                      <th>طريقة الإعطاء</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${medRows}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <p style="font-weight: bold; font-size: 13px; margin: 0 0 5px 0;">المكملات الغذائية:</p>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>اسم المكمل</th>
+                      <th>الجرعة</th>
+                      <th>النوع</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${supRows}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Energy Calculations & Plan -->
+          <div class="section">
+            <div class="section-title">الحسابات والتدخل الغذائي المستهدف</div>
+            <div class="grid">
+              <div>
+                <p class="info-item"><span class="info-label">الوزن الحالي:</span> ${currentMetrics?.weightKg || '-'} كجم</p>
+                <p class="info-item"><span class="info-label">الطول:</span> ${currentMetrics?.heightCm || '-'} سم</p>
+                <p class="info-item"><span class="info-label">مؤشر كتلة الجسم (BMI):</span> ${currentMetrics?.bmi ? currentMetrics.bmi.value.toFixed(2) : '-'}</p>
+                <p class="info-item"><span class="info-label">تصنيف كتلة الجسم:</span> ${currentMetrics?.bmi ? currentMetrics.bmi.categoryLabel : '-'}</p>
+                <p class="info-item"><span class="info-label">إجمالي الاحتياج اليومي (TDEE):</span> ${currentMetrics?.tdee ? `${currentMetrics.tdee.value} سعرة` : '-'}</p>
+              </div>
+              <div>
+                <p class="info-item"><span class="info-label">التشخيص التغذوي:</span> ${intervention?.nutritionDiagnosis || '-'}</p>
+                <p class="info-item"><span class="info-label">الهدف الرئيسي:</span> ${MAIN_GOAL_OPTIONS.find(g => g.value === intervention?.mainGoal)?.label || intervention?.mainGoal || '-'}</p>
+                <p class="info-item"><span class="info-label">نوع الحمية:</span> ${DIET_TYPE_OPTIONS.find(d => d.value === intervention?.dietType)?.label || intervention?.dietType || '-'}</p>
+                <p class="info-item"><span class="info-label">طريقة التغذية:</span> ${ROUTE_OF_FEEDING_OPTIONS.find(r => r.value === intervention?.routeOfFeeding)?.label || intervention?.routeOfFeeding || '-'}</p>
+                <p class="info-item"><span class="info-label">السعرات المستهدفة بالخطة:</span> ${currentPlan?.totalCalories || '-'} سعرة</p>
+                <p class="info-item"><span class="info-label">بروتين:</span> ${currentPlan?.macros ? `${currentPlan.macros.proteinGrams} غرام` : '-'}</p>
+                <p class="info-item"><span class="info-label">كربوهيدرات:</span> ${currentPlan?.macros ? `${currentPlan.macros.carbsGrams} غرام` : '-'}</p>
+                <p class="info-item"><span class="info-label">دهون:</span> ${currentPlan?.macros ? `${currentPlan.macros.fatGrams} غرام` : '-'}</p>
+              </div>
+            </div>
+            ${currentPlan?.dietitianNotes ? `<p class="info-item" style="margin-top: 15px;"><span class="info-label">ملاحظات أخصائي التغذية:</span> ${currentPlan.dietitianNotes}</p>` : ''}
+          </div>
+
+          <div class="footer">
+            <p>تم استخراج التقرير آلياً عبر نظام Clinical-ADCN - د. أنس الأموي</p>
+            <p>تاريخ التقرير: ${new Date().toLocaleString('ar-YE')}</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'حفظ التقرير الطبي الشامل' });
+      showToast('تم تصدير التقرير بنجاح 🎉', 'success');
+    } catch (error) {
+      console.error('Print error:', error);
+      showToast('فشل تصدير التقرير السريري', 'error');
+    }
+  }, [patient, medicalHistory, socialHistory, labResults, medications, supplements, intervention, currentMetrics, currentPlan, showToast]);
+
+  const handleExportCase = useCallback(async () => {
+    try {
+      const { getDatabase } = await import('../../src/data/database');
+      const { Q } = await import('@nozbe/watermelondb');
+      const db = await getDatabase();
+      const patientId = id;
+
+      const [
+        medHistories,
+        socHistories,
+        meds,
+        sups,
+        labs,
+        exams,
+        calcs,
+        interventions,
+        meals
+      ] = await Promise.all([
+        db.get('medical_histories').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('social_histories').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('medications').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('supplements').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('lab_results').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('physical_exam_items').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('calculations').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('interventions').query(Q.where('patient_id', patientId)).fetch(),
+        db.get('meal_plans').query(Q.where('patient_id', patientId)).fetch(),
+      ]);
+
+      const serializeRecord = (record: any) => {
+        const raw = record._raw;
+        const copy = { ...raw };
+        delete copy.id;
+        delete copy._status;
+        delete copy._changed;
+        return copy;
+      };
+
+      const payload = {
+        adcnProtocolVersion: "2.0",
+        exportedBy: "Dr. Anas Al-Umawi",
+        exportedAt: new Date().toISOString(),
+        patientData: {
+          patientProfile: patient ? {
+            fullName: patient.fullName,
+            age: patient.age,
+            dateOfBirth: patient.dateOfBirth,
+            gender: patient.gender,
+            nationalId: patient.nationalId,
+            nationality: patient.nationality,
+            phoneNumber: patient.phoneNumber,
+            department: patient.department,
+            bedNumber: patient.bedNumber,
+            referringPhysician: patient.referringPhysician,
+            primaryDiagnosis: patient.primaryDiagnosis,
+            patientType: patient.patientType,
+            status: patient.status,
+            notes: patient.notes,
+            incompleteSections: patient.incompleteSections,
+          } : null,
+          clinicalWorkflow: {
+            medicalHistories: medHistories.map(serializeRecord),
+            socialHistories: socHistories.map(serializeRecord),
+            medications: meds.map(serializeRecord),
+            supplements: sups.map(serializeRecord),
+            labResults: labs.map(serializeRecord),
+            physicalExamItems: exams.map(serializeRecord),
+            calculations: calcs.map(serializeRecord),
+            interventions: interventions.map(serializeRecord),
+            mealPlans: meals.map(serializeRecord),
+          }
+        }
+      };
+
+      if (Platform.OS === 'web') {
+        const jsonStr = JSON.stringify(payload, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const cleanName = patient ? patient.fullName.replace(/\s+/g, '_') : 'case';
+        a.download = `patient_${cleanName}_record.adcn`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('تم تصدير ملف الحالة بنجاح 🎉', 'success');
+      } else {
+        const summaryText = `ملف حالة المريض: ${patient ? patient.fullName : 'غير معروف'}\nنظام إدارة التغذية العلاجية: Clinical-ADCN\nامتداد الملف المرفق: .adcn\nتاريخ التصدير: ${new Date().toLocaleDateString('ar-YE')}`;
+        await Share.share({
+          message: summaryText,
+          title: 'مشاركة ملف الحالة (.adcn)'
+        });
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('فشل تصدير ملف الحالة', 'error');
+    }
+  }, [id, patient, showToast]);
+
   useEffect(() => {
     loadPatient();
     loadMetricsForPatient(id);
     loadPlanForPatient(id);
+    loadClinicalData(id);
   }, [id]);
 
   useEffect(() => {
@@ -202,19 +708,19 @@ export default function PatientDetailScreen() {
             {/* Left Column: DATA COLLECTION & ASSESSMENT */}
             <View style={styles.column}>
               <ModuleButton
-                title="📜 التاريخ المرضي"
+                title="التاريخ المرضي"
                 icon="clipboard"
                 route={`/patient/${patient.id}/medical-history`}
                 color="#4CAF50"
               />
               <ModuleButton
-                title="🌍 التاريخ الاجتماعي والنمط"
+                title=" التاريخ الاجتماعي والنمط"
                 icon="people"
                 route={`/patient/${patient.id}/social-history`}
                 color="#FF9800"
               />
               <ModuleButton
-                title="🩺 الفحص السريري"
+                title=" الفحص السريري"
                 icon="body"
                 route={`/patient/${patient.id}/physical-exam`}
                 color="#00BCD4"
@@ -224,6 +730,12 @@ export default function PatientDetailScreen() {
                 icon="flask"
                 route={`/patient/${patient.id}/laboratory`}
                 color="#E91E63"
+              />
+              <ModuleButton
+                title="📋 تقييم الخطر التغذوي (NRS-2002)"
+                icon="checkbox-outline"
+                route={`/patient/${patient.id}/screening`}
+                color="#2E7D32"
               />
             </View>
 
@@ -242,13 +754,19 @@ export default function PatientDetailScreen() {
                 color="#607D8B"
               />
               <ModuleButton
-                title="🎯 خطة التدخل التغذوي"
+                title="خطة التدخل التغذوي"
                 icon="restaurant"
                 route={`/patient/${patient.id}/intervention`}
                 color="#795548"
               />
               <ModuleButton
-                title="🍽️ تخطيط الوجبات والبدائل الغذائية"
+                title="🧪 حاسبة التغذية الأنبوبية والوريدية"
+                icon="flask"
+                route={`/patient/${patient.id}/nutrition-calculator`}
+                color="#00695C"
+              />
+              <ModuleButton
+                title=" تخطيط الوجبات والبدائل الغذائية"
                 icon="nutrition"
                 route={`/patient/${patient.id}/diet-plan`}
                 color="#2E7D32"
@@ -261,7 +779,7 @@ export default function PatientDetailScreen() {
             <ModuleButton
               title="🔬 التحليل السريري"
               icon="analytics"
-              onPress={scrollToClinicalAnalysis}
+              route={`/patient/${patient.id}/clinical-analysis`}
               color="#008080"
               isWide
             />
@@ -278,6 +796,21 @@ export default function PatientDetailScreen() {
               route={`/patient/${patient.id}/discharge`}
               color="#E67E22"
               isWide
+            />
+            <ModuleButton
+              title="📄 تصدير التقرير السريري الشامل (PDF)"
+              icon="print"
+              onPress={handlePrintReport}
+              color="#3F51B5"
+              isWide
+            />
+            <ModuleButton
+              title="🔗 مشاركة ملف الحالة (.adcn)"
+              icon="share-social"
+              onPress={handleExportCase}
+              color="#4CAF50"
+              isWide
+              fontFamily="ThmanyahSans-Medium"
             />
           </View>
         </View>
@@ -450,6 +983,379 @@ export default function PatientDetailScreen() {
 
 
       </ScrollView>
+
+      {Platform.OS === 'web' && patient && (
+        <>
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page {
+                size: A4;
+                margin: 20mm 15mm;
+              }
+              body {
+                visibility: hidden !important;
+                background-color: #fff !important;
+              }
+              #print-report-root, #print-report-root * {
+                visibility: visible !important;
+              }
+              #print-report-root {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                display: block !important;
+                direction: rtl !important;
+                text-align: right !important;
+                background-color: #fff !important;
+                color: #000 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+              }
+              #print-report-root table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                margin-top: 15px !important;
+                margin-bottom: 15px !important;
+              }
+              #print-report-root th, #print-report-root td {
+                padding: 8px 10px !important;
+                border: 1.5px solid #000 !important;
+                font-size: 12px !important;
+                text-align: right !important;
+              }
+              #print-report-root th {
+                background-color: #f2f2f2 !important;
+                font-family: 'ThmanyahSans-Bold', sans-serif !important;
+                font-weight: bold !important;
+              }
+              #print-report-root td {
+                font-family: 'ThmanyahSans-Regular', sans-serif !important;
+              }
+              .print-bg-normal {
+                background-color: #e8f5e9 !important;
+                color: #1b5e20 !important;
+                font-weight: bold !important;
+                border: 1.5px solid #000 !important;
+              }
+              .print-bg-danger {
+                background-color: #ffebee !important;
+                color: #c62828 !important;
+                font-weight: bold !important;
+                border: 1.5px solid #000 !important;
+              }
+              .print-header {
+                border-bottom: 3px double #000 !important;
+                padding-bottom: 10px !important;
+                margin-bottom: 20px !important;
+                text-align: center !important;
+              }
+              .print-section {
+                margin-bottom: 25px !important;
+                page-break-inside: avoid !important;
+              }
+              .print-section-title {
+                font-size: 15px !important;
+                font-family: 'ThmanyahSans-Bold', sans-serif !important;
+                font-weight: bold !important;
+                border-bottom: 1.5px solid #000 !important;
+                padding-bottom: 5px !important;
+                margin-bottom: 10px !important;
+                color: #000 !important;
+              }
+              .print-grid {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 15px !important;
+              }
+              .print-info-item {
+                font-size: 13px !important;
+                margin-bottom: 6px !important;
+                line-height: 1.4 !important;
+              }
+              .print-info-label {
+                font-family: 'ThmanyahSans-Bold', sans-serif !important;
+                font-weight: bold !important;
+                color: #000 !important;
+              }
+            }
+          `}} />
+
+          <div id="print-report-root" style={{ display: 'none' }}>
+            {/* Header */}
+            <div className="print-header">
+              <h2 style={{ fontSize: '16px', margin: '0 0 5px 0', color: '#000', fontWeight: 'bold' }}>نظام إدارة التغذية العلاجية المتكامل - ADCN-Clinical</h2>
+              <h3 style={{ fontSize: '14px', margin: '0', color: '#333', fontWeight: 'bold' }}>التقرير السريري التغذوي الشامل للحالة</h3>
+            </div>
+
+            {/* Section 1: Demographics */}
+            <div className="print-section">
+              <div className="print-section-title">👤 البيانات الأساسية للمريض</div>
+              <div className="print-grid">
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">اسم المريض:</span> {patient.fullName}</p>
+                  <p className="print-info-item"><span className="print-info-label">رقم الملف:</span> {patient.fileNumber}</p>
+                  <p className="print-info-item"><span className="print-info-label">الجنس:</span> {GENDER_LABELS[patient.gender] || patient.gender}</p>
+                  <p className="print-info-item"><span className="print-info-label">العمر:</span> {patient.age} سنة</p>
+                </div>
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">القسم الطبي:</span> {DEPARTMENT_LABELS[patient.department] || patient.department}</p>
+                  <p className="print-info-item"><span className="print-info-label">رقم السرير:</span> {patient.bedNumber || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">نوع المريض:</span> {PATIENT_TYPE_LABELS[patient.patientType] || patient.patientType}</p>
+                  <p className="print-info-item"><span className="print-info-label">التشخيص الرئيسي:</span> {patient.primaryDiagnosis}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Anthropometrics */}
+            <div className="print-section">
+              <div className="print-section-title">🧮 التقييم الأنثروبومتري وحساب الاحتياجات</div>
+              <div className="print-grid">
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">الوزن الحالي:</span> {weightKg || '-'} كجم</p>
+                  <p className="print-info-item"><span className="print-info-label">الطول الحالي:</span> {heightCm || '-'} سم</p>
+                  <p className="print-info-item"><span className="print-info-label">مؤشر كتلة الجسم (BMI):</span> {currentMetrics ? `${currentMetrics.bmi.value.toFixed(2)} (${currentMetrics.bmi.categoryLabel})` : '-'}</p>
+                </div>
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">معدل الأيض الأساسي (BMR):</span> {currentMetrics ? `${currentMetrics.bmr.value.toFixed(0)} سعرة` : '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">إجمالي الاحتياج اليومي للطاقة (TDEE):</span> {currentMetrics ? `${currentMetrics.tdee.value} سعرة` : '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">مستوى النشاط البدني:</span> {ACTIVITY_LEVELS[activityLevel]?.label || activityLevel}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Laboratory Analysis */}
+            <div className="print-section">
+              <div className="print-section-title">🧪 نتائج الفحوصات المخبرية والمقارنة السريرية</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ border: '1.5px solid #000', padding: '8px', backgroundColor: '#f2f2f2', fontWeight: 'bold' }}>اسم الفحص</th>
+                    <th style={{ border: '1.5px solid #000', padding: '8px', backgroundColor: '#f2f2f2', fontWeight: 'bold' }}>النتيجة المسجلة</th>
+                    <th style={{ border: '1.5px solid #000', padding: '8px', backgroundColor: '#f2f2f2', fontWeight: 'bold' }}>النطاق الطبيعي المرجعي</th>
+                    <th style={{ border: '1.5px solid #000', padding: '8px', backgroundColor: '#f2f2f2', fontWeight: 'bold' }}>حجم النقص/الزيادة</th>
+                    <th style={{ border: '1.5px solid #000', padding: '8px', backgroundColor: '#f2f2f2', fontWeight: 'bold' }}>تاريخ الفحص</th>
+                    <th style={{ border: '1.5px solid #000', padding: '8px', backgroundColor: '#f2f2f2', fontWeight: 'bold' }}>الحالة السريرية</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Albumin */}
+                  {(() => {
+                    const res = getLatestLabResult('Albumin');
+                    const val = res ? res.resultValue : null;
+                    const styleClass = val !== null ? getLabResultStyleClass(val, 3.5, 5.0) : '';
+                    const status = val !== null ? getLabResultStatusLabel(val, 3.5, 5.0) : 'غير متوفر';
+                    return (
+                      <tr>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>ألبومين (Albumin)</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? `${val} g/dL` : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>3.5 - 5.0 g/dL</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? (val < 3.5 ? `نقص ${(3.5 - val).toFixed(1)}` : val > 5.0 ? `زيادة ${(val - 5.0).toFixed(1)}` : 'سليم') : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{res ? res.testDate : '-'}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{status}</td>
+                      </tr>
+                    );
+                  })()}
+                  {/* Creatinine */}
+                  {(() => {
+                    const res = getLatestLabResult('Creatinine');
+                    const val = res ? res.resultValue : null;
+                    const styleClass = val !== null ? getLabResultStyleClass(val, 0.6, 1.2) : '';
+                    const status = val !== null ? getLabResultStatusLabel(val, 0.6, 1.2) : 'غير متوفر';
+                    return (
+                      <tr>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>كرياتينين (Creatinine)</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? `${val} mg/dL` : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>0.6 - 1.2 mg/dL</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? (val < 0.6 ? `نقص ${(0.6 - val).toFixed(2)}` : val > 1.2 ? `زيادة ${(val - 1.2).toFixed(2)}` : 'سليم') : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{res ? res.testDate : '-'}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{status}</td>
+                      </tr>
+                    );
+                  })()}
+                  {/* Urea */}
+                  {(() => {
+                    const res = getLatestLabResult('Urea');
+                    const val = res ? res.resultValue : null;
+                    const styleClass = val !== null ? getLabResultStyleClass(val, 7, 20) : '';
+                    const status = val !== null ? getLabResultStatusLabel(val, 7, 20) : 'غير متوفر';
+                    return (
+                      <tr>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>يوريا (Urea)</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? `${val} mg/dL` : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>7 - 20 mg/dL</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? (val < 7 ? `نقص ${(7 - val).toFixed(1)}` : val > 20 ? `زيادة ${(val - 20).toFixed(1)}` : 'سليم') : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{res ? res.testDate : '-'}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{status}</td>
+                      </tr>
+                    );
+                  })()}
+                  {/* HbA1c */}
+                  {(() => {
+                    const res = getLatestLabResult('HbA1c');
+                    const val = res ? res.resultValue : null;
+                    const styleClass = val !== null ? getLabResultStyleClass(val, null, 5.7) : '';
+                    const status = val !== null ? getLabResultStatusLabel(val, null, 5.7) : 'غير متوفر';
+                    return (
+                      <tr>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>السكر التراكمي (HbA1c)</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? `${val}%` : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>&lt; 5.7%</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? (val > 5.7 ? `زيادة ${(val - 5.7).toFixed(1)}` : 'سليم') : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{res ? res.testDate : '-'}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{status}</td>
+                      </tr>
+                    );
+                  })()}
+                  {/* ALT */}
+                  {(() => {
+                    const res = getLatestLabResult('ALT (SGPT)') || getLatestLabResult('ALT');
+                    const val = res ? res.resultValue : null;
+                    const styleClass = val !== null ? getLabResultStyleClass(val, 7, 56) : '';
+                    const status = val !== null ? getLabResultStatusLabel(val, 7, 56) : 'غير متوفر';
+                    return (
+                      <tr>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>وظائف الكبد ALT</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? `${val} U/L` : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>7 - 56 U/L</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? (val < 7 ? `نقص ${(7 - val).toFixed(0)}` : val > 56 ? `زيادة ${(val - 56).toFixed(0)}` : 'سليم') : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{res ? res.testDate : '-'}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{status}</td>
+                      </tr>
+                    );
+                  })()}
+                  {/* AST */}
+                  {(() => {
+                    const res = getLatestLabResult('AST (SGOT)') || getLatestLabResult('AST');
+                    const val = res ? res.resultValue : null;
+                    const styleClass = val !== null ? getLabResultStyleClass(val, 10, 40) : '';
+                    const status = val !== null ? getLabResultStatusLabel(val, 10, 40) : 'غير متوفر';
+                    return (
+                      <tr>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>وظائف الكبد AST</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? `${val} U/L` : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>10 - 40 U/L</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{val !== null ? (val < 10 ? `نقص ${(10 - val).toFixed(0)}` : val > 40 ? `زيادة ${(val - 40).toFixed(0)}` : 'سليم') : '-'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{res ? res.testDate : '-'}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{status}</td>
+                      </tr>
+                    );
+                  })()}
+
+                  {/* Other labs */}
+                  {labResults.filter(
+                    (r) => ![
+                      'albumin', 'creatinine', 'urea', 'hba1c', 'alt (sgpt)', 'alt', 'ast (sgot)', 'ast'
+                    ].includes(r.testName?.toLowerCase())
+                  ).map((r, index) => {
+                    const isHigh = r.referenceRangeHigh && r.resultValue > r.referenceRangeHigh;
+                    const isLow = r.referenceRangeLow && r.resultValue < r.referenceRangeLow;
+                    const styleClass = (isHigh || isLow) ? 'print-bg-danger' : 'print-bg-normal';
+                    const status = isHigh ? 'مرتفع ⚠️' : isLow ? 'منخفض ⚠️' : 'طبيعي ✓';
+                    return (
+                      <tr key={r.id || index}>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{r.testName}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{r.resultValue} {r.unit}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{r.referenceRangeLow} - {r.referenceRangeHigh} {r.unit}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{isLow ? `نقص ${(r.referenceRangeLow - r.resultValue).toFixed(1)}` : isHigh ? `زيادة ${(r.resultValue - r.referenceRangeHigh).toFixed(1)}` : 'سليم'}</td>
+                        <td style={{ border: '1.5px solid #000', padding: '8px' }}>{r.testDate}</td>
+                        <td className={styleClass} style={{ border: '1.5px solid #000', padding: '8px' }}>{status}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Section 4: History */}
+            <div className="print-section">
+              <div className="print-section-title">🩺 التاريخ المرضي والتاريخ الاجتماعي</div>
+              <div className="print-grid">
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">الشكوى الرئيسية:</span> {medicalHistory?.chiefComplaint || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">التشخيص الحالي:</span> {medicalHistory?.currentDiagnosis || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">الأمراض المصاحبة:</span> {(() => {
+                    if (!medicalHistory?.comorbidities) return '-';
+                    try {
+                      const parsed = JSON.parse(medicalHistory.comorbidities);
+                      return Array.isArray(parsed) ? parsed.join('، ') : '-';
+                    } catch {
+                      return '-';
+                    }
+                  })()}</p>
+                  <p className="print-info-item"><span className="print-info-label">الحساسية للدواء/الغذاء:</span> {medicalHistory?.medicationAllergies || 'لا يوجد'}</p>
+                </div>
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">التاريخ الاجتماعي (التدخين):</span> {socialHistory?.smoking === 'yes' ? 'نعم' : socialHistory?.smoking === 'former' ? 'سابق' : 'لا'}</p>
+                  <p className="print-info-item"><span className="print-info-label">النشاط البدني الموصوف:</span> {socialHistory?.physicalActivity || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">النظام المتبع قبل الدخول:</span> {socialHistory?.specialDietBeforeAdmission || '-'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 5: Meds & Supplements */}
+            <div className="print-section">
+              <div className="print-section-title">💊 الأدوية الموصوفة والمكملات الغذائية</div>
+              <div className="print-grid">
+                <div>
+                  <p className="print-info-item" style={{ fontWeight: 'bold' }}><span className="print-info-label">الأدوية الحالية:</span></p>
+                  {medications.length === 0 ? <p className="print-info-item">لا يوجد أدوية مسجلة</p> : (
+                    medications.map((m) => (
+                      <p key={m.id} className="print-info-item" style={{ marginRight: '10px' }}>• {m.drugName} ({m.dosage}) - {FREQUENCY_LABELS[m.frequency] || m.frequency}</p>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <p className="print-info-item" style={{ fontWeight: 'bold' }}><span className="print-info-label">المكملات الغذائية:</span></p>
+                  {supplements.length === 0 ? <p className="print-info-item">لا يوجد مكملات مسجلة</p> : (
+                    supplements.map((s) => (
+                      <p key={s.id} className="print-info-item" style={{ marginRight: '10px' }}>• {s.supplementName} ({s.dosage}) - {SUPPLEMENT_TYPE_LABELS[s.supplementType] || s.supplementType}</p>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Section 6: Intervention */}
+            <div className="print-section">
+              <div className="print-section-title"> خطة التدخل التغذوي والتوصيات المستهدفة</div>
+              <div className="print-grid">
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">التشخيص التغذوي:</span> {intervention?.nutritionDiagnosis || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">الهدف الرئيسي:</span> {MAIN_GOAL_OPTIONS.find(g => g.value === intervention?.mainGoal)?.label || intervention?.mainGoal || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">نوع الحمية المحددة:</span> {DIET_TYPE_OPTIONS.find(d => d.value === intervention?.dietType)?.label || intervention?.dietType || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">قوام الطعام:</span> {FOOD_TEXTURE_OPTIONS.find(t => t.value === intervention?.foodTexture)?.label || intervention?.foodTexture || '-'}</p>
+                  <p className="print-info-item"><span className="print-info-label">طريقة التغذية:</span> {ROUTE_OF_FEEDING_OPTIONS.find(r => r.value === intervention?.routeOfFeeding)?.label || intervention?.routeOfFeeding || '-'}</p>
+                </div>
+                <div>
+                  <p className="print-info-item"><span className="print-info-label">السعرات الحرارية المستهدفة:</span> {intervention?.targetCalories ? `${intervention.targetCalories} سعرة` : (currentPlan ? `${currentPlan.totalCalories} سعرة` : '-')}</p>
+                  <p className="print-info-item"><span className="print-info-label">البروتين المستهدف:</span> {intervention?.targetProtein ? `${intervention.targetProtein} غرام` : (currentPlan ? `${currentPlan.macros.proteinGrams} غرام` : '-')}</p>
+                  <p className="print-info-item"><span className="print-info-label">الكربوهيدرات المستهدفة:</span> {intervention?.targetCarbohydrates ? `${intervention.targetCarbohydrates} غرام` : (currentPlan ? `${currentPlan.macros.carbsGrams} غرام` : '-')}</p>
+                  <p className="print-info-item"><span className="print-info-label">الدهون المستهدفة:</span> {intervention?.targetFat ? `${intervention.targetFat} غرام` : (currentPlan ? `${currentPlan.macros.fatGrams} غرام` : '-')}</p>
+                  <p className="print-info-item"><span className="print-info-label">الاحتياج اليومي للسوائل:</span> {intervention?.fluidAllowance ? `${intervention.fluidAllowance} مل` : '-'}</p>
+                </div>
+              </div>
+              {intervention?.dietRecommendations && (
+                <p className="print-info-item" style={{ marginTop: '10px' }}><span className="print-info-label">توصيات حمية مخصصة:</span> {intervention.dietRecommendations}</p>
+              )}
+              {currentPlan?.dietitianNotes && (
+                <p className="print-info-item" style={{ marginTop: '5px' }}><span className="print-info-label">ملاحظات أخصائي التغذية العلاجية:</span> {currentPlan.dietitianNotes}</p>
+              )}
+            </div>
+
+            {/* Signatures */}
+            <div style={{ marginTop: '60px', display: 'flex', flexDirection: 'row-reverse', justifyContent: 'space-between', borderTop: '1.5px solid #000', paddingTop: '15px' }}>
+              <div>
+                <p style={{ fontSize: '12px', margin: '0 0 5px 0' }}><span className="print-info-label">توقيع أخصائي التغذية العلاجية:</span> ______________________</p>
+                <p style={{ fontSize: '11px', margin: '0', color: '#333' }}>حرر في تاريخ: {new Date().toLocaleDateString('ar-SA')}</p>
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <p style={{ fontSize: '12px', margin: '0', fontWeight: 'bold' }}><span className="print-info-label">ختم القسم السريري والتثقيف التغذوي</span></p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -461,6 +1367,7 @@ function ModuleButton({
   onPress,
   color,
   isWide = false,
+  fontFamily,
 }: {
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
@@ -468,6 +1375,7 @@ function ModuleButton({
   onPress?: () => void;
   color: string;
   isWide?: boolean;
+  fontFamily?: string;
 }) {
   const router = useRouter();
   const handlePress = () => {
@@ -490,7 +1398,7 @@ function ModuleButton({
       <View style={[styles.moduleIconContainer, { backgroundColor: color + '12' }]}>
         <Ionicons name={icon} size={22} color={color} />
       </View>
-      <Text style={styles.moduleButtonText}>{title}</Text>
+      <Text style={[styles.moduleButtonText, fontFamily ? { fontFamily } : undefined]}>{title}</Text>
     </TouchableOpacity>
   );
 }

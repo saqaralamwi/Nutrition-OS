@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useMemo } from 'react';
+import TripleActionFooter from '../../src/presentation/components/TripleActionFooter';
 import { Ionicons } from '@expo/vector-icons';
 import FormField from '../../src/presentation/components/FormField';
 import PickerField from '../../src/presentation/components/PickerField';
@@ -184,7 +185,7 @@ export default function AddPatientScreen() {
     setServerErrors([]);
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
     const allTouched: TouchedFields = {};
     (Object.keys(form) as (keyof FormState)[]).forEach((f) => {
       allTouched[f] = true;
@@ -192,7 +193,7 @@ export default function AddPatientScreen() {
     setTouched(allTouched);
     setServerErrors([]);
 
-    if (!isFormValid || !dateOfBirth) return;
+    if (!isFormValid || !dateOfBirth) return undefined;
 
     setIsSaving(true);
 
@@ -209,9 +210,12 @@ export default function AddPatientScreen() {
       primaryDiagnosis: form.primaryDiagnosis.trim(),
       patientType: form.patientType as 'inpatient' | 'outpatient' | 'consultation',
       notes: form.notes || null,
+      status: status,
+      incompleteSections: ['medical-history', 'social-history', 'physical-exam', 'laboratory', 'medications', 'calculations', 'intervention']
     };
 
     const result = await addPatient(input);
+    setIsSaving(false);
 
     if (result.success && result.patient) {
       const newPatientId = result.patient.id;
@@ -219,12 +223,11 @@ export default function AddPatientScreen() {
       setDateOfBirth(null);
       setTouched({});
       setCustomFields([{ id: 1, value: '' }]);
-      router.replace({ pathname: "/patient/[id]/medical-history", params: { id: newPatientId } });
+      return newPatientId;
     } else if (result.errors) {
       setServerErrors(result.errors);
     }
-
-    setIsSaving(false);
+    return undefined;
   };
 
   const renderField = (
@@ -423,33 +426,12 @@ export default function AddPatientScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.cancelButtonText}>إلغاء</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.saveButton,
-            (!isFormValid || isSaving) && styles.saveButtonDisabled,
-          ]}
-          onPress={handleSave}
-          disabled={!isFormValid || isSaving}
-          activeOpacity={0.8}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={colors.primaryContrast} />
-          ) : (
-            <Ionicons name="save-outline" size={20} color={colors.primaryContrast} />
-          )}
-          <Text style={styles.saveButtonText}>
-            {isSaving ? 'جارٍ الحفظ...' : 'حفظ المريض'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <TripleActionFooter
+        screenKey="new"
+        onSave={handleSave}
+        isSaving={isSaving}
+        isValid={isFormValid}
+      />
     </View>
   );
 }

@@ -9,6 +9,7 @@ import { calculateMacros } from '../calculators/MacronutrientCalculator';
 import { calculateFluidRequirement } from '../calculators/FluidCalculator';
 import { calculateIbw } from '../calculators/IbwCalculator';
 import { calculateAbw } from '../calculators/AbwCalculator';
+import { useSettingsStore } from '../../presentation/stores/settingsStore';
 
 export interface CalculateMetricsInput {
   patientId: string;
@@ -82,12 +83,24 @@ export class CalculatePatientMetricsUseCase {
 
     // 5. Total Energy (TDEE + stress)
     const sf = stressFactor ?? 1.0;
-    const totalEnergy = calculateTotalEnergy(bmrMifflin.value, activityLevel, sf);
+    const settings = useSettingsStore.getState();
+    const formula = settings.defaultEnergyFormula;
+    let baseBmr = bmrMifflin.value;
+    let formulaName = 'Mifflin-St Jeor + Factor';
+    if (formula === 'Harris-Benedict') {
+      baseBmr = bmrHarris.value;
+      formulaName = 'Harris-Benedict + Factor';
+    } else if (formula === 'Weight-Based') {
+      baseBmr = weightKg * 27.5;
+      formulaName = 'Weight-Based (25-30 kcal/kg)';
+    }
+
+    const totalEnergy = calculateTotalEnergy(baseBmr, activityLevel, sf);
     results.push({
       patientId,
       calculationType: 'total_energy',
-      formulaName: 'الطاقة الكلية',
-      inputValues: { bmr: bmrMifflin.value, activityLevel, stressFactor: sf },
+      formulaName: formulaName,
+      inputValues: { bmr: baseBmr, activityLevel, stressFactor: sf },
       resultValue: totalEnergy.value,
       steps: totalEnergy.steps,
     });

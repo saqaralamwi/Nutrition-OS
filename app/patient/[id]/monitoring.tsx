@@ -22,6 +22,7 @@ import DatePickerField from '../../../src/presentation/components/DatePickerFiel
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { formatSafeDate } from '../../../src/utils/date';
 import { FollowUpVisitRecord } from '../../../src/domain/repositories/IFollowUpVisitRepository';
 import { LaboratoryRecordRecord } from '../../../src/domain/repositories/ILaboratoryRepository';
 
@@ -395,11 +396,7 @@ export default function MonitoringScreen() {
   }, [resetLab]);
 
   function formatDate(ts: number): string {
-    return new Date(ts).toLocaleDateString('ar-SA', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+    return formatSafeDate(ts);
   }
 
   const edemaLabel = (v: string) => EDEMA_OPTIONS.find((o) => o.value === v)?.label || v;

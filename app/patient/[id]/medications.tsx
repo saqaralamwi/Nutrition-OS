@@ -21,7 +21,9 @@ import TextInputField from '../../../src/presentation/components/TextInputField'
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import DatePickerField from '../../../src/presentation/components/DatePickerField';
 import Button from '../../../src/presentation/components/Button';
+import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { formatSafeDate } from '../../../src/utils/date';
 
 const ROUTE_OPTIONS = [
   { label: 'فموي', value: 'oral' },
@@ -186,6 +188,10 @@ export default function MedicationsScreen() {
 
   useEffect(() => {
     loadData();
+  }, [patientId]);
+
+  const handleSave = useCallback(async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
+    return patientId;
   }, [patientId]);
 
   async function loadData() {
@@ -396,8 +402,8 @@ export default function MedicationsScreen() {
                   </ArabicText>
                   {med.startDate && (
                     <ArabicText style={styles.cardDetail}>
-                      من: {new Date(med.startDate).toLocaleDateString('ar-SA')}
-                      {med.endDate ? ` إلى: ${new Date(med.endDate).toLocaleDateString('ar-SA')}` : ''}
+                      من: {formatSafeDate(med.startDate)}
+                      {med.endDate ? ` إلى: ${formatSafeDate(med.endDate)}` : ''}
                     </ArabicText>
                   )}
                 </View>
@@ -445,13 +451,13 @@ export default function MedicationsScreen() {
           )}
         </View>
 
-        <View style={{ padding: spacing.md }}>
-          <Button
-            title="التالي: حسابات الطاقة"
-            onPress={() => router.replace({ pathname: "/patient/[id]/calculations", params: { id: patientId } })}
-            icon={<Ionicons name="arrow-back-outline" size={20} color={colors.primaryContrast} />}
-          />
-        </View>
+        <TripleActionFooter
+          patientId={patientId}
+          screenKey="medications"
+          onSave={handleSave}
+          isSaving={false}
+          isValid={true}
+        />
 
         <View style={styles.spacer} />
       </ScrollView>

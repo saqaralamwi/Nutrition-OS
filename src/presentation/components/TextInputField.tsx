@@ -14,6 +14,7 @@ interface TextInputFieldProps {
   editable?: boolean;
   secureTextEntry?: boolean;
   leftIcon?: React.ReactNode;
+  autoCorrect?: boolean;
 }
 
 export default function TextInputField({
@@ -29,6 +30,7 @@ export default function TextInputField({
   editable = true,
   secureTextEntry = false,
   leftIcon,
+  autoCorrect,
 }: TextInputFieldProps) {
   return (
     <View style={styles.container}>
@@ -51,6 +53,7 @@ export default function TextInputField({
           editable={editable}
           onBlur={onBlur}
           secureTextEntry={secureTextEntry}
+          autoCorrect={autoCorrect}
         />
       </View>
       {error && <Text style={styles.error}>{error}</Text>}

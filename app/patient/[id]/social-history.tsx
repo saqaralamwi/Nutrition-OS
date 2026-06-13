@@ -2,9 +2,11 @@ import {
   View,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  Modal,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -18,6 +20,7 @@ import TextInputField from '../../../src/presentation/components/TextInputField'
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import Button from '../../../src/presentation/components/Button';
+import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 
 const MARITAL_OPTIONS = [
   { label: 'أعزب/عزباء', value: 'single' },
@@ -122,8 +125,9 @@ export default function SocialHistoryScreen() {
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isValid },
   } = useForm<SocialHistoryFormValues>({
+    mode: 'onChange',
     resolver: zodResolver(socialHistorySchema),
     defaultValues: {
       maritalStatus: '',
@@ -185,37 +189,41 @@ export default function SocialHistoryScreen() {
     }
   }
 
-  const onSubmit = useCallback(async (values: SocialHistoryFormValues) => {
-    try {
-      setIsSaving(true);
-      const { SaveSocialHistoryUseCase } = await import('../../../src/domain/use-cases/SaveSocialHistoryUseCase');
-      const useCase = new SaveSocialHistoryUseCase();
-      await useCase.execute({
-        patientId: patientId,
-        maritalStatus: values.maritalStatus || undefined,
-        educationLevel: values.educationLevel || undefined,
-        occupation: values.occupation || undefined,
-        livingArea: values.livingArea || undefined,
-        familyStructure: values.familyStructure || undefined,
-        incomeLevel: values.incomeLevel || undefined,
-        smoking: values.smoking,
-        cigarettesPerDay: values.cigarettesPerDay ? parseInt(values.cigarettesPerDay, 10) : undefined,
-        yearsSmoked: values.yearsSmoked ? parseInt(values.yearsSmoked, 10) : undefined,
-        alcoholSubstanceUse: values.alcoholSubstanceUse,
-        physicalActivity: values.physicalActivity,
-        activityDescription: values.activityDescription || undefined,
-        dietaryHistory: values.dietaryHistory || undefined,
-        foodAllergies: values.foodAllergies || undefined,
-        specialDietBeforeAdmission: values.specialDietBeforeAdmission,
-        comments: values.comments || undefined,
-      });
-      router.replace({ pathname: "/patient/[id]/physical-exam", params: { id: patientId } });
-    } catch {
-      /* error handled via toast */
-    } finally {
-      setIsSaving(false);
-    }
-  }, [patientId, router]);
+  const handleSave = async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
+    let success = false;
+    await handleSubmit(async (values) => {
+      try {
+        setIsSaving(true);
+        const { SaveSocialHistoryUseCase } = await import('../../../src/domain/use-cases/SaveSocialHistoryUseCase');
+        const useCase = new SaveSocialHistoryUseCase();
+        await useCase.execute({
+          patientId: patientId,
+          maritalStatus: values.maritalStatus || undefined,
+          educationLevel: values.educationLevel || undefined,
+          occupation: values.occupation || undefined,
+          livingArea: values.livingArea || undefined,
+          familyStructure: values.familyStructure || undefined,
+          incomeLevel: values.incomeLevel || undefined,
+          smoking: values.smoking,
+          cigarettesPerDay: values.cigarettesPerDay ? parseInt(values.cigarettesPerDay, 10) : undefined,
+          yearsSmoked: values.yearsSmoked ? parseInt(values.yearsSmoked, 10) : undefined,
+          alcoholSubstanceUse: values.alcoholSubstanceUse,
+          physicalActivity: values.physicalActivity,
+          activityDescription: values.activityDescription || undefined,
+          dietaryHistory: values.dietaryHistory || undefined,
+          foodAllergies: values.foodAllergies || undefined,
+          specialDietBeforeAdmission: values.specialDietBeforeAdmission,
+          comments: values.comments || undefined,
+        });
+        success = true;
+      } catch {
+        /* error handled via toast */
+      } finally {
+        setIsSaving(false);
+      }
+    })();
+    return success ? patientId : undefined;
+  };
 
   const renderDropdown = (name: keyof SocialHistoryFormValues, label: string, options: readonly { label: string; value: string }[], required = false) => (
     <DropdownField
@@ -320,22 +328,13 @@ export default function SocialHistoryScreen() {
           {renderTextInput('comments', 'ملاحظات إضافية', { multiline: true })}
         </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <Button
-            title="حفظ"
-            onPress={handleSubmit(onSubmit)}
-            loading={isSaving}
-            disabled={isSaving}
-            icon={<Ionicons name="checkmark" size={20} color={colors.primaryContrast} />}
-          />
-          <Button
-            title="إلغاء"
-            onPress={() => router.back()}
-            variant="secondary"
-            disabled={isSaving}
-          />
-        </View>
+      <TripleActionFooter
+        patientId={patientId}
+        screenKey="social-history"
+        onSave={handleSave}
+        isSaving={isSaving}
+        isValid={isValid}
+      />
 
         <View style={styles.spacer} />
       </ScrollView>

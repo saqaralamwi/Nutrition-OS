@@ -36,6 +36,7 @@ export default class Patient extends Model {
   @field('patient_type') patientType!: string;
   @field('status') status!: string;
   @field('notes') notes!: string;
+  @field('incomplete_sections') incompleteSections!: string;
   @date('created_at') createdAt!: Date;
   @date('updated_at') updatedAt!: Date;
 

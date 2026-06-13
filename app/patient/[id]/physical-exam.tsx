@@ -13,7 +13,7 @@ import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import SegmentedControl from '../../../src/presentation/components/SegmentedControl';
-import Button from '../../../src/presentation/components/Button';
+import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import {
   EXAM_TEMPLATES,
@@ -89,7 +89,7 @@ export default function PhysicalExamScreen() {
     }));
   }, []);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
     try {
       setIsSaving(true);
       const { SavePhysicalExamUseCase } = await import('../../../src/domain/use-cases/SavePhysicalExamUseCase');
@@ -104,14 +104,14 @@ export default function PhysicalExamScreen() {
           comments: responses[t.itemKey].comments || undefined,
         }));
       await uc.execute(patientId, items);
-      showToast('تم حفظ الفحص', 'success');
-      router.replace({ pathname: "/patient/[id]/laboratory", params: { id: patientId } });
+      return patientId;
     } catch {
       showToast('فشل الحفظ', 'error');
+      return undefined;
     } finally {
       setIsSaving(false);
     }
-  }, [patientId, responses, router, showToast]);
+  }, [patientId, responses, showToast]);
 
   if (isLoading) {
     return (
@@ -177,22 +177,13 @@ export default function PhysicalExamScreen() {
           })}
         </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <Button
-            title="حفظ"
-            onPress={handleSave}
-            loading={isSaving}
-            disabled={isSaving}
-            icon={<Ionicons name="checkmark" size={20} color={colors.primaryContrast} />}
-          />
-          <Button
-            title="إلغاء"
-            onPress={() => router.back()}
-            variant="secondary"
-            disabled={isSaving}
-          />
-        </View>
+        <TripleActionFooter
+          patientId={patientId}
+          screenKey="physical-exam"
+          onSave={handleSave}
+          isSaving={isSaving}
+          isValid={true}
+        />
 
         <View style={styles.spacer} />
       </ScrollView>

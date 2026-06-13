@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 4,
+  version: 6,
   tables: [
     tableSchema({
       name: 'patients',
@@ -22,6 +22,7 @@ export const schema = appSchema({
         { name: 'patient_type', type: 'string' },
         { name: 'status', type: 'string', isIndexed: true },
         { name: 'notes', type: 'string', isOptional: true },
+        { name: 'incomplete_sections', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
@@ -323,6 +324,15 @@ export const schema = appSchema({
         { name: 'total_fat', type: 'number' },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'audit_logs',
+      columns: [
+        { name: 'action_type', type: 'string' },
+        { name: 'details', type: 'string' },
+        { name: 'user_id', type: 'string' },
+        { name: 'created_at', type: 'number' },
       ],
     }),
   ],

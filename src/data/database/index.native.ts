@@ -1,6 +1,7 @@
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 import { schema } from './schema';
+import { migrations } from './migrations';
 import { seedDatabase } from './seed';
 import Patient from '../models/Patient';
 import SocialHistory from '../models/SocialHistory';
@@ -20,6 +21,8 @@ import LaboratoryRecord from '../models/LaboratoryRecord';
 import DischargeSummary from '../models/DischargeSummary';
 import FoodItem from '../models/FoodItem';
 import MealPlan from '../models/MealPlan';
+import AuditLog from '../models/AuditLog';
+import { setupAuditTriggers } from './auditTrigger';
 
 const modelClasses = [
   Patient,
@@ -40,6 +43,7 @@ const modelClasses = [
   DischargeSummary,
   FoodItem,
   MealPlan,
+  AuditLog,
 ];
 
 const DB_KEY = '__WATERMELONDB_NATIVE__';
@@ -53,6 +57,7 @@ export async function getDatabase(): Promise<Database> {
   const adapter = new SQLiteAdapter({
     dbName: 'clinical_nutrition',
     schema,
+    migrations,
     jsi: true,
     onSetUpError: (error: Error) => {
       console.error('Database setup error:', error);
@@ -60,6 +65,8 @@ export async function getDatabase(): Promise<Database> {
   });
 
   console.log('[WatermelonDB] Initializing SQLite adapter...');
+
+  setupAuditTriggers();
 
   const db = new Database({
     adapter,

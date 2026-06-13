@@ -1,10 +1,13 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, I18nManager, Text, TextInput } from 'react-native';
+import { View, I18nManager, Text, TextInput, AppState, AppStateStatus } from 'react-native';
 import { colors } from '../src/presentation/theme';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useSecurityStore } from '../src/presentation/stores/securityStore';
+import { useSettingsStore } from '../src/presentation/stores/settingsStore';
+import LockScreen from '../src/presentation/components/LockScreen';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,6 +40,38 @@ export default function RootLayout() {
     'ThmanyahSans-Light': require('../assets/fonts/thmanyah-sans-light.otf'),
   });
 
+  const activeProfileId = useSettingsStore((s) => s.activeProfileId);
+  const initSecurity = useSecurityStore((s) => s.initSecurity);
+
+  // Initialize security for the active clinician profile on change/launch
+  useEffect(() => {
+    initSecurity(activeProfileId);
+  }, [activeProfileId]);
+
+  // AppState listener for 2-minute background auto-lock
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      const { lastActiveTime, isLocked, hasPIN, lockApp, updateLastActiveTime } = useSecurityStore.getState();
+      
+      if (nextAppState === 'background') {
+        updateLastActiveTime();
+      } else if (nextAppState === 'active') {
+        if (hasPIN && !isLocked) {
+          const inactiveDurationMs = Date.now() - lastActiveTime;
+          const twoMinutesMs = 2 * 60 * 1000;
+          if (inactiveDurationMs > twoMinutesMs) {
+            lockApp();
+          }
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const onLayoutRootView = useCallback(async () => {
     if (fontsLoaded) {
       await SplashScreen.hideAsync();
@@ -54,6 +89,7 @@ export default function RootLayout() {
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <StatusBar style="light" />
+      <LockScreen />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.primary },
@@ -110,12 +146,36 @@ export default function RootLayout() {
           options={{ title: 'التاريخ الاجتماعي', headerShown: false }}
         />
         <Stack.Screen
+          name="patient/[id]/clinical-analysis"
+          options={{ title: 'التحليل السريري', headerShown: false }}
+        />
+        <Stack.Screen
           name="patient/[id]/medical-history"
           options={{ title: 'التاريخ المرضي', headerShown: false }}
         />
         <Stack.Screen
           name="patient/[id]/intervention"
           options={{ title: 'خطة التدخل التغذوي', headerShown: false }}
+        />
+        <Stack.Screen
+          name="patient/[id]/nutrition-calculator"
+          options={{ title: 'حاسبة التغذية الأنبوبية والوريدية', headerShown: false }}
+        />
+        <Stack.Screen
+          name="patient/[id]/screening"
+          options={{ title: 'تقييم الخطر التغذوي NRS-2002', headerShown: false }}
+        />
+        <Stack.Screen
+          name="patient/[id]/ocr"
+          options={{ title: 'المسح الذكي للتحاليل (OCR)', headerShown: false }}
+        />
+        <Stack.Screen
+          name="about"
+          options={{ title: 'عن المطور', headerShown: false }}
+        />
+        <Stack.Screen
+          name="settings"
+          options={{ title: 'غرفة التحكم والإعدادات', headerShown: false }}
         />
         <Stack.Screen
           name="admin/index"

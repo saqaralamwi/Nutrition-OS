@@ -19,7 +19,9 @@ import SegmentedControl from '../../../src/presentation/components/SegmentedCont
 import Button from '../../../src/presentation/components/Button';
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
+import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useSettingsStore } from '../../../src/presentation/stores/settingsStore';
 import { Patient } from '../../../src/domain/entities/Patient';
 import { ACTIVITY_LEVELS } from '../../../src/domain/entities/NutritionPlan';
 import { CalculationResult } from '../../../src/domain/entities/Calculation';
@@ -44,6 +46,7 @@ const CALCULATION_TYPE_LABELS: Record<string, string> = {
   bmr_harris: 'معدل الأيض الأساسي (Harris-Benedict)',
   total_energy: 'الطاقة الكلية (TEE)',
   fluid: 'احتياج السوائل',
+  nrs_2002: 'تقييم الخطر التغذوي (NRS-2002)',
 };
 
 const ILLNESS_OPTIONS = Object.entries(KAU_ILLNESS_MATRIX).map(([key, val]) => ({
@@ -63,6 +66,9 @@ export default function CalculationsScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const showToast = usePatientStore((s) => s.showToast);
+  
+  // Dynamic default formula
+  const { defaultEnergyFormula } = useSettingsStore();
 
   const [isLoading, setIsLoading] = useState(true);
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -198,9 +204,20 @@ export default function CalculationsScreen() {
   const injuryFactor = parseFloat(stressFactor) || 1.0;
 
   const calculatedTEE = useMemo(() => {
-    const baseREE = ventilatedREE ? ventilatedREE.value : mifflinBMR;
+    let baseREE = mifflinBMR;
+    if (ventilatedREE) {
+      baseREE = ventilatedREE.value;
+    } else {
+      if (defaultEnergyFormula === 'Harris-Benedict') {
+        baseREE = harrisBMR;
+      } else if (defaultEnergyFormula === 'Weight-Based') {
+        baseREE = w * 27.5; // Quick rule midpoint
+      } else {
+        baseREE = mifflinBMR;
+      }
+    }
     return baseREE * activityFactor * injuryFactor * feverFactor;
-  }, [mifflinBMR, ventilatedREE, activityFactor, injuryFactor, feverFactor]);
+  }, [w, mifflinBMR, harrisBMR, ventilatedREE, activityFactor, injuryFactor, feverFactor, defaultEnergyFormula]);
 
   // Illness specific ranges
   const illnessDetails = useMemo(() => {
@@ -258,10 +275,10 @@ export default function CalculationsScreen() {
     };
   }, [pnVolume, pnDextrosePercent, w]);
 
-  const handleCalculate = useCallback(async () => {
+  const handleSave = useCallback(async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
     if (w <= 0 || h <= 0) {
       showToast('يرجى إدخال وزن وطول صحيحين لإجراء الحسابات السريرية', 'error');
-      return;
+      return undefined;
     }
 
     try {
@@ -304,11 +321,38 @@ export default function CalculationsScreen() {
         {
           patientId,
           calculationType: 'total_energy',
-          formulaName: ventilatedREE ? ventilatedREE.formulaName : 'Mifflin-St Jeor + Factor',
-          inputValues: { baseREE: ventilatedREE ? ventilatedREE.value : mifflinBMR, activityFactor, injuryFactor, feverFactor },
+          formulaName: ventilatedREE
+            ? ventilatedREE.formulaName
+            : defaultEnergyFormula === 'Harris-Benedict'
+            ? 'Harris-Benedict + Factor'
+            : defaultEnergyFormula === 'Weight-Based'
+            ? 'Weight-Based (25-30 kcal/kg)'
+            : 'Mifflin-St Jeor + Factor',
+          inputValues: {
+            baseREE: ventilatedREE
+              ? ventilatedREE.value
+              : defaultEnergyFormula === 'Harris-Benedict'
+              ? harrisBMR
+              : defaultEnergyFormula === 'Weight-Based'
+              ? w * 27.5
+              : mifflinBMR,
+            activityFactor,
+            injuryFactor,
+            feverFactor,
+          },
           resultValue: calculatedTEE,
           steps: [
-            { label: 'الأيض الأساسي المستهدف', value: `${(ventilatedREE ? ventilatedREE.value : mifflinBMR).toFixed(0)} سعرة` },
+            {
+              label: 'الأيض الأساسي المستهدف',
+              value: `${(ventilatedREE
+                ? ventilatedREE.value
+                : defaultEnergyFormula === 'Harris-Benedict'
+                ? harrisBMR
+                : defaultEnergyFormula === 'Weight-Based'
+                ? w * 27.5
+                : mifflinBMR
+              ).toFixed(0)} سعرة`,
+            },
             { label: 'معامل النشاط البدني', value: String(activityFactor) },
             { label: 'معامل الإجهاد السريري', value: String(injuryFactor) },
             { label: 'معامل الحرارة/الحمى', value: String(feverFactor) },
@@ -330,12 +374,12 @@ export default function CalculationsScreen() {
 
       await repo.upsertBatch(results);
       setCalculations(results);
-      showToast('تمت معالجة وحساب جميع النماذج بنجاح وبشكل متكامل', 'success');
-      router.replace({ pathname: "/patient/[id]/intervention", params: { id: patientId } });
+      return patientId;
     } catch {
       showToast('فشل في حفظ الحسابات في قاعدة البيانات', 'error');
+      return undefined;
     }
-  }, [patientId, w, h, age, isMale, bmi, mifflinBMR, harrisBMR, ventilatedREE, activityFactor, injuryFactor, feverFactor, calculatedTEE, fluidHollidaySegar, fluidRda, showToast]);
+  }, [patientId, w, h, age, isMale, bmi, mifflinBMR, harrisBMR, ventilatedREE, activityFactor, injuryFactor, feverFactor, calculatedTEE, fluidHollidaySegar, fluidRda, showToast, defaultEnergyFormula]);
 
   const openOverride = useCallback((calc: CalculationResult) => {
     setOverrideTarget(calc);
@@ -767,19 +811,13 @@ export default function CalculationsScreen() {
           </View>
         )}
 
-        {/* Action triggers */}
-        <View style={styles.actions}>
-          <Button
-            title="حفظ السجل السريري المتكامل"
-            onPress={handleCalculate}
-            icon={<Ionicons name="save-outline" size={20} color={colors.primaryContrast} />}
-          />
-          <Button
-            title="عودة لملف المريض"
-            onPress={() => router.back()}
-            variant="secondary"
-          />
-        </View>
+        <TripleActionFooter
+          patientId={patientId}
+          screenKey="calculations"
+          onSave={handleSave}
+          isSaving={false}
+          isValid={true}
+        />
 
         <View style={styles.spacer} />
       </ScrollView>

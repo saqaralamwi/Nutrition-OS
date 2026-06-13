@@ -21,6 +21,7 @@ import DatePickerField from '../../../src/presentation/components/DatePickerFiel
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { formatSafeDate } from '../../../src/utils/date';
 import { getDatabase } from '../../../src/data/database';
 import { Q } from '@nozbe/watermelondb';
 import CalculationModel from '../../../src/data/models/Calculation';
@@ -221,9 +222,9 @@ export default function DischargeScreen() {
     const followUpRequiredVal = form.getValues('followUpRequired');
 
     const statusLabel = DISCHARGE_STATUS_OPTIONS.find(o => o.value === dischargeStatusVal)?.label || dischargeStatusVal;
-    const formattedDischargeDate = dischargeDate.toLocaleDateString('ar-SA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const formattedDischargeDate = formatSafeDate(dischargeDate);
     const formattedFollowUpDate = followUpRequiredVal && nextFollowUpDate
-      ? nextFollowUpDate.toLocaleDateString('ar-SA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      ? formatSafeDate(nextFollowUpDate)
       : 'لا يتطلب متابعة مجدولة';
 
     const weightLossPercentageText = weightLossDetails ? `${weightLossDetails.lossPercentage.toFixed(1)}%` : '0.0%';

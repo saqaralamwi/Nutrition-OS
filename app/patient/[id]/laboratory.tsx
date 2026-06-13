@@ -22,6 +22,9 @@ import DropdownField from '../../../src/presentation/components/DropdownField';
 import DatePickerField from '../../../src/presentation/components/DatePickerField';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { formatSafeDate } from '../../../src/utils/date';
+// import Tesseract from 'tesseract.js';
+import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { InterpretationResult } from '../../../src/domain/entities/LabResult';
 import { LabResultRecord } from '../../../src/domain/repositories/ILabResultRepository';
 import { InterpretLabResultUseCase } from '../../../src/domain/use-cases/InterpretLabResultUseCase';
@@ -62,6 +65,56 @@ interface CatalogOption {
   category: string;
 }
 
+const OCR_RULES = [
+  {
+    testNameEn: 'Albumin',
+    patterns: [
+      /albumin\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /ألبومين\s*[:=\-]?\s*(\d+(?:\.\d+)?)/,
+      /alb\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+    ]
+  },
+  {
+    testNameEn: 'Creatinine',
+    patterns: [
+      /creatinine\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /كرياتينين\s*[:=\-]?\s*(\d+(?:\.\d+)?)/,
+      /creat\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /cr\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+    ]
+  },
+  {
+    testNameEn: 'Urea',
+    patterns: [
+      /urea\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /يوريا\s*[:=\-]?\s*(\d+(?:\.\d+)?)/,
+    ]
+  },
+  {
+    testNameEn: 'ALT (SGPT)',
+    patterns: [
+      /alt\s*(?:\(sgpt\))?\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /sgpt\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+    ]
+  },
+  {
+    testNameEn: 'AST (SGOT)',
+    patterns: [
+      /ast\s*(?:\(sgot\))?\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /sgot\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+    ]
+  },
+  {
+    testNameEn: 'HbA1c',
+    patterns: [
+      /hba1c\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /a1c\s*[:=\-]?\s*(\d+(?:\.\d+)?)/i,
+      /التراكمي\s*[:=\-]?\s*(\d+(?:\.\d+)?)/,
+      /السكر\s+التراكمي\s*[:=\-]?\s*(\d+(?:\.\d+)?)/,
+    ]
+  }
+];
+
 export default function LaboratoryScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -77,6 +130,15 @@ export default function LaboratoryScreen() {
 
   const defaultRangeLowRef = useRef<number>(0);
   const defaultRangeHighRef = useRef<number>(0);
+
+  const handleOcrClick = () => {
+    setShowAddModal(false);
+    router.push(`/patient/${patientId}/ocr`);
+  };
+
+  const handleSave = useCallback(async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
+    return patientId;
+  }, [patientId]);
 
   const labSchema = useMemo(() => z.object({
     testName: z.string().min(1, 'اسم الفحص مطلوب'),
@@ -282,10 +344,16 @@ export default function LaboratoryScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <ArabicText bold style={styles.sectionTitle}>النتائج المسجلة</ArabicText>
-            <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-              <Ionicons name="add-circle" size={22} color={colors.primary} />
-              <ArabicText style={styles.addButtonText}>إضافة نتيجة</ArabicText>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <TouchableOpacity style={styles.addButton} onPress={() => router.push(`/patient/${patientId}/ocr`)}>
+                <Ionicons name="camera-outline" size={22} color={colors.primary} />
+                <ArabicText style={styles.addButtonText}>مسح ذكي (OCR)</ArabicText>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
+                <Ionicons name="add-circle" size={22} color={colors.primary} />
+                <ArabicText style={styles.addButtonText}>إضافة نتيجة</ArabicText>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {labResults.length === 0 ? (
@@ -302,7 +370,7 @@ export default function LaboratoryScreen() {
                   <View style={styles.resultInfo}>
                     <ArabicText bold style={styles.testName}>{result.testName}</ArabicText>
                     <ArabicText style={styles.testDateText}>
-                      {new Date(result.testDate).toLocaleDateString('ar-SA')}
+                      {formatSafeDate(result.testDate)}
                     </ArabicText>
                   </View>
                   <View style={[styles.interpBadge, { backgroundColor: INTERPRETATION_BG[result.interpretation as InterpretationResult] || '#F0F0F0' }]}>
@@ -324,13 +392,13 @@ export default function LaboratoryScreen() {
           )}
         </View>
 
-        <View style={{ padding: spacing.md }}>
-          <Button
-            title="التالي: الأدوية والمكملات"
-            onPress={() => router.replace({ pathname: "/patient/[id]/medications", params: { id: patientId } })}
-            icon={<Ionicons name="arrow-back-outline" size={20} color={colors.primaryContrast} />}
-          />
-        </View>
+        <TripleActionFooter
+          patientId={patientId}
+          screenKey="laboratory"
+          onSave={handleSave}
+          isSaving={false}
+          isValid={true}
+        />
 
         <View style={styles.spacer} />
       </ScrollView>
@@ -347,6 +415,16 @@ export default function LaboratoryScreen() {
             </View>
 
             <View style={styles.modalContent}>
+              <TouchableOpacity
+                style={styles.ocrButton}
+                onPress={handleOcrClick}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="camera-outline" size={20} color="#FFF" />
+                <ArabicText bold style={styles.ocrButtonText}>
+                  📸 إدخال البيانات الذكي عبر التصوير (OCR Scan)
+                </ArabicText>
+              </TouchableOpacity>
               <DropdownField
                 label="اسم الفحص"
                 options={catalogOptions.map((o) => ({ label: o.label, value: o.value }))}
@@ -489,4 +567,54 @@ const styles = StyleSheet.create({
   modalActions: { gap: spacing.sm, marginTop: spacing.md },
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: 8, borderWidth: 1, marginBottom: spacing.md },
   liveBadgeText: { fontSize: 14, fontWeight: '600', flex: 1 },
+  ocrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.md,
+    backgroundColor: '#1E3A8A',
+    borderRadius: 8,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    minHeight: 48,
+  },
+  ocrButtonDisabled: {
+    opacity: 0.6,
+  },
+  ocrButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+  },
+  ocrResultsContainer: {
+    backgroundColor: '#F3F4F6',
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  ocrResultsTitle: {
+    fontSize: 12,
+    color: '#374151',
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+  },
+  ocrChipsRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  ocrChip: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#BAE6FD',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  ocrChipText: {
+    color: '#0369A1',
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });
