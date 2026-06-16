@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useMemo } from 'react';
 import TripleActionFooter from '../../src/presentation/components/TripleActionFooter';
@@ -279,14 +279,32 @@ export default function AddPatientScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>معلومات المريض</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+    >
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {serverErrors.length > 0 && (
+            <View style={styles.alertContainer}>
+              <Ionicons name="warning-outline" size={24} color={colors.danger} />
+              <View style={styles.alertTextContainer}>
+                <Text style={styles.alertTitle}>خطأ في حفظ البيانات</Text>
+                {serverErrors.map((se, idx) => (
+                  <Text key={idx} style={styles.alertMessage}>
+                    {se.message}
+                  </Text>
+                ))}
+              </View>
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>معلومات المريض</Text>
 
           {renderField('fullName', 'الاسم الكامل', {
             placeholder: 'أدخل اسم المريض',
@@ -296,8 +314,7 @@ export default function AddPatientScreen() {
           {Platform.OS === 'web' ? (
             <View style={styles.webDatePickerContainer}>
               <Text style={styles.webDatePickerLabel}>
-                تاريخ الميلاد
-                <Text style={styles.required}> *</Text>
+                تاريخ الميلاد <Text style={{ color: colors.danger }}>*</Text>
               </Text>
               <input
                 type="date"
@@ -306,27 +323,22 @@ export default function AddPatientScreen() {
                 onChange={(e) => {
                   if (e.target.value) {
                     handleBirthDateChange(new Date(e.target.value + 'T00:00:00'));
-                  } else {
-                    setDateOfBirth(null);
-                    setForm((prev) => ({
-                      ...prev,
-                      age: '',
-                    }));
                   }
                 }}
                 style={{
                   width: '100%',
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '8px',
-                  padding: `${spacing.sm + 2}px`,
-                  fontSize: '16px',
-                  color: dateOfBirth ? colors.textPrimary : colors.textDisabled,
+                  height: 48,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderStyle: 'solid',
+                  borderColor: colors.border,
+                  padding: '10px 14px',
                   backgroundColor: colors.surface,
+                  color: dateOfBirth ? colors.textPrimary : colors.textDisabled,
+                  fontSize: 16,
+                  fontFamily: 'inherit',
                   textAlign: 'right',
-                  direction: 'rtl',
-                  minHeight: '48px',
                   outline: 'none',
-                  fontFamily: fontFamilies?.regular || 'inherit',
                   boxSizing: 'border-box',
                 }}
               />
@@ -432,24 +444,12 @@ export default function AddPatientScreen() {
         isSaving={isSaving}
         isValid={isFormValid}
       />
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  webDatePickerContainer: {
-    marginBottom: spacing.md,
-  },
-  webDatePickerLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    textAlign: 'right',
-    fontFamily: fontFamilies?.regular,
-  },
-  required: {
-    color: colors.danger,
-  },
   container: {
     flex: 1,
     backgroundColor: colors.surfaceSecondary,
@@ -554,5 +554,43 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 14,
     fontFamily: fontFamilies?.medium || 'System',
+  },
+  webDatePickerContainer: {
+    marginBottom: spacing.md,
+  },
+  webDatePickerLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+  },
+  alertContainer: {
+    backgroundColor: '#FDE8E8',
+    borderRadius: 8,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F8B4B4',
+  },
+  alertTextContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  alertTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#9B1C1C',
+    fontFamily: fontFamilies?.medium || 'System',
+    marginBottom: 4,
+  },
+  alertMessage: {
+    fontSize: 14,
+    color: '#9B1C1C',
+    fontFamily: fontFamilies?.regular || 'System',
+    textAlign: 'right',
   },
 });

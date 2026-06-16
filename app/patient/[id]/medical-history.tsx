@@ -12,7 +12,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
@@ -204,10 +204,14 @@ export default function MedicalHistoryScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
     >
-      <ScrollView style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
@@ -290,7 +294,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.primary,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
   },

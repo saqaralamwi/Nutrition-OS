@@ -1,0 +1,16 @@
+name = "adcn-nutrition-os-cdn"
+main = "src/cdn/worker.ts"
+compatibility_date = "2024-01-01"
+node_compat = true
+
+r2_buckets = [
+  { binding = "storage", bucket_name = "adcn-storage" }
+]
+
+[env.production]
+vars = {
+  ENVIRONMENT = "production",
+  CDN_DOMAIN = "cdn.adcn.io",
+  MAX_FILE_SIZE = "5000000",
+  ALLOWED_MIME_TYPES = "image/jpeg,image/png,image/gif,image/webp",
+}

@@ -16,7 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../../src/presentation/stores/patientStore';
-import { colors, spacing } from '../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../src/presentation/theme';
 import { formatSafeDate } from '../../src/utils/date';
 import { Patient } from '../../src/domain/entities/Patient';
 import { ActivityLevel } from '../../src/domain/entities/NutritionPlan';
@@ -480,8 +480,21 @@ export default function PatientDetailScreen() {
     try {
       const { getDatabase } = await import('../../src/data/database');
       const { Q } = await import('@nozbe/watermelondb');
-      const db = await getDatabase();
+      let db;
+      try {
+        db = await getDatabase();
+      } catch {
+        showToast('تعذر الاتصال بقاعدة البيانات للتصدير', 'error');
+        return;
+      }
+      if (!db) return;
       const patientId = id;
+
+      const safeQuery = (table: string) => {
+        const col = db.get(table);
+        if (!col) return Promise.resolve([]);
+        return col.query(Q.where('patient_id', patientId)).fetch();
+      };
 
       const [
         medHistories,
@@ -494,15 +507,15 @@ export default function PatientDetailScreen() {
         interventions,
         meals
       ] = await Promise.all([
-        db.get('medical_histories').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('social_histories').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('medications').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('supplements').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('lab_results').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('physical_exam_items').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('calculations').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('interventions').query(Q.where('patient_id', patientId)).fetch(),
-        db.get('meal_plans').query(Q.where('patient_id', patientId)).fetch(),
+        safeQuery('medical_histories'),
+        safeQuery('social_histories'),
+        safeQuery('medications'),
+        safeQuery('supplements'),
+        safeQuery('lab_results'),
+        safeQuery('physical_exam_items'),
+        safeQuery('calculations'),
+        safeQuery('interventions'),
+        safeQuery('meal_plans'),
       ]);
 
       const serializeRecord = (record: any) => {
@@ -701,6 +714,76 @@ export default function PatientDetailScreen() {
           <InfoRow label="رقم السرير" value={patient.bedNumber || '-'} />
         </View>
 
+        {/* NCP Gateways */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>بوابات التحكم والرعاية السريرية (NCP Gateways)</Text>
+          <View style={styles.bottomSection}>
+            <ModuleButton
+              title="🩸 بوابة رعاية السكري (Diabetes NCP)"
+              icon="water"
+              route={`/patient/${patient.id}/ncp-diabetes-gateway`}
+              color="#EF4444"
+              isWide
+            />
+            <ModuleButton
+              title="⚙️ بوابة رعاية أمراض الكلى (Nephrology NCP)"
+              icon="funnel"
+              route={`/patient/${patient.id}/ncp-nephrology-gateway`}
+              color="#3B82F6"
+              isWide
+            />
+            <ModuleButton
+              title="🏥 بوابة العناية المركزة (ICU NCP)"
+              icon="bed"
+              route={`/patient/${patient.id}/ncp-icu-gateway`}
+              color="#8B5CF6"
+              isWide
+            />
+            <ModuleButton
+              title="🩺 محاكي الرعاية الحرجة والتغذية الوريدية (ICU TPN)"
+              icon="pulse"
+              route={`/patient/${patient.id}/icu-critical-care`}
+              color="#0EA5E9"
+              isWide
+            />
+            <ModuleButton
+              title="📊 منحنيات سوائل العناية والأسموزية (ICU Telemetry)"
+              icon="analytics"
+              route={`/patient/${patient.id}/icu-charts`}
+              color="#BF5AF2"
+              isWide
+            />
+            <ModuleButton
+              title="🔥 إنعاش وتقييم الحروق البليغة (Severe Burns NCP)"
+              icon="flame"
+              route={`/patient/${patient.id}/burn-assessment`}
+              color="#F97316"
+              isWide
+            />
+            <ModuleButton
+              title="🫁 لوحة التحكم التنفسي وكبح الكربوهيدرات (Respiratory NCP)"
+              icon="options"
+              route={`/patient/${patient.id}/respiratory-deck`}
+              color="#0EA5E9"
+              isWide
+            />
+            <ModuleButton
+              title="🔒 بوابة التصديق والتدقيق السريري (Certified Audit)"
+              icon="lock-closed"
+              route={`/patient/${patient.id}/certified-audit-gateway`}
+              color="#EAB308"
+              isWide
+            />
+            <ModuleButton
+              title="📊 منحنيات القلب والسوائل (Cardiovascular Telemetry)"
+              icon="pulse"
+              route={`/patient/${patient.id}/cardio-charts`}
+              color="#FF3B30"
+              isWide
+            />
+          </View>
+        </View>
+
         {/* Clinical Modules Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>الأقسام السريرية</Text>
@@ -737,6 +820,24 @@ export default function PatientDetailScreen() {
                 route={`/patient/${patient.id}/screening`}
                 color="#2E7D32"
               />
+              <ModuleButton
+                title="🧒 فحص سوء التغذية للأطفال (STAMP)"
+                icon="bonfire"
+                route={`/patient/${patient.id}/stamp`}
+                color="#8D6E63"
+              />
+              <ModuleButton
+                title="🆘 قبول العناية المركزة (ICU)"
+                icon="fitness"
+                route={`/patient/${patient.id}/icu-admission`}
+                color="#DC2626"
+              />
+              <ModuleButton
+                title="📝 تقييم التاريخ التغذوي (24h Recall)"
+                icon="clipboard"
+                route={`/meal-planner/dietary-history?patientId=${patient.id}`}
+                color="#1565C0"
+              />
             </View>
 
             {/* Right Column: ANALYSIS, CALCULATION & INTERVENTION */}
@@ -746,6 +847,12 @@ export default function PatientDetailScreen() {
                 icon="medical"
                 route={`/patient/${patient.id}/medications`}
                 color="#3F51B5"
+              />
+              <ModuleButton
+                title="🧪 المحاليل والأدوية المسببة للسعرات (Hidden Calories)"
+                icon="eyedrop"
+                route={`/patient/${patient.id}/iv-medications`}
+                color="#E65100"
               />
               <ModuleButton
                 title="🧮 حسابات الطاقة التفصيلية"
@@ -769,6 +876,12 @@ export default function PatientDetailScreen() {
                 title=" تخطيط الوجبات والبدائل الغذائية"
                 icon="nutrition"
                 route={`/patient/${patient.id}/diet-plan`}
+                color="#2E7D32"
+              />
+              <ModuleButton
+                title="🥗 تخطيط الوصفة الغذائية الذكية"
+                icon="restaurant"
+                route={`/meal-planner/smart-planner?patientId=${patient.id}`}
                 color="#2E7D32"
               />
             </View>
@@ -1457,13 +1570,13 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.primary,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
   },
   backBtn: {
     position: 'absolute',
-    top: 54,
+    top: safeHeaderPaddingTop - 6,
     start: spacing.md,
     zIndex: 1,
     padding: 4,

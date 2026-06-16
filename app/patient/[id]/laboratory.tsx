@@ -15,7 +15,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
@@ -349,6 +349,10 @@ export default function LaboratoryScreen() {
                 <Ionicons name="camera-outline" size={22} color={colors.primary} />
                 <ArabicText style={styles.addButtonText}>مسح ذكي (OCR)</ArabicText>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.addButton} onPress={() => router.push(`/patient/${patientId}/lab-trends`)}>
+                <Ionicons name="trending-up-outline" size={22} color={colors.primary} />
+                <ArabicText style={styles.addButtonText}>اتجاهات</ArabicText>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
                 <Ionicons name="add-circle" size={22} color={colors.primary} />
                 <ArabicText style={styles.addButtonText}>إضافة نتيجة</ArabicText>
@@ -539,7 +543,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceSecondary },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary, gap: spacing.md },
   loadingText: { fontSize: 16, color: colors.textSecondary },
-  header: { backgroundColor: colors.primary, paddingTop: 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.md },
+  header: { backgroundColor: colors.primary, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.lg, paddingHorizontal: spacing.md },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   headerTitle: { fontSize: 22, color: colors.primaryContrast, flex: 1 },
   section: { backgroundColor: colors.surface, margin: spacing.md, borderRadius: 12, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
@@ -561,7 +565,7 @@ const styles = StyleSheet.create({
   refRange: { fontSize: 12, color: colors.textSecondary },
   spacer: { height: 40 },
   modalContainer: { flex: 1, backgroundColor: colors.surfaceSecondary },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primary, paddingTop: 60, paddingBottom: spacing.md, paddingHorizontal: spacing.md },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primary, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.md, paddingHorizontal: spacing.md },
   modalTitle: { fontSize: 20, color: colors.primaryContrast },
   modalContent: { padding: spacing.md },
   modalActions: { gap: spacing.sm, marginTop: spacing.md },

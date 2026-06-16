@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "التغذية السريرية",
+    "name": "ADCN",
     "slug": "clinical-nutrition-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,19 +9,27 @@
     "scheme": "clinical-nutrition",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.alumawi.clinicaladcn",
       "infoPlist": {
-        "NSCameraUsageDescription": "يستخدم هذا التطبيق الكاميرا لتصوير المستندات الطبية."
+        "NSCameraUsageDescription": "يستخدم هذا التطبيق الكاميرا لتصوير تقارير التحاليل الطبية والمستندات السريرية واستخراج البيانات عبر الماسح الضوئي.",
+        "NSPhotoLibraryUsageDescription": "يستخدم هذا التطبيق معرض الصور لتمكين رفع وقراءة تقارير التحاليل الطبية والمستندات السريرية.",
+        "NSPhotoLibraryAddUsageDescription": "يستخدم هذا التطبيق معرض الصور لحفظ التقارير الطبية والمستندات المصدرة."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1B6B4A",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.clinical.nutrition.app"
+      "package": "com.alumawi.clinicaladcn",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "INTERNET",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -49,7 +57,7 @@
           "ocrModels": ["latin"],
           "ocrUseBundled": true
         }
-      ]
+      ],
     ],
     "extra": {
       "router": {

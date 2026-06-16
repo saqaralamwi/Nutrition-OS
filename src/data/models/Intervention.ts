@@ -1,5 +1,7 @@
 import { Model } from '@nozbe/watermelondb';
-import { field, date, children, immutableRelation } from '@nozbe/watermelondb/decorators';
+import { field, date, readonly, children, relation } from '@nozbe/watermelondb/decorators';
+import Patient from './Patient';
+import FollowUpVisit from './FollowUpVisit';
 
 export default class Intervention extends Model {
   static table = 'interventions';
@@ -9,9 +11,9 @@ export default class Intervention extends Model {
     follow_up_visits: { type: 'has_many' as const, foreignKey: 'intervention_id' },
   };
 
-  @immutableRelation('patients', 'patient_id') patient!: any;
+  @relation('patients', 'patient_id') patient?: Patient;
   @field('patient_id') patientId!: string;
-  @children('follow_up_visits') followUpVisits!: any;
+  @children('follow_up_visits') followUpVisits?: FollowUpVisit[];
   @field('nutrition_diagnosis') nutritionDiagnosis!: string;
   @field('main_goal') mainGoal!: string;
   @field('diet_type') dietType!: string;
@@ -31,6 +33,7 @@ export default class Intervention extends Model {
   @field('status') status!: string;
   @field('superseded_by') supersededBy!: string;
   @field('comments') comments!: string;
-  @date('created_at') createdAt!: Date;
-  @date('updated_at') updatedAt!: Date;
+
+  @readonly @date('created_at') createdAt!: Date;
+  @readonly @date('updated_at') updatedAt!: Date;
 }

@@ -15,6 +15,16 @@ function toRecord(model: DischargeSummaryModel): DischargeSummaryRecord {
     homeNutritionPlan: model.homeNutritionPlan,
     followUpRequired: model.followUpRequired,
     nextFollowUpDate: model.nextFollowUpDate?.getTime() ?? undefined,
+    finalEnergyIntake: model.finalEnergyIntake,
+    finalProteinIntake: model.finalProteinIntake,
+    finalFluidIntake: model.finalFluidIntake,
+    weightChangeKg: model.weightChangeKg ?? undefined,
+    nutritionCompliance: model.nutritionCompliance,
+    dischargeNutritionRecommendation: model.dischargeNutritionRecommendation,
+    followupNeededDays: model.followupNeededDays ?? undefined,
+    complicationsRelatedToNutrition: model.complicationsRelatedToNutrition ?? undefined,
+    complicationsNotes: model.complicationsNotes ?? undefined,
+    nextEnergyTargetKcal: model.nextEnergyTargetKcal ?? undefined,
     createdAt: model.createdAt?.toISOString() || undefined,
     updatedAt: model.updatedAt?.toISOString() || undefined,
   };
@@ -46,6 +56,16 @@ export class DischargeRepository implements IDischargeRepository {
         r.homeNutritionPlan = record.homeNutritionPlan;
         r.followUpRequired = record.followUpRequired;
         r.nextFollowUpDate = record.nextFollowUpDate ? new Date(record.nextFollowUpDate) : undefined;
+        r.finalEnergyIntake = record.finalEnergyIntake;
+        r.finalProteinIntake = record.finalProteinIntake;
+        r.finalFluidIntake = record.finalFluidIntake;
+        r.weightChangeKg = record.weightChangeKg ?? undefined;
+        r.nutritionCompliance = record.nutritionCompliance;
+        r.dischargeNutritionRecommendation = record.dischargeNutritionRecommendation;
+        r.followupNeededDays = record.followupNeededDays ?? undefined;
+        r.complicationsRelatedToNutrition = record.complicationsRelatedToNutrition ?? undefined;
+        r.complicationsNotes = record.complicationsNotes ?? undefined;
+        r.nextEnergyTargetKcal = record.nextEnergyTargetKcal ?? undefined;
         r.createdAt = now;
         r.updatedAt = now;
       });

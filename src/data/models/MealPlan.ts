@@ -1,5 +1,6 @@
 import { Model } from '@nozbe/watermelondb';
-import { field, date, immutableRelation } from '@nozbe/watermelondb/decorators';
+import { field, date, readonly, relation } from '@nozbe/watermelondb/decorators';
+import Patient from './Patient';
 
 export default class MealPlan extends Model {
   static table = 'meal_plans';
@@ -8,7 +9,7 @@ export default class MealPlan extends Model {
     patients: { type: 'belongs_to' as const, key: 'patient_id' },
   };
 
-  @immutableRelation('patients', 'patient_id') patient!: any;
+  @relation('patients', 'patient_id') patient?: Patient;
   @field('patient_id') patientId!: string;
   @date('plan_date') planDate!: Date;
   @field('meal_type') mealType!: string;
@@ -18,6 +19,6 @@ export default class MealPlan extends Model {
   @field('total_protein') totalProtein!: number;
   @field('total_fat') totalFat!: number;
 
-  @date('created_at') createdAt!: Date;
-  @date('updated_at') updatedAt!: Date;
+  @readonly @date('created_at') createdAt!: Date;
+  @readonly @date('updated_at') updatedAt!: Date;
 }

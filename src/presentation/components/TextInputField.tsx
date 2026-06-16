@@ -1,5 +1,9 @@
 import { View, TextInput, StyleSheet, Text } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { colors, spacing, fontFamilies } from '../theme';
+import { useAppTheme } from '../hooks/useAppTheme';
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
 interface TextInputFieldProps {
   label: string;
@@ -32,20 +36,21 @@ export default function TextInputField({
   leftIcon,
   autoCorrect,
 }: TextInputFieldProps) {
+  const { theme, animatedCard, animatedText, animatedSubtext } = useAppTheme();
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>
+      <Animated.Text style={[styles.label, animatedSubtext]}>
         {label}
         {required && <Text style={styles.required}> *</Text>}
-      </Text>
-      <View style={[styles.inputRow, error && styles.inputRowError, !editable && styles.inputRowDisabled]}>
+      </Animated.Text>
+      <Animated.View style={[styles.inputRow, animatedCard, error && styles.inputRowError, !editable && styles.inputRowDisabled]}>
         {leftIcon && <View style={styles.iconSlot}>{leftIcon}</View>}
-        <TextInput
-          style={[styles.input, multiline && styles.multiline]}
+        <AnimatedTextInput
+          style={[styles.input, animatedText, multiline && styles.multiline]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={colors.textDisabled}
+          placeholderTextColor={theme.subtext}
           keyboardType={keyboardType}
           multiline={multiline}
           numberOfLines={multiline ? 3 : 1}
@@ -55,7 +60,7 @@ export default function TextInputField({
           secureTextEntry={secureTextEntry}
           autoCorrect={autoCorrect}
         />
-      </View>
+      </Animated.View>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );

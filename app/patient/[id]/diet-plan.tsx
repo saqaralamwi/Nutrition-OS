@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
@@ -113,7 +113,14 @@ export default function DietPlanScreen() {
   async function loadData() {
     try {
       setIsLoading(true);
-      const db = await getDatabase();
+      let db;
+      try {
+        db = await getDatabase();
+      } catch {
+        showToast('تعذر الاتصال بقاعدة البيانات', 'error');
+        return;
+      }
+      if (!db) return;
 
       // 1. Load patient details
       const { GetPatientUseCase } = await import('../../../src/domain/use-cases/GetPatientUseCase');
@@ -197,15 +204,30 @@ export default function DietPlanScreen() {
   }
 
   async function loadFoodCatalog(db: any) {
-    const items = await db.get('food_items').query().fetch();
+    if (!db) {
+      showToast('قاعدة البيانات غير متاحة', 'error');
+      return;
+    }
+    const collection = db.get('food_items');
+    if (!collection) return;
+    const items = await collection.query().fetch();
     setFoodCatalog(items);
   }
 
   // Pre-populate template helper
   const loadClinicalTemplate = useCallback(async (templateType: 'diabetic_renal' | 'traditional' | 'low_sodium') => {
     try {
-      const db = await getDatabase();
-      const allFoods = await db.get('food_items').query().fetch();
+      let db;
+      try {
+        db = await getDatabase();
+      } catch {
+        showToast('تعذر الاتصال بقاعدة البيانات', 'error');
+        return;
+      }
+      if (!db) return;
+      const foodCollection = db.get('food_items');
+      if (!foodCollection) return;
+      const allFoods = await foodCollection.query().fetch();
 
       const findFood = (nameAr: string) => {
         return allFoods.find((f: any) => f.nameAr.includes(nameAr) || nameAr.includes(f.nameAr));
@@ -500,7 +522,14 @@ export default function DietPlanScreen() {
     }
 
     try {
-      const db = await getDatabase();
+      let db;
+      try {
+        db = await getDatabase();
+      } catch {
+        Alert.alert('خطأ', 'تعذر الاتصال بقاعدة البيانات');
+        return;
+      }
+      if (!db) return;
       let createdRecord: any;
 
       await db.write(async () => {
@@ -536,8 +565,11 @@ export default function DietPlanScreen() {
       });
 
       // Reload list and auto add
-      const updatedCatalog = await db.get('food_items').query().fetch();
-      setFoodCatalog(updatedCatalog);
+      const foodItemsCollection = db.get('food_items');
+      if (foodItemsCollection) {
+        const updatedCatalog = await foodItemsCollection.query().fetch();
+        setFoodCatalog(updatedCatalog);
+      }
 
       // Auto add to the active meal
       addFoodToMeal(activeMealType, createdRecord);
@@ -623,7 +655,7 @@ export default function DietPlanScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="stats-chart" size={20} color={colors.primary} />
-              <ArabicText bold style={styles.sectionTitle}>الملخص اليومي المقارن بمستهدفات جامعة الملك عبد العزيز</ArabicText>
+              <ArabicText bold style={styles.sectionTitle}>الملخص اليومي المقارن بمستهدفات البرتوكولات</ArabicText>
             </View>
 
             <View style={styles.macroDashboard}>
@@ -1112,8 +1144,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceSecondary },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary, gap: spacing.md },
   loadingText: { fontSize: 16, color: colors.textSecondary },
-  header: { backgroundColor: colors.primary, paddingTop: 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.md },
-  backBtn: { position: 'absolute', top: 54, start: spacing.md, zIndex: 1, padding: 4 },
+  header: { backgroundColor: colors.primary, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.lg, paddingHorizontal: spacing.md },
+  backBtn: { position: 'absolute', top: safeHeaderPaddingTop - 6, start: spacing.md, zIndex: 1, padding: 4 },
   headerTitle: { fontSize: 20, color: colors.primaryContrast, textAlign: 'right', marginTop: spacing.lg },
   headerSubtitle: { fontSize: 13, color: colors.primaryContrast, opacity: 0.8, textAlign: 'right', marginTop: spacing.xs },
   section: {

@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import { Patient } from '../../../src/domain/entities/Patient';
 import { ActivityLevel, ACTIVITY_LEVELS } from '../../../src/domain/entities/NutritionPlan';
 
@@ -350,8 +350,8 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary },
   errorText: { fontSize: 16, color: colors.danger, fontFamily: 'ThmanyahSans-Medium' },
-  header: { backgroundColor: colors.primary, paddingTop: 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.md, position: 'relative' },
-  backBtn: { position: 'absolute', top: 54, start: spacing.md, zIndex: 1, padding: 4 },
+  header: { backgroundColor: colors.primary, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.lg, paddingHorizontal: spacing.md, position: 'relative' },
+  backBtn: { position: 'absolute', top: safeHeaderPaddingTop - 6, start: spacing.md, zIndex: 1, padding: 4 },
   headerTitle: { fontSize: 22, fontFamily: 'ThmanyahSans-Bold', color: colors.primaryContrast, textAlign: 'right', marginTop: spacing.lg },
   headerSubtitle: { fontSize: 14, fontFamily: 'ThmanyahSans-Regular', color: colors.primaryContrast, opacity: 0.8, textAlign: 'right', marginTop: spacing.xs },
   section: { backgroundColor: colors.surface, margin: spacing.md, borderRadius: 12, padding: spacing.md, borderWidth: 1, borderColor: colors.border },

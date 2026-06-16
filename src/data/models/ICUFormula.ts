@@ -1,0 +1,64 @@
+import { Model } from '@nozbe/watermelondb';
+import { field, date, readonly } from '@nozbe/watermelondb/decorators';
+
+export default class ICUFormula extends Model {
+  static table = 'icu_formulas';
+
+  @field('name') name!: string;
+  @field('name_ar') nameAr?: string;
+  @field('type') type!: string;
+  @field('type_ar') typeAr?: string;
+  @field('manufacturer') manufacturer?: string;
+  @field('brand') brand?: string;
+  @field('calories_per_ml') caloriesPerMl!: number;
+  @field('protein_per_ml') proteinPerMl?: number;
+  @field('carbs_per_ml') carbsPerMl?: number;
+  @field('fat_per_ml') fatPerMl?: number;
+  @field('fiber_per_100ml') fiberPer100ml?: number;
+  @field('energy_kcal_per_ml') energyKcalPerMl?: number;
+  @field('protein_g_per_ml') proteinGPerMl?: number;
+  @field('carbs_g_per_ml') carbsGPerMl?: number;
+  @field('fat_g_per_ml') fatGPerMl?: number;
+  @field('fiber_g_per_ml') fiberGPerMl?: number;
+  @field('protein_percent') proteinPercent?: number;
+  @field('carbs_percent') carbsPercent?: number;
+  @field('fat_percent') fatPercent?: number;
+  @field('sodium_mg') sodiumMg?: number;
+  @field('potassium_mg') potassiumMg?: number;
+  @field('phosphorus_mg') phosphorusMg?: number;
+  @field('calcium_mg') calciumMg?: number;
+  @field('magnesium_mg') magnesiumMg?: number;
+  @field('iron_mg') ironMg?: number;
+  @field('zinc_mg') zincMg?: number;
+  @field('vitamin_a_mcg') vitaminAMcg?: number;
+  @field('vitamin_c_mg') vitaminCMg?: number;
+  @field('vitamin_d_mcg') vitaminDMcg?: number;
+  @field('vitamin_e_mg') vitaminEMg?: number;
+  @field('vitamin_k_mcg') vitaminKMcg?: number;
+  @field('folate_mcg') folateMcg?: number;
+  @field('niacin_mg') niacinMg?: number;
+  @field('thiamin_mg') thiaminMg?: number;
+  @field('riboflavin_mg') riboflavinMg?: number;
+  @field('biotin_mcg') biotinMcg?: number;
+  @field('osmolality') osmolality?: number;
+  @field('volume_ml') volumeMl?: number;
+  @field('ph') ph?: number;
+  @field('viscosity') viscosity?: number;
+  @field('indications') indications?: string;
+  @field('recommended_use') recommendedUse?: string;
+  @field('recommended_use_ar') recommendedUseAr?: string;
+  @field('contraindications') contraindications?: string;
+  @field('contraindications_ar') contraindicationsAr?: string;
+  @field('side_effects') sideEffects?: string;
+  @field('side_effects_ar') sideEffectsAr?: string;
+  @field('storage') storage?: string;
+  @field('storage_ar') storageAr?: string;
+  @field('expiration_days') expirationDays?: number;
+  @field('price_sar') priceSar?: number;
+  @field('price_usd') priceUsd?: number;
+  @field('price_yer') priceYer?: number;
+  @field('created_by') createdBy?: string;
+
+  @readonly @date('created_at') createdAt!: Date;
+  @readonly @date('updated_at') updatedAt!: Date;
+}

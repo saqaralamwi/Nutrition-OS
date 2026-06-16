@@ -1,89 +1,41 @@
-import { DiseaseRule, DiseaseAdjustment } from '../entities/DiseaseRule';
+import { DiseaseAdjustment } from '../entities/DiseaseRule';
+import { DepartmentPlannerRegistry, PlannerPatient } from './DepartmentPlannerRegistry';
 
-const OBESITY_CALORIE_DEFICIT = -500;
-
-const diseaseRules: DiseaseRule[] = [
-  {
-    keywords: ['سكري', 'diabetes', 'DM', 'type 2'],
-    apply: (calories: number, _weightKg: number): DiseaseAdjustment => ({
-      calorieAdjustment: 0,
-      recommendations: [
-        'توزيع الوجبات على 3 وجبات رئيسية + 2 وجبة خفيفة',
-        'اختيار الكربوهيدرات المعقدة (الحبوب الكاملة، البقوليات)',
-        'زيادة الألياف الغذائية إلى 25-30 غرام يومياً',
-        'متابعة مستوى السكر بانتظام',
-      ],
-      restrictions: [
-        'تجنب السكريات البسيطة والمشروبات المحلاة',
-        'تجنب الكربوهيدرات المكررة (الخبز الأبيض، الأرز الأبيض)',
-      ],
-      carbsPercentage: 0.45,
-    }),
-  },
-  {
-    keywords: ['ضغط', 'hypertension', 'HTN', 'ارتفاع ضغط'],
-    apply: (calories: number, _weightKg: number): DiseaseAdjustment => ({
-      calorieAdjustment: 0,
-      recommendations: [
-        'اتباع نظام DASH الغذائي',
-        'زيادة تناول البوتاسيوم (الموز، البطاطس، السبانخ)',
-        'تناول الخضروات والفواكه الطازجة يومياً',
-      ],
-      restrictions: [
-        'تقليل الصوديوم إلى أقل من 2000 ملغ يومياً',
-        'تجنب الأطعمة المعلبة والمصنعة',
-        'تجنب إضافة الملح إلى الطعام',
-      ],
-    }),
-  },
-  {
-    keywords: ['سمنة', 'obesity', 'obese', 'زيادة وزن'],
-    apply: (calories: number, _weightKg: number): DiseaseAdjustment => ({
-      calorieAdjustment: OBESITY_CALORIE_DEFICIT,
-      recommendations: [
-        'تقليل السعرات الحرارية تدريجياً',
-        'زيادة النشاط البدني (30 دقيقة مشي يومياً على الأقل)',
-        'تناول وجبات صغيرة متكررة',
-        'شرب الماء قبل الوجبات',
-      ],
-      restrictions: [
-        'تجنب الوجبات السريعة والمقلية',
-        'تجنب المشروبات الغازية والعصائر المحلاة',
-      ],
-    }),
-  },
-  {
-    keywords: ['فشل كلوي', 'renal', 'kidney', ' CKD'],
-    apply: (calories: number, weightKg: number): DiseaseAdjustment => ({
-      calorieAdjustment: 0,
-      recommendations: [
-        'الحفاظ على السعرات الحرارية المناسبة لتجنب الهزال',
-        'طهي الخضروات لتقليل محتوى البوتاسيوم',
-      ],
-      restrictions: [
-        'تقييد البروتين حسب توصية الطبيب',
-        'مراقبة البوتاسيوم والفوسفور',
-        'تجنب الأطعمة عالية الصوديوم',
-      ],
-      proteinPerKg: 0.6,
-    }),
-  },
-  {
-    keywords: ['أمراض كبد', 'liver', 'hepatic', ' cirrhosis'],
-    apply: (calories: number, _weightKg: number): DiseaseAdjustment => ({
-      calorieAdjustment: 0,
-      recommendations: [
-        'تقسيم الوجبات إلى 4-6 وجبات صغيرة يومياً',
-        'تناول الكربوهيدرات المعقدة للحفاظ على مستوى الطاقة',
-      ],
-      restrictions: [
-        'تجنب الكحول تماماً',
-        'تقييد الصوديوم في حالة الاستسقاء',
-        'تجنب الأطعمة النيئة أو غير المطبوخة جيداً',
-      ],
-    }),
-  },
+const diseaseKeywordMap: { keywords: string[]; department: string }[] = [
+  { keywords: ['سكري', 'diabetes', 'DM', 'type 1', 'type 2', 't1d', 't2d'], department: 'diabetes' },
+  { keywords: ['ضغط', 'hypertension', 'HTN', 'ارتفاع ضغط'], department: 'default' },
+  { keywords: ['سمنة', 'obesity', 'obese', 'زيادة وزن'], department: 'default' },
+  { keywords: ['فشل كلوي', 'renal', 'kidney', 'CKD', 'nephro'], department: 'nephrology' },
+  { keywords: ['أمراض كبد', 'liver', 'hepatic', 'cirrhosis'], department: 'default' },
 ];
+
+function diagnosisToPatient(diagnosis: string, weightKg: number): PlannerPatient {
+  return {
+    id: '',
+    fileNumber: '',
+    fullName: '',
+    age: 40,
+    dateOfBirth: null,
+    gender: 'male',
+    nationalId: null,
+    nationality: null,
+    phoneNumber: null,
+    department: '',
+    bedNumber: null,
+    admissionDate: new Date().toISOString(),
+    referringPhysician: null,
+    primaryDiagnosis: diagnosis,
+    patientType: 'inpatient',
+    status: 'active',
+    notes: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    weight_kg: weightKg,
+    height_cm: 170,
+    activity_factor: 1.2,
+    stress_factor: 1.0,
+  };
+}
 
 export function getDiseaseAdjustments(
   diagnosis: string,
@@ -91,39 +43,42 @@ export function getDiseaseAdjustments(
   weightKg: number
 ): DiseaseAdjustment {
   const lowerDiagnosis = diagnosis.toLowerCase();
-  const matchedRules = diseaseRules.filter((rule) =>
-    rule.keywords.some((kw) => lowerDiagnosis.includes(kw.toLowerCase()))
+  const matchedDepartment = diseaseKeywordMap.find((entry) =>
+    entry.keywords.some((kw) => lowerDiagnosis.includes(kw.toLowerCase()))
   );
 
-  if (matchedRules.length === 0) {
-    return {
-      calorieAdjustment: 0,
-      recommendations: ['اتباع نظام غذائي متوازن', 'تناول وجبات منتظمة'],
-      restrictions: [],
-    };
-  }
+  const patient = diagnosisToPatient(diagnosis, weightKg);
+  const planner = matchedDepartment
+    ? DepartmentPlannerRegistry.getPlanner(matchedDepartment.department)
+    : DepartmentPlannerRegistry.getPlanner('default');
 
-  const adjustments = matchedRules.map((r) =>
-    r.apply(totalCalories, weightKg)
-  );
+  const plan = {
+    patient,
+    calories: totalCalories,
+    protein_g: planner.calculateProtein(patient),
+    carbs_g: planner.calculateCarbs(patient, totalCalories),
+    fat_g: planner.calculateFat(patient, totalCalories),
+    totalCalories,
+  };
+
+  const validation = planner.validatePlan(plan);
+  const considerations = planner.getSpecialConsiderations(patient);
+
+  const recommendations = [
+    ...(considerations.length > 0 ? considerations : ['اتباع نظام غذائي متوازن', 'تناول وجبات منتظمة']),
+  ];
+  const restrictions = validation.errors.concat(validation.warnings);
+
+  const protein_g = planner.calculateProtein(patient);
+  const carbs_g = planner.calculateCarbs(patient, totalCalories);
+  const fat_g = planner.calculateFat(patient, totalCalories);
 
   return {
-    calorieAdjustment: adjustments.reduce(
-      (sum, a) => sum + (a.calorieAdjustment ?? 0),
-      0
-    ),
-    recommendations: [
-      ...new Set(adjustments.flatMap((a) => a.recommendations)),
-    ],
-    restrictions: [...new Set(adjustments.flatMap((a) => a.restrictions))],
-    proteinPerKg: adjustments
-      .map((a) => a.proteinPerKg)
-      .find((p) => p !== undefined),
-    fatPercentage: adjustments
-      .map((a) => a.fatPercentage)
-      .find((p) => p !== undefined),
-    carbsPercentage: adjustments
-      .map((a) => a.carbsPercentage)
-      .find((p) => p !== undefined),
+    calorieAdjustment: 0,
+    recommendations,
+    restrictions,
+    proteinPerKg: weightKg > 0 ? Math.round((protein_g / weightKg) * 10) / 10 : undefined,
+    carbsPercentage: totalCalories > 0 ? Math.round((carbs_g * 4 / totalCalories) * 100) : undefined,
+    fatPercentage: totalCalories > 0 ? Math.round((fat_g * 9 / totalCalories) * 100) : undefined,
   };
 }

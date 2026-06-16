@@ -1,5 +1,5 @@
 import { Model } from '@nozbe/watermelondb';
-import { field, date } from '@nozbe/watermelondb/decorators';
+import { field, date, readonly } from '@nozbe/watermelondb/decorators';
 
 export default class FoodItem extends Model {
   static table = 'food_items';
@@ -15,6 +15,6 @@ export default class FoodItem extends Model {
   @field('potassium') potassium?: number;
   @field('sodium') sodium?: number;
 
-  @date('created_at') createdAt!: Date;
-  @date('updated_at') updatedAt!: Date;
+  @readonly @date('created_at') createdAt!: Date;
+  @readonly @date('updated_at') updatedAt!: Date;
 }

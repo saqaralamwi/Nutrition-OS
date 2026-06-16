@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -12,13 +13,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import Button from '../../../src/presentation/components/Button';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import NutritionTemplateSelector from '../../../src/presentation/components/NutritionTemplateSelector';
+import type { NutritionTemplate } from '../../../src/domain/entities/NutritionTemplate';
 
 const NUTRITION_DIAGNOSIS_OPTIONS = [
   { label: 'سوء التغذية', value: 'malnutrition' },
@@ -124,6 +127,7 @@ export default function InterventionScreen() {
   const [missingModules, setMissingModules] = useState<string[]>([]);
   const [existingId, setExistingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
   const {
     handleSubmit,
@@ -257,6 +261,49 @@ export default function InterventionScreen() {
     return success ? patientId : undefined;
   };
 
+  const applyTemplate = useCallback((template: NutritionTemplate) => {
+    const current = watch();
+    const calcFromPercent = (pct: number | null, calories: number): string => {
+      if (!pct) return '';
+      const targetKcal = calories > 0 ? calories : 2000;
+      return String(Math.round((pct / 100) * targetKcal / 4));
+    };
+
+    reset({
+      ...current,
+      dietType: template.appliesToDietType || current.dietType,
+      targetCalories: template.energyKcalPerKg
+        ? String(Math.round(template.energyKcalPerKg * 70))
+        : current.targetCalories,
+      targetProtein: template.proteinGPerKg
+        ? String(Math.round(template.proteinGPerKg * 70))
+        : template.proteinPercent
+          ? calcFromPercent(template.proteinPercent, parseFloat(current.targetCalories || '2000'))
+          : current.targetProtein,
+      targetCarbohydrates: template.carbohydratePercent
+        ? calcFromPercent(template.carbohydratePercent, parseFloat(current.targetCalories || '2000'))
+        : current.targetCarbohydrates,
+      targetFat: template.fatPercent
+        ? calcFromPercent(template.fatPercent, parseFloat(current.targetCalories || '2000'))
+        : current.targetFat,
+      fluidAllowance: template.fluidMlPerDay
+        ? String(template.fluidMlPerDay)
+        : current.fluidAllowance,
+      dietModifications: template.specialRecommendationsAr
+        ? current.dietModifications
+          ? current.dietModifications + '\n---\n' + template.specialRecommendationsAr
+          : template.specialRecommendationsAr
+        : current.dietModifications,
+      dietRecommendations: template.mealPatternNoteAr
+        ? current.dietRecommendations
+          ? current.dietRecommendations + '\n' + template.mealPatternNoteAr
+          : template.mealPatternNoteAr
+        : current.dietRecommendations,
+    });
+
+    showToast(`تم تطبيق قالب: ${template.conditionNameAr}`, 'success');
+  }, [watch, reset, showToast]);
+
   const w = watch;
 
   if (isLoading) {
@@ -314,6 +361,14 @@ export default function InterventionScreen() {
           <View style={styles.headerRow}>
             <Ionicons name="clipboard-outline" size={24} color={colors.primaryContrast} />
             <ArabicText bold style={styles.headerTitle}>خطة التدخل التغذوي</ArabicText>
+            <TouchableOpacity
+              style={styles.templateBtn}
+              onPress={() => setShowTemplateSelector(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="book-outline" size={18} color={colors.primaryContrast} />
+              <ArabicText style={styles.templateBtnText}>قوالب</ArabicText>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -495,6 +550,12 @@ export default function InterventionScreen() {
 
         <View style={styles.spacer} />
       </ScrollView>
+
+      <NutritionTemplateSelector
+        visible={showTemplateSelector}
+        onClose={() => setShowTemplateSelector(false)}
+        onSelect={applyTemplate}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -518,7 +579,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.primary,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
   },
@@ -602,5 +663,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
     flex: 1,
+  },
+  templateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  templateBtnText: {
+    color: colors.primaryContrast,
+    fontSize: 13,
   },
 });

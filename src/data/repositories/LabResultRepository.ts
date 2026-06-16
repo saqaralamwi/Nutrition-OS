@@ -12,11 +12,11 @@ function toRecord(model: LabResultModel): LabResultRecord {
     unit: model.unit,
     referenceRangeLow: model.referenceRangeLow,
     referenceRangeHigh: model.referenceRangeHigh,
-    interpretation: model.interpretation,
-    overrideReason: model.overrideReason || undefined,
+    interpretation: model.isAbnormal ? 'abnormal' : 'normal',
+    overrideReason: model.severity || undefined,
     testDate: model.testDate?.toISOString() || new Date().toISOString(),
     comments: model.comments || undefined,
-    attachedImagePath: model.attachedImagePath || undefined,
+    attachedImagePath: undefined,
     createdAt: model.createdAt?.toISOString() || undefined,
     updatedAt: model.updatedAt?.toISOString() || undefined,
   };
@@ -25,7 +25,7 @@ function toRecord(model: LabResultModel): LabResultRecord {
 export class LabResultRepository implements ILabResultRepository {
   async getByPatientId(patientId: string): Promise<LabResultRecord[]> {
     const db = await getDatabase();
-    const results = await db.get<LabResultModel>('lab_results')
+    const results = await db.get<LabResultModel>('laboratory_results')
       .query(
         Q.where('patient_id', patientId),
         Q.sortBy('test_date', 'desc'),
@@ -36,7 +36,7 @@ export class LabResultRepository implements ILabResultRepository {
 
   async getByTestName(patientId: string, testName: string): Promise<LabResultRecord[]> {
     const db = await getDatabase();
-    const results = await db.get<LabResultModel>('lab_results')
+    const results = await db.get<LabResultModel>('laboratory_results')
       .query(
         Q.where('patient_id', patientId),
         Q.where('test_name', testName),
@@ -51,7 +51,7 @@ export class LabResultRepository implements ILabResultRepository {
     const now = new Date();
 
     const result = await db.write(async () => {
-      const collection = db.get<LabResultModel>('lab_results');
+      const collection = db.get<LabResultModel>('laboratory_results');
       return collection.create((r) => {
         r.patientId = record.patientId;
         r.testName = record.testName;
@@ -59,11 +59,11 @@ export class LabResultRepository implements ILabResultRepository {
         r.unit = record.unit;
         r.referenceRangeLow = record.referenceRangeLow;
         r.referenceRangeHigh = record.referenceRangeHigh;
-        r.interpretation = record.interpretation;
-        r.overrideReason = record.overrideReason ?? '';
+        r.isAbnormal = record.interpretation === 'abnormal';
+        r.severity = record.overrideReason || null;
+        r.source = 'lab_machine';
         r.testDate = new Date(record.testDate);
         r.comments = record.comments ?? '';
-        r.attachedImagePath = record.attachedImagePath ?? '';
         r.createdAt = now;
         r.updatedAt = now;
       });
@@ -74,7 +74,7 @@ export class LabResultRepository implements ILabResultRepository {
   async delete(id: string): Promise<void> {
     const db = await getDatabase();
     await db.write(async () => {
-      const record = await db.get<LabResultModel>('lab_results').find(id);
+      const record = await db.get<LabResultModel>('laboratory_results').find(id);
       await record.markAsDeleted();
     });
   }

@@ -1,5 +1,7 @@
 import { Model } from '@nozbe/watermelondb';
-import { field, date, immutableRelation, relation } from '@nozbe/watermelondb/decorators';
+import { field, date, readonly, relation } from '@nozbe/watermelondb/decorators';
+import Patient from './Patient';
+import Intervention from './Intervention';
 
 export default class FollowUpVisit extends Model {
   static table = 'follow_up_visits';
@@ -9,9 +11,9 @@ export default class FollowUpVisit extends Model {
     interventions: { type: 'belongs_to' as const, key: 'intervention_id' },
   };
 
-  @immutableRelation('patients', 'patient_id') patient!: any;
+  @relation('patients', 'patient_id') patient?: Patient;
   @field('patient_id') patientId!: string;
-  @relation('interventions', 'intervention_id') intervention!: any;
+  @relation('interventions', 'intervention_id') intervention?: Intervention;
   @field('intervention_id') interventionId!: string;
   @date('visit_date') visitDate!: Date;
   @field('current_weight') currentWeight!: number;
@@ -33,6 +35,7 @@ export default class FollowUpVisit extends Model {
   @field('replan_required') replanRequired!: boolean;
   @field('replan_notes') replanNotes!: string;
   @field('comments') comments!: string;
-  @date('created_at') createdAt!: Date;
-  @date('updated_at') updatedAt!: Date;
+
+  @readonly @date('created_at') createdAt!: Date;
+  @readonly @date('updated_at') updatedAt!: Date;
 }

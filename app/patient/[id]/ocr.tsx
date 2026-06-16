@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, fontFamilies, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
@@ -19,6 +19,8 @@ import { getDatabase } from '../../../src/data/database';
 import { TestCatalogRepository } from '../../../src/data/repositories/TestCatalogRepository';
 import { InterpretLabResultUseCase } from '../../../src/domain/use-cases/InterpretLabResultUseCase';
 import { recognizeTextFromImage } from '../../../src/services/ocrService';
+import { ParsedLabResult, OcrRawData } from '../../../src/services/ocrTypes';
+import { analyzeOcrConfidence, getConfidenceColor, getConfidenceLabel, OcrConfidenceReport } from '../../../src/services/ocrConfidenceService';
 import * as ImagePicker from 'expo-image-picker';
 import WebCropperModal from './WebCropperModal';
 
@@ -42,11 +44,6 @@ const darkTheme = {
   forestGreenDark: '#145237',
   slateBlue: '#4775B3',
 };
-
-export interface ParsedLabResult {
-  testName: string;
-  resultValue: number;
-}
 
 // Robust medical lab report parser (fuzzy-cleaning regex engine)
 export function parseMedicalLabText(rawText: string): ParsedLabResult[] {
@@ -167,6 +164,9 @@ export default function OCRScannerScreen() {
   const [catalog, setCatalog] = useState<any[]>([]);
   const [rawText, setRawText] = useState('');
   const [detectedResults, setDetectedResults] = useState<ParsedLabResult[]>([]);
+  const [confidenceReport, setConfidenceReport] = useState<OcrConfidenceReport | null>(null);
+  const [ocrRawData, setOcrRawData] = useState<OcrRawData | null>(null);
+  const [verifiedFields, setVerifiedFields] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [scanAttempted, setScanAttempted] = useState(false);
   const [manualValues, setManualValues] = useState<Record<string, string>>({
@@ -206,14 +206,26 @@ export default function OCRScannerScreen() {
     try {
       setIsLoading(true);
       setDetectedResults([]);
+      setConfidenceReport(null);
+      setOcrRawData(null);
+      setVerifiedFields(new Set());
       setScanAttempted(false);
       showToast('⏳ جاري مسح وتحليل الفحوصات المخبرية ضوئياً...', 'info');
 
-      const text = await recognizeTextFromImage(source);
-      setRawText(text);
+      const ocrData = await recognizeTextFromImage(source);
+      setOcrRawData(ocrData);
+      setRawText(ocrData.text);
 
-      const parsed = parseMedicalLabText(text);
-      setDetectedResults(parsed);
+      const parsed = parseMedicalLabText(ocrData.text);
+      const annotated: ParsedLabResult[] = parsed.map((r) => ({
+        ...r,
+        isVerified: false,
+      }));
+      setDetectedResults(annotated);
+
+      const report = analyzeOcrConfidence(ocrData, annotated, ocrData.text);
+      setConfidenceReport(report);
+
       setScanAttempted(true);
 
       // Pre-fill manual values
@@ -224,7 +236,11 @@ export default function OCRScannerScreen() {
       setManualValues(prefilled);
 
       if (parsed.length > 0) {
-        showToast(`تم استخراج ${parsed.length} فحص بنجاح 🎉`, 'success');
+        if (report.needsReview) {
+          showToast(`تم استخراج ${parsed.length} فحص - بعض النتائج بحاجة مراجعة`, 'warning');
+        } else {
+          showToast(`تم استخراج ${parsed.length} فحص بنجاح 🎉`, 'success');
+        }
       } else {
         showToast('لم يتم العثور على فحوصات مطابقة في الصورة', 'info');
       }
@@ -264,8 +280,19 @@ export default function OCRScannerScreen() {
       showToast('يرجى إدخال أو لصق نص التقرير أولاً للمحاكاة.', 'warning');
       return;
     }
+    setDetectedResults([]);
+    setConfidenceReport(null);
+    setVerifiedFields(new Set());
+
     const parsed = parseMedicalLabText(rawText);
-    setDetectedResults(parsed);
+    const annotated: ParsedLabResult[] = parsed.map((r) => ({
+      ...r,
+      isVerified: false,
+    }));
+    setDetectedResults(annotated);
+
+    const report = analyzeOcrConfidence(ocrRawData, annotated, rawText);
+    setConfidenceReport(report);
     setScanAttempted(true);
 
     // Pre-fill manual values
@@ -276,17 +303,32 @@ export default function OCRScannerScreen() {
     setManualValues(prefilled);
 
     if (parsed.length > 0) {
-      showToast(`تم تحليل واستخراج ${parsed.length} فحص بنجاح 🎉`, 'success');
+      if (report.needsReview) {
+        showToast(`تم تحليل ${parsed.length} فحص - بعض النتائج بحاجة مراجعة`, 'warning');
+      } else {
+        showToast(`تم تحليل واستخراج ${parsed.length} فحص بنجاح 🎉`, 'success');
+      }
     } else {
       showToast('لم يتم العثور على فحوصات مطابقة في النص المدخل', 'info');
     }
-  }, [rawText, showToast]);
+  }, [rawText, ocrRawData, showToast]);
 
   // Load Mock Report template
   const handleLoadMock = useCallback(() => {
+    setDetectedResults([]);
+    setConfidenceReport(null);
+    setVerifiedFields(new Set());
     setRawText(MOCK_LAB_REPORT);
+
     const parsed = parseMedicalLabText(MOCK_LAB_REPORT);
-    setDetectedResults(parsed);
+    const annotated: ParsedLabResult[] = parsed.map((r) => ({
+      ...r,
+      isVerified: false,
+    }));
+    setDetectedResults(annotated);
+
+    const report = analyzeOcrConfidence(null, annotated, MOCK_LAB_REPORT);
+    setConfidenceReport(report);
     setScanAttempted(false);
 
     // Pre-fill manual values
@@ -299,11 +341,37 @@ export default function OCRScannerScreen() {
     showToast('تم تحميل نص التقرير الافتراضي واستخراج النتائج بنجاح 🧪', 'success');
   }, [showToast]);
 
+  const toggleFieldVerification = useCallback((testName: string) => {
+    setVerifiedFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(testName)) {
+        next.delete(testName);
+      } else {
+        next.add(testName);
+      }
+      return next;
+    });
+  }, []);
+
   // Shared save handler executing direct WatermelonDB transactions
   const saveLabResults = useCallback(async (resultsToSave: ParsedLabResult[], isManual = false) => {
     if (resultsToSave.length === 0) {
       showToast('لا توجد نتائج لحفظها.', 'warning');
       return;
+    }
+
+    // Check if low-confidence fields need verification
+    if (!isManual && confidenceReport?.needsReview) {
+      const unverified = confidenceReport.lowConfidenceFields.filter(
+        (f) => !verifiedFields.has(f)
+      );
+      if (unverified.length > 0) {
+        showToast(
+          `يرجى تأكيد صحة النتائج التالية: ${unverified.join('، ')} قبل الحفظ`,
+          'warning'
+        );
+        return;
+      }
     }
 
     try {
@@ -349,9 +417,13 @@ export default function OCRScannerScreen() {
             record.interpretation = interpretation;
             record.testDate = new Date();
             record.overrideReason = '';
+            const confidence = confidenceReport?.perFieldConfidence[detectedTestName];
+            const verified = verifiedFields.has(detectedTestName);
             record.comments = isManual 
               ? 'مضاف يدوياً عبر شبكة الإدخال السريع الاحتياطية' 
-              : 'مستخرج ومضاف تلقائياً عبر ميزة مسح OCR الذكي للتقرير';
+              : verified
+                ? `مستخرج عبر OCR (مؤكد يدوياً، ثقة: ${confidence ?? '?'}%)`
+                : `مستخرج عبر OCR (ثقة: ${confidence ?? '?'}%)`;
             record.attachedImagePath = '';
             record.createdAt = new Date();
             record.updatedAt = new Date();
@@ -565,34 +637,94 @@ Creatinine 1.5 mg/dL"
         {/* Results Preview */}
         {detectedResults.length > 0 ? (
           <View style={[styles.card, styles.resultsCard]}>
-            <ArabicText bold style={styles.resultsTitle}>
-              التحاليل المكتشفة تلقائياً:
-            </ArabicText>
+            <View style={styles.resultsHeaderRow}>
+              <ArabicText bold style={styles.resultsTitle}>
+                التحاليل المكتشفة تلقائياً:
+              </ArabicText>
+              {confidenceReport && (
+                <View style={[
+                  styles.confidenceBadge,
+                  { backgroundColor: confidenceReport.needsReview ? `${getConfidenceColor(confidenceReport.overallConfidence)}20` : `${darkTheme.accent}20` }
+                ]}>
+                  <View style={[styles.confidenceDot, { backgroundColor: getConfidenceColor(confidenceReport.overallConfidence) }]} />
+                  <ArabicText style={[
+                    styles.confidenceText,
+                    { color: getConfidenceColor(confidenceReport.overallConfidence) }
+                  ]}>
+                    {getConfidenceLabel(confidenceReport.overallConfidence)} ({confidenceReport.overallConfidence}%)
+                  </ArabicText>
+                </View>
+              )}
+            </View>
+
+            {confidenceReport?.needsReview && (
+              <View style={styles.reviewBanner}>
+                <Ionicons name="warning-outline" size={18} color="#F59E0B" />
+                <ArabicText style={styles.reviewBannerText}>
+                  بعض النتائج بحاجة تأكيد يدوي قبل الحفظ. يرجى مراجعة الحقول ذات الثقة المنخفضة.
+                </ArabicText>
+              </View>
+            )}
             
             {detectedResults.map((res, index) => {
               const catalogItem = catalog.find((c) => c.testNameEn === res.testName);
               const label = catalogItem ? catalogItem.testNameAr : res.testName;
               const unit = catalogItem ? catalogItem.defaultUnit : '';
+              const fieldConf = confidenceReport?.perFieldConfidence[res.testName] ?? 100;
+              const isLowConf = fieldConf < 60;
+              const isVerified = verifiedFields.has(res.testName);
 
               return (
-                <View key={index} style={styles.resultItem}>
-                  <View style={styles.resultRow}>
-                    <Ionicons name="checkmark-circle-outline" size={20} color={darkTheme.accent} />
+                <View key={index} style={[
+                  styles.resultItem,
+                  isLowConf && !isVerified && styles.resultItemLowConf,
+                  isVerified && styles.resultItemVerified,
+                ]}>
+                  <TouchableOpacity
+                    style={styles.resultRow}
+                    onPress={() => isLowConf && toggleFieldVerification(res.testName)}
+                    activeOpacity={isLowConf ? 0.7 : 1}
+                  >
+                    {isVerified ? (
+                      <Ionicons name="checkmark-circle" size={20} color={darkTheme.accent} />
+                    ) : isLowConf ? (
+                      <Ionicons name="warning-outline" size={20} color="#F59E0B" />
+                    ) : (
+                      <Ionicons name="checkmark-circle-outline" size={20} color={darkTheme.accent} />
+                    )}
                     <ArabicText bold style={styles.resultTestName}>
                       {label} ({res.testName})
                     </ArabicText>
+                    <View style={[styles.confidenceDotSmall, { backgroundColor: getConfidenceColor(fieldConf) }]} />
+                  </TouchableOpacity>
+
+                  <View style={styles.resultRight}>
+                    <ArabicText bold style={styles.resultValueText}>
+                      {res.resultValue} <ArabicText style={styles.resultUnitText}>{unit}</ArabicText>
+                    </ArabicText>
+                    {isLowConf && !isVerified && (
+                      <TouchableOpacity
+                        style={styles.confirmBtn}
+                        onPress={() => toggleFieldVerification(res.testName)}
+                      >
+                        <ArabicText bold style={styles.confirmBtnText}>تأكيد</ArabicText>
+                      </TouchableOpacity>
+                    )}
+                    {isVerified && (
+                      <ArabicText style={styles.verifiedLabel}>مؤكد</ArabicText>
+                    )}
                   </View>
-                  <ArabicText bold style={styles.resultValueText}>
-                    {res.resultValue} <ArabicText style={styles.resultUnitText}>{unit}</ArabicText>
-                  </ArabicText>
                 </View>
               );
             })}
 
             <TouchableOpacity
-              style={styles.saveButton}
+              style={[
+                styles.saveButton,
+                confidenceReport?.needsReview && verifiedFields.size < confidenceReport.lowConfidenceFields.length && styles.saveButtonDisabled
+              ]}
               onPress={handleSaveResults}
-              disabled={isSaving}
+              disabled={isSaving || (confidenceReport?.needsReview ?? false) && verifiedFields.size < (confidenceReport?.lowConfidenceFields.length ?? 0)}
             >
               {isSaving ? (
                 <ActivityIndicator size="small" color="#FFF" />
@@ -710,12 +842,91 @@ Creatinine 1.5 mg/dL"
 }
 
 const styles = StyleSheet.create({
+  // --- Confidence & Verification styles ---
+  resultsHeaderRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  confidenceBadge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  confidenceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  confidenceDotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: 4,
+  },
+  confidenceText: {
+    fontSize: 11,
+    fontFamily: fontFamilies.bold,
+  },
+  reviewBanner: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderRadius: 8,
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  reviewBannerText: {
+    fontSize: 12,
+    color: '#F59E0B',
+    fontFamily: fontFamilies.medium,
+    flex: 1,
+    textAlign: 'right',
+  },
+  resultItemLowConf: {
+    borderColor: 'rgba(245, 158, 11, 0.5)',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+  },
+  resultItemVerified: {
+    borderColor: 'rgba(16, 185, 129, 0.5)',
+  },
+  resultRight: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  confirmBtn: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  confirmBtnText: {
+    color: '#10B981',
+    fontSize: 12,
+    fontFamily: fontFamilies.bold,
+  },
+  verifiedLabel: {
+    color: '#10B981',
+    fontSize: 11,
+    fontFamily: fontFamilies.bold,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
   flex: { flex: 1, backgroundColor: darkTheme.background },
   container: { flex: 1 },
   scrollContent: { padding: spacing.md, gap: spacing.md },
   header: {
     backgroundColor: colors.primary,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
     borderBottomWidth: 1,

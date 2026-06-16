@@ -1,0 +1,11 @@
+env: load .env
+env: export ALLOWED_MIME_TYPES CDN_DOMAIN CDN_URL CLOUDFLARE_ACCESS_KEY CLOUDFLARE_ACCESS_KEY_ID CLOUDFLARE_ACCOUNT_ID JWT_SECRET MAX_FILE_SIZE
+Starting project at C:\Users\hp\Desktop\مجلد جديد (2)\clinical-nutrition-app
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+2 packages may need updating. Run npx expo install --check for details.
+Logs for your project will appear below.
+
+C:\Users\hp\Desktop\???? ???? (2)\clinical-nutrition-app>

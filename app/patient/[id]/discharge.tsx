@@ -13,7 +13,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
@@ -33,6 +33,14 @@ const DISCHARGE_STATUS_OPTIONS = [
   { label: 'تدهور (Deteriorated)', value: 'deteriorated' },
   { label: 'نقل لمستشفى آخر (Transferred)', value: 'transferred' },
   { label: 'وفاة (Deceased)', value: 'deceased' },
+];
+
+const NUTRITION_RECOMMENDATION_OPTIONS = [
+  { label: 'نظام غذائي فموي (Oral Diet)', value: 'oral_diet' },
+  { label: 'مكملات غذائية فموية (Oral Supplements)', value: 'oral_supplements' },
+  { label: 'تغذية أنبوبية (Enteral Nutrition)', value: 'enteral' },
+  { label: 'تغذية وريدية (Parenteral Nutrition)', value: 'parenteral' },
+  { label: 'خليط (Mixed)', value: 'mixed' },
 ];
 
 const dischargeFormSchema = z.object({
@@ -55,6 +63,48 @@ const dischargeFormSchema = z.object({
   }, { message: 'يجب أن يكون عدد الأيام 0 أو أكثر' }),
   homeNutritionPlan: z.string().min(1, 'التوصيات المنزلية مطلوبة'),
   followUpRequired: z.boolean(),
+  finalEnergyIntake: z.string()
+    .min(1, 'الطاقة النهائية مطلوبة')
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num > 0;
+    }, { message: 'يجب أن تكون الطاقة أكبر من 0' }),
+  finalProteinIntake: z.string()
+    .min(1, 'البروتين النهائي مطلوب')
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num > 0;
+    }, { message: 'يجب أن يكون البروتين أكبر من 0' }),
+  finalFluidIntake: z.string()
+    .min(1, 'السوائل النهائية مطلوبة')
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num > 0;
+    }, { message: 'يجب أن تكون السوائل أكبر من 0' }),
+  weightChangeKg: z.string().optional().refine((val) => {
+    if (!val) return true;
+    const num = parseFloat(val);
+    return !isNaN(num);
+  }, { message: 'يجب أن يكون رقماً' }),
+  nutritionCompliance: z.string()
+    .min(1, 'نسبة الالتزام مطلوبة')
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }, { message: 'يجب أن تكون النسبة بين 0 و 100' }),
+  dischargeNutritionRecommendation: z.string().min(1, 'توصية التغذية مطلوبة'),
+  followupNeededDays: z.string().optional().refine((val) => {
+    if (!val) return true;
+    const num = parseInt(val, 10);
+    return !isNaN(num) && num >= 0;
+  }, { message: 'يجب أن يكون عدد الأيام 0 أو أكثر' }),
+  complicationsRelatedToNutrition: z.boolean().optional(),
+  complicationsNotes: z.string().optional(),
+  nextEnergyTargetKcal: z.string().optional().refine((val) => {
+    if (!val) return true;
+    const num = parseFloat(val);
+    return !isNaN(num) && num > 0;
+  }, { message: 'يجب أن تكون الطاقة أكبر من 0' }),
 });
 
 type DischargeFormValues = z.infer<typeof dischargeFormSchema>;
@@ -80,6 +130,16 @@ export default function DischargeScreen() {
       totalDaysOnPn: '',
       homeNutritionPlan: '',
       followUpRequired: false,
+      finalEnergyIntake: '',
+      finalProteinIntake: '',
+      finalFluidIntake: '',
+      weightChangeKg: '',
+      nutritionCompliance: '',
+      dischargeNutritionRecommendation: '',
+      followupNeededDays: '',
+      complicationsRelatedToNutrition: false,
+      complicationsNotes: '',
+      nextEnergyTargetKcal: '',
     },
   });
 
@@ -130,6 +190,16 @@ export default function DischargeScreen() {
           totalDaysOnPn: existing.totalDaysOnPn !== undefined ? String(existing.totalDaysOnPn) : '',
           homeNutritionPlan: existing.homeNutritionPlan,
           followUpRequired: existing.followUpRequired,
+          finalEnergyIntake: existing.finalEnergyIntake !== undefined ? String(existing.finalEnergyIntake) : '',
+          finalProteinIntake: existing.finalProteinIntake !== undefined ? String(existing.finalProteinIntake) : '',
+          finalFluidIntake: existing.finalFluidIntake !== undefined ? String(existing.finalFluidIntake) : '',
+          weightChangeKg: existing.weightChangeKg !== undefined ? String(existing.weightChangeKg) : '',
+          nutritionCompliance: existing.nutritionCompliance !== undefined ? String(existing.nutritionCompliance) : '',
+          dischargeNutritionRecommendation: existing.dischargeNutritionRecommendation || '',
+          followupNeededDays: existing.followupNeededDays !== undefined ? String(existing.followupNeededDays) : '',
+          complicationsRelatedToNutrition: existing.complicationsRelatedToNutrition || false,
+          complicationsNotes: existing.complicationsNotes || '',
+          nextEnergyTargetKcal: existing.nextEnergyTargetKcal !== undefined ? String(existing.nextEnergyTargetKcal) : '',
         });
       }
     } catch (error) {
@@ -201,6 +271,16 @@ export default function DischargeScreen() {
         homeNutritionPlan: values.homeNutritionPlan,
         followUpRequired: values.followUpRequired,
         nextFollowUpDate: values.followUpRequired && nextFollowUpDate ? nextFollowUpDate.getTime() : undefined,
+        finalEnergyIntake: parseFloat(values.finalEnergyIntake),
+        finalProteinIntake: parseFloat(values.finalProteinIntake),
+        finalFluidIntake: parseFloat(values.finalFluidIntake),
+        weightChangeKg: values.weightChangeKg ? parseFloat(values.weightChangeKg) : undefined,
+        nutritionCompliance: parseFloat(values.nutritionCompliance),
+        dischargeNutritionRecommendation: values.dischargeNutritionRecommendation,
+        followupNeededDays: values.followupNeededDays ? parseInt(values.followupNeededDays, 10) : undefined,
+        complicationsRelatedToNutrition: values.complicationsRelatedToNutrition || undefined,
+        complicationsNotes: values.complicationsNotes || undefined,
+        nextEnergyTargetKcal: values.nextEnergyTargetKcal ? parseFloat(values.nextEnergyTargetKcal) : undefined,
       });
 
       showToast('تم حفظ ملخص خروج المريض وتحديث حالته بنجاح', 'success');
@@ -220,6 +300,16 @@ export default function DischargeScreen() {
     const totalDaysOnPnVal = form.getValues('totalDaysOnPn');
     const homeNutritionPlanVal = form.getValues('homeNutritionPlan');
     const followUpRequiredVal = form.getValues('followUpRequired');
+    const finalEnergyIntakeVal = form.getValues('finalEnergyIntake');
+    const finalProteinIntakeVal = form.getValues('finalProteinIntake');
+    const finalFluidIntakeVal = form.getValues('finalFluidIntake');
+    const weightChangeKgVal = form.getValues('weightChangeKg');
+    const nutritionComplianceVal = form.getValues('nutritionCompliance');
+    const dischargeRecVal = form.getValues('dischargeNutritionRecommendation');
+    const followupNeededDaysVal = form.getValues('followupNeededDays');
+    const complicationsRelatedVal = form.getValues('complicationsRelatedToNutrition');
+    const complicationsNotesVal = form.getValues('complicationsNotes');
+    const nextEnergyTargetVal = form.getValues('nextEnergyTargetKcal');
 
     const statusLabel = DISCHARGE_STATUS_OPTIONS.find(o => o.value === dischargeStatusVal)?.label || dischargeStatusVal;
     const formattedDischargeDate = formatSafeDate(dischargeDate);
@@ -233,6 +323,11 @@ export default function DischargeScreen() {
         ⚠️ تحذير فسيولوجي: المريض فقد ${weightLossDetails.lossPercentage.toFixed(1)}% من وزنه الأساسي خلال فترة التنويم. هذه الخسارة الحرجة تتطلب إدراج مكملات عالية البروتين والطاقة في خطة التغذية المنزلية.
       </div>
     ` : '';
+
+    const recLabel = NUTRITION_RECOMMENDATION_OPTIONS.find(o => o.value === dischargeRecVal)?.label || dischargeRecVal || 'غير محدد';
+    const complicationsHtml = complicationsRelatedVal
+      ? `<div class="grid-item"><span>ملاحظات المضاعفات:</span> ${complicationsNotesVal || 'لا توجد ملاحظات'}</div>`
+      : '';
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -251,6 +346,8 @@ export default function DischargeScreen() {
           .grid-item { font-size: 14px; }
           .grid-item span { font-weight: bold; color: #555; }
           .plan-box { font-size: 14px; line-height: 1.6; white-space: pre-wrap; background-color: #fff; border: 1px solid #eee; padding: 10px; border-radius: 4px; }
+          .compliance-bar { height: 20px; border-radius: 10px; background: linear-gradient(to left, #4CAF50, #FFC107, #F44336); margin: 5px 0; position: relative; }
+          .compliance-marker { position: absolute; top: -4px; width: 4px; height: 28px; background: #333; border-radius: 2px; }
           .footer { margin-top: 50px; text-align: center; font-size: 14px; border-top: 1px solid #ddd; padding-top: 20px; }
           .signature { margin-top: 20px; font-weight: bold; color: #004D40; }
           @media print { body { margin: 20px; } .section { page-break-inside: avoid; } }
@@ -285,6 +382,31 @@ export default function DischargeScreen() {
             <div class="grid-item"><span>حالة الخروج الطبية:</span> ${statusLabel}</div>
           </div>
           ${criticalWarningAlertHtml}
+        </div>
+        <div class="section">
+          <h2 class="section-title">الملخص التغذوي النهائي</h2>
+          <div class="grid">
+            <div class="grid-item"><span>الطاقة النهائية:</span> ${finalEnergyIntakeVal || 'غير محدد'} كيلو سعرة/يوم</div>
+            <div class="grid-item"><span>البروتين النهائي:</span> ${finalProteinIntakeVal || 'غير محدد'} غرام/يوم</div>
+            <div class="grid-item"><span>السوائل النهائية:</span> ${finalFluidIntakeVal || 'غير محدد'} مل/يوم</div>
+            <div class="grid-item"><span>تغير الوزن أثناء التنويم:</span> ${weightChangeKgVal || 'غير محدد'} كجم</div>
+            <div class="grid-item"><span>نسبة الالتزام بالخطة التغذوية:</span> ${nutritionComplianceVal || 'غير محدد'}%</div>
+          </div>
+        </div>
+        <div class="section">
+          <h2 class="section-title">توصيات الخروج التغذوية</h2>
+          <div class="grid">
+            <div class="grid-item"><span>نظام التغذية الموصى به:</span> ${recLabel}</div>
+            <div class="grid-item"><span>المتابعة بعد:</span> ${followupNeededDaysVal || 'غير محدد'} يوم</div>
+            <div class="grid-item"><span>هدف الطاقة القادم:</span> ${nextEnergyTargetVal || 'غير محدد'} كيلو سعرة/يوم</div>
+          </div>
+        </div>
+        <div class="section">
+          <h2 class="section-title">المضاعفات التغذوية</h2>
+          <div class="grid">
+            <div class="grid-item"><span>مضاعفات متعلقة بالتغذية:</span> ${complicationsRelatedVal ? 'نعم' : 'لا'}</div>
+            ${complicationsHtml}
+          </div>
         </div>
         <div class="section">
           <h2 class="section-title">التوصيات التغذوية للمنزل</h2>
@@ -470,6 +592,150 @@ export default function DischargeScreen() {
             )}
           </View>
 
+          {/* Section 4: الملخص التغذوي النهائي */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="restaurant-outline" size={20} color={colors.primary} />
+              <ArabicText bold style={styles.sectionTitle}>القسم 4: الملخص التغذوي النهائي</ArabicText>
+            </View>
+
+            <View style={styles.weightRow}>
+              <View style={styles.weightCard}>
+                <ArabicText style={styles.weightLabel}>الطاقة النهائية (كيلو سعرة/يوم)</ArabicText>
+                <TextInputField
+                  label=""
+                  value={form.watch('finalEnergyIntake')}
+                  onChangeText={(v) => form.setValue('finalEnergyIntake', v, { shouldValidate: true })}
+                  placeholder="مثال: 1800"
+                  keyboardType="decimal-pad"
+                  error={form.formState.errors.finalEnergyIntake?.message}
+                  required
+                />
+              </View>
+              <View style={styles.weightCard}>
+                <ArabicText style={styles.weightLabel}>البروتين النهائي (غرام/يوم)</ArabicText>
+                <TextInputField
+                  label=""
+                  value={form.watch('finalProteinIntake')}
+                  onChangeText={(v) => form.setValue('finalProteinIntake', v, { shouldValidate: true })}
+                  placeholder="مثال: 75"
+                  keyboardType="decimal-pad"
+                  error={form.formState.errors.finalProteinIntake?.message}
+                  required
+                />
+              </View>
+            </View>
+
+            <View style={styles.weightRow}>
+              <View style={styles.weightCard}>
+                <ArabicText style={styles.weightLabel}>السوائل النهائية (مل/يوم)</ArabicText>
+                <TextInputField
+                  label=""
+                  value={form.watch('finalFluidIntake')}
+                  onChangeText={(v) => form.setValue('finalFluidIntake', v, { shouldValidate: true })}
+                  placeholder="مثال: 1500"
+                  keyboardType="decimal-pad"
+                  error={form.formState.errors.finalFluidIntake?.message}
+                  required
+                />
+              </View>
+              <View style={styles.weightCard}>
+                <ArabicText style={styles.weightLabel}>تغير الوزن أثناء التنويم (كجم)</ArabicText>
+                <TextInputField
+                  label=""
+                  value={form.watch('weightChangeKg') || ''}
+                  onChangeText={(v) => form.setValue('weightChangeKg', v, { shouldValidate: true })}
+                  placeholder="اختياري (سالب/موجب)"
+                  keyboardType="decimal-pad"
+                  error={form.formState.errors.weightChangeKg?.message}
+                />
+              </View>
+            </View>
+
+            <TextInputField
+              label="نسبة الالتزام بالخطة التغذوية (٪)"
+              value={form.watch('nutritionCompliance')}
+              onChangeText={(v) => form.setValue('nutritionCompliance', v, { shouldValidate: true })}
+              placeholder="0 - 100"
+              keyboardType="decimal-pad"
+              error={form.formState.errors.nutritionCompliance?.message}
+              required
+            />
+          </View>
+
+          {/* Section 5: توصيات الخروج والمتابعة */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.primary} />
+              <ArabicText bold style={styles.sectionTitle}>القسم 5: توصيات الخروج والمتابعة</ArabicText>
+            </View>
+
+            <DropdownField
+              label="نظام التغذية الموصى به بعد الخروج"
+              options={NUTRITION_RECOMMENDATION_OPTIONS}
+              selectedValue={form.watch('dischargeNutritionRecommendation')}
+              onValueChange={(val) => form.setValue('dischargeNutritionRecommendation', val, { shouldValidate: true })}
+              error={form.formState.errors.dischargeNutritionRecommendation?.message}
+              required
+            />
+
+            <TextInputField
+              label="المتابعة بعد (أيام)"
+              value={form.watch('followupNeededDays') || ''}
+              onChangeText={(v) => form.setValue('followupNeededDays', v, { shouldValidate: true })}
+              placeholder="اختياري (عدد الأيام)"
+              keyboardType="numeric"
+              error={form.formState.errors.followupNeededDays?.message}
+            />
+          </View>
+
+          {/* Section 6: المضاعفات التغذوية */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="warning-outline" size={20} color={colors.primary} />
+              <ArabicText bold style={styles.sectionTitle}>القسم 6: المضاعفات التغذوية</ArabicText>
+            </View>
+
+            <RadioGroup
+              label="هل حدثت مضاعفات متعلقة بالتغذية أثناء التنويم؟"
+              options={[
+                { label: 'نعم', value: 'yes' },
+                { label: 'لا', value: 'no' },
+              ]}
+              selectedValue={form.watch('complicationsRelatedToNutrition') ? 'yes' : 'no'}
+              onValueChange={(val) => form.setValue('complicationsRelatedToNutrition', val === 'yes')}
+              direction="row"
+            />
+
+            {form.watch('complicationsRelatedToNutrition') && (
+              <TextInputField
+                label="ملاحظات المضاعفات (500 حرف كحد أقصى)"
+                value={form.watch('complicationsNotes') || ''}
+                onChangeText={(v) => form.setValue('complicationsNotes', v, { shouldValidate: true })}
+                placeholder="وصف المضاعفات التغذوية..."
+                multiline
+                error={form.formState.errors.complicationsNotes?.message}
+              />
+            )}
+          </View>
+
+          {/* Section 7: الأهداف التغذوية القادمة */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="trending-up-outline" size={20} color={colors.primary} />
+              <ArabicText bold style={styles.sectionTitle}>القسم 7: الأهداف التغذوية القادمة</ArabicText>
+            </View>
+
+            <TextInputField
+              label="هدف الطاقة للمراجعة القادمة (كيلو سعرة/يوم)"
+              value={form.watch('nextEnergyTargetKcal') || ''}
+              onChangeText={(v) => form.setValue('nextEnergyTargetKcal', v, { shouldValidate: true })}
+              placeholder="اختياري"
+              keyboardType="decimal-pad"
+              error={form.formState.errors.nextEnergyTargetKcal?.message}
+            />
+          </View>
+
           {/* Actions */}
           <View style={styles.actions}>
             <Button
@@ -506,8 +772,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceSecondary },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary, gap: spacing.md },
   loadingText: { fontSize: 16, color: colors.textSecondary },
-  header: { backgroundColor: colors.primary, paddingTop: 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.md },
-  backBtn: { position: 'absolute', top: 54, start: spacing.md, zIndex: 1, padding: 4 },
+  header: { backgroundColor: colors.primary, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.lg, paddingHorizontal: spacing.md },
+  backBtn: { position: 'absolute', top: safeHeaderPaddingTop - 6, start: spacing.md, zIndex: 1, padding: 4 },
   headerTitle: { fontSize: 20, color: colors.primaryContrast, textAlign: 'right', marginTop: spacing.lg },
   headerSubtitle: { fontSize: 13, color: colors.primaryContrast, opacity: 0.8, textAlign: 'right', marginTop: spacing.xs },
   section: {

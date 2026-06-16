@@ -1,5 +1,9 @@
 import { Database } from '@nozbe/watermelondb';
+import { importSeedData } from '../../database/seed/importSeedData';
 import { seedArabicFoods } from '../../domain/utils/arabicFoodSeed';
+import { seedClinicalReferenceData } from '../../domain/utils/clinicalReferenceDataSeed';
+import { seedFoodExchanges } from './seeds/seedFoodExchanges';
+import { seedTestPatientMeals } from './seeds/seedTestPatientMeals';
 
 const NOW = Date.now();
 
@@ -111,8 +115,14 @@ const TEST_CATALOG: TestCatalogSeed[] = [
 ];
 
 export async function seedDatabase(database: Database): Promise<void> {
-  // Seed Arabic Food items if empty
+  if ((globalThis as any).__SKIP_SEEDING__) {
+    return;
+  }
   await seedArabicFoods(database);
+  await importSeedData(database);
+  await seedClinicalReferenceData(database);
+  await seedFoodExchanges(database);
+  await seedTestPatientMeals(database);
 
   const testCatalogCollection = database.get('test_catalog');
   const settingsCollection = database.get('settings');

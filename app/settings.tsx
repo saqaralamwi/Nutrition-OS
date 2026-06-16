@@ -19,8 +19,13 @@ import TextInputField from '../src/presentation/components/TextInputField';
 import DropdownField from '../src/presentation/components/DropdownField';
 import { useSettingsStore } from '../src/presentation/stores/settingsStore';
 import { useSecurityStore } from '../src/presentation/stores/securityStore';
+import { useAuthStore } from '../src/presentation/stores/authStore';
 import { usePatientStore } from '../src/presentation/stores/patientStore';
 import Toast from '../src/presentation/components/Toast';
+import Animated from 'react-native-reanimated';
+import { useAppTheme } from '../src/presentation/hooks/useAppTheme';
+
+const AnimatedArabicText = Animated.createAnimatedComponent(ArabicText);
 
 const FORMULA_OPTIONS = [
   { label: 'Mifflin-St Jeor', value: 'Mifflin' },
@@ -47,6 +52,8 @@ export default function SettingsScreen() {
     thresholdSodium,
     defaultEnergyFormula,
     updateClinicalSettings,
+    themeMode,
+    setThemeMode,
   } = useSettingsStore();
 
   // Security store
@@ -225,34 +232,37 @@ export default function SettingsScreen() {
     showToast('🔄 تم تبديل الحساب وتهيئة النظام الآمن', 'info');
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <Toast toast={toast} onDismiss={hideToast} />
+  const { theme, animatedContainer, animatedCard, animatedText, animatedSubtext } = useAppTheme();
 
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtnRow} onPress={() => router.back()} activeOpacity={0.7}>
-            <Ionicons name="arrow-forward" size={24} color={colors.textPrimary} />
-            <ArabicText style={styles.backBtnText}>العودة للرئيسية</ArabicText>
-          </TouchableOpacity>
-          <ArabicText bold style={styles.headerTitle}>غرفة التحكم والإعدادات</ArabicText>
-        </View>
+  return (
+    <Animated.View style={[{ flex: 1 }, animatedContainer]}>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <Toast toast={toast} onDismiss={hideToast} />
+
+          {/* Header */}
+          <Animated.View style={[styles.header, animatedCard]}>
+            <TouchableOpacity style={styles.backBtnRow} onPress={() => router.back()} activeOpacity={0.7}>
+              <Ionicons name="arrow-forward" size={24} color={colors.textPrimary} />
+              <AnimatedArabicText style={[styles.backBtnText, animatedSubtext]}>العودة للرئيسية</AnimatedArabicText>
+            </TouchableOpacity>
+            <AnimatedArabicText bold style={[styles.headerTitle, animatedText]}>غرفة التحكم والإعدادات</AnimatedArabicText>
+          </Animated.View>
 
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
           
           {/* Section 1: Active Identity card */}
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, animatedCard]}>
             <View style={styles.cardHeader}>
               <Ionicons name="person-outline" size={22} color={colors.success} />
-              <ArabicText bold style={styles.cardTitle}>الهوية المهنية الحالية</ArabicText>
+              <AnimatedArabicText bold style={[styles.cardTitle, animatedText]}>الهوية المهنية الحالية</AnimatedArabicText>
             </View>
-            <ArabicText style={styles.cardSubtitle}>
+            <AnimatedArabicText style={[styles.cardSubtitle, animatedSubtext]}>
               تعديل بيانات الحساب النشط حالياً في النظام.
-            </ArabicText>
+            </AnimatedArabicText>
 
             <TextInputField
               label="اسم الأخصائي بالكامل"
@@ -283,17 +293,17 @@ export default function SettingsScreen() {
               <Ionicons name="save-outline" size={20} color={colors.primaryContrast} />
               <ArabicText bold style={styles.saveBtnText}>حفظ وتحديث الهوية الطبية</ArabicText>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
           {/* Section: Clinical Calibration card */}
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, animatedCard]}>
             <View style={styles.cardHeader}>
               <Ionicons name="options-outline" size={22} color={colors.success} />
-              <ArabicText bold style={styles.cardTitle}>🚨 ضبط الحساسية والمعايير السريرية</ArabicText>
+              <AnimatedArabicText bold style={[styles.cardTitle, animatedText]}>🚨 ضبط الحساسية والمعايير السريرية</AnimatedArabicText>
             </View>
-            <ArabicText style={styles.cardSubtitle}>
+            <AnimatedArabicText style={[styles.cardSubtitle, animatedSubtext]}>
               تعديل حدود تنبيهات التحاليل المخبرية للمرضى والمعادلة الافتراضية لحساب الطاقة.
-            </ArabicText>
+            </AnimatedArabicText>
 
             <TextInputField
               label="حد إنذار اليوريا (mg/dL) - Urea Alert Limit"
@@ -339,24 +349,50 @@ export default function SettingsScreen() {
               <Ionicons name="save-outline" size={20} color={colors.primaryContrast} />
               <ArabicText bold style={styles.saveBtnText}>حفظ وتحديث الإعدادات الطبية</ArabicText>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
+
+          {/* Section: Universal Theme Mode card */}
+          <Animated.View style={[styles.card, animatedCard]}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="color-palette-outline" size={22} color={colors.success} />
+              <AnimatedArabicText bold style={[styles.cardTitle, animatedText]}>🎨 مظهر التطبيق (Theme Settings)</AnimatedArabicText>
+            </View>
+            <AnimatedArabicText style={[styles.cardSubtitle, animatedSubtext]}>
+              التبديل بين المظهر الصباحي المضيء والمظهر المسائي الهادئ.
+            </AnimatedArabicText>
+
+            <View style={styles.securityRowContainer}>
+              <View style={styles.securityTextColumn}>
+                <AnimatedArabicText bold style={[styles.securityLabel, animatedText]}>المظهر الفعال حالياً</AnimatedArabicText>
+                <AnimatedArabicText style={[styles.securitySubLabel, animatedSubtext]}>
+                  {themeMode === 'night' ? 'المظهر المسائي الهادئ (Dark Mode)' : 'المظهر الصباحي المضيء (Light Mode)'}
+                </AnimatedArabicText>
+              </View>
+              <Switch
+                value={themeMode === 'night'}
+                onValueChange={(value) => setThemeMode(value ? 'night' : 'morning')}
+                trackColor={{ false: '#E2E8F0', true: '#1B6B4A' }}
+                thumbColor={themeMode === 'night' ? '#10B981' : '#64748B'}
+              />
+            </View>
+          </Animated.View>
 
           {/* Section 2: Security & Forensic Audit card */}
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, animatedCard]}>
             <View style={styles.cardHeader}>
               <Ionicons name="shield-checkmark-outline" size={22} color={colors.success} />
-              <ArabicText bold style={styles.cardTitle}>الأمان وسجل العمليات</ArabicText>
+              <AnimatedArabicText bold style={[styles.cardTitle, animatedText]}>الأمان وسجل العمليات</AnimatedArabicText>
             </View>
-            <ArabicText style={styles.cardSubtitle}>
+            <AnimatedArabicText style={[styles.cardSubtitle, animatedSubtext]}>
               حماية قاعدة البيانات بـ PIN وتفعيل نظام البصمة البيومتري.
-            </ArabicText>
+            </AnimatedArabicText>
 
             {/* PIN Lock Management */}
             {hasPIN ? (
               <View style={styles.securityRowContainer}>
                 <View style={styles.securityTextColumn}>
-                  <ArabicText bold style={styles.securityLabel}>قفل الدخول (PIN Code) نشط 🔐</ArabicText>
-                  <ArabicText style={styles.securitySubLabel}>النظام محمي ومقفل بالكامل في الخلفية.</ArabicText>
+                  <AnimatedArabicText bold style={[styles.securityLabel, animatedText]}>قفل الدخول (PIN Code) نشط 🔐</AnimatedArabicText>
+                  <AnimatedArabicText style={[styles.securitySubLabel, animatedSubtext]}>النظام محمي ومقفل بالكامل في الخلفية.</AnimatedArabicText>
                 </View>
                 <TouchableOpacity style={styles.removePinBtn} onPress={handleRemovePin} activeOpacity={0.8}>
                   <ArabicText bold style={styles.removePinBtnText}>إزالة القفل</ArabicText>
@@ -364,16 +400,16 @@ export default function SettingsScreen() {
               </View>
             ) : (
               <View style={styles.pinSetupContainer}>
-                <ArabicText bold style={styles.securityLabel}>رمز القفل (PIN) غير مفعل 🔓</ArabicText>
-                <ArabicText style={styles.securitySubLabel}>يرجى إدخال 4 أرقام لتنشيط الحماية.</ArabicText>
+                <AnimatedArabicText bold style={[styles.securityLabel, animatedText]}>رمز القفل (PIN) غير مفعل 🔓</AnimatedArabicText>
+                <AnimatedArabicText style={[styles.securitySubLabel, animatedSubtext]}>يرجى إدخال 4 أرقام لتنشيط الحماية.</AnimatedArabicText>
                 
                 <View style={styles.pinInputRow}>
                   <TextInput
-                    style={styles.pinInput}
+                    style={[styles.pinInput, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
                     value={newPin}
                     onChangeText={setNewPin}
                     placeholder="PIN"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={theme.subtext}
                     keyboardType="numeric"
                     maxLength={4}
                     secureTextEntry
@@ -390,14 +426,14 @@ export default function SettingsScreen() {
 
             <View style={styles.securityRowContainer}>
               <View style={styles.securityTextColumn}>
-                <ArabicText bold style={styles.securityLabel}>
+                <AnimatedArabicText bold style={[styles.securityLabel, animatedText]}>
                   تسجيل الدخول بالبصمة (FaceID / Fingerprint)
-                </ArabicText>
-                <ArabicText style={styles.securitySubLabel}>
+                </AnimatedArabicText>
+                <AnimatedArabicText style={[styles.securitySubLabel, animatedSubtext]}>
                   {isBiometricsSupported
                     ? 'تسريع الدخول الآمن باستخدام البصمة البيومترية.'
                     : 'البصمة غير مدعومة أو غير مسجلة في هذا الجهاز.'}
-                </ArabicText>
+                </AnimatedArabicText>
               </View>
               <Switch
                 value={biometricsEnabled}
@@ -407,30 +443,30 @@ export default function SettingsScreen() {
                 thumbColor={biometricsEnabled ? '#10B981' : '#94A3B8'}
               />
             </View>
-          </View>
+          </Animated.View>
 
           {/* Section 3: Profile Switcher card */}
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, animatedCard]}>
             <View style={styles.cardHeader}>
               <Ionicons name="people-outline" size={22} color={colors.success} />
-              <ArabicText bold style={styles.cardTitle}>مبدل الحسابات الآمن</ArabicText>
+              <AnimatedArabicText bold style={[styles.cardTitle, animatedText]}>مبدل الحسابات الآمن</AnimatedArabicText>
             </View>
-            <ArabicText style={styles.cardSubtitle}>
+            <AnimatedArabicText style={[styles.cardSubtitle, animatedSubtext]}>
               التبديل بين ملفات الأخصائيين المعتمدين في هذه المنظومة.
-            </ArabicText>
+            </AnimatedArabicText>
 
             {/* List of clinical profiles */}
             {profiles.map((profile) => {
               const isActive = profile.id === activeProfileId;
               return (
-                <View
+                <Animated.View
                   key={profile.id}
-                  style={[styles.profileItem, isActive && styles.profileItemActive]}
+                  style={[styles.profileItem, animatedContainer, isActive && styles.profileItemActive]}
                 >
                   <View style={styles.profileItemInfo}>
-                    <ArabicText bold style={styles.profileItemName}>{profile.username}</ArabicText>
-                    <ArabicText style={styles.profileItemDesc}>{profile.professionalTitle}</ArabicText>
-                    <ArabicText style={styles.profileItemDesc}>{profile.hospitalName}</ArabicText>
+                    <AnimatedArabicText bold style={[styles.profileItemName, animatedText]}>{profile.username}</AnimatedArabicText>
+                    <AnimatedArabicText style={[styles.profileItemDesc, animatedSubtext]}>{profile.professionalTitle}</AnimatedArabicText>
+                    <AnimatedArabicText style={[styles.profileItemDesc, animatedSubtext]}>{profile.hospitalName}</AnimatedArabicText>
                   </View>
                   
                   {isActive ? (
@@ -447,7 +483,7 @@ export default function SettingsScreen() {
                       <ArabicText bold style={styles.switchProfileBtnText}>دخول</ArabicText>
                     </TouchableOpacity>
                   )}
-                </View>
+                </Animated.View>
               );
             })}
 
@@ -459,7 +495,20 @@ export default function SettingsScreen() {
               <Ionicons name="person-add-outline" size={18} color="#1B6B4A" />
               <ArabicText bold style={styles.addProfileBtnText}>إضافة ملف طبيب جديد</ArabicText>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
+
+          {/* Section 4: Cloud Account card */}
+          <Animated.View style={[styles.card, animatedCard]}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="cloud-outline" size={22} color={colors.info} />
+              <AnimatedArabicText bold style={[styles.cardTitle, animatedText]}>الحساب السحابي</AnimatedArabicText>
+            </View>
+            <AnimatedArabicText style={[styles.cardSubtitle, animatedSubtext]}>
+              المزامنة السحابية عبر Supabase. قم بتسجيل الدخول لمزامنة البيانات مع الخادم.
+            </AnimatedArabicText>
+
+            <CloudAccountSection />
+          </Animated.View>
         </ScrollView>
 
         {/* Modal: Add Profile Form */}
@@ -470,13 +519,13 @@ export default function SettingsScreen() {
           onRequestClose={() => setShowAddProfileModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <ArabicText bold style={styles.modalTitle}>إضافة طبيب جديد مع رمز PIN</ArabicText>
+            <Animated.View style={[styles.modalContent, animatedCard]}>
+              <Animated.View style={[styles.modalHeader, animatedCard, { borderBottomWidth: 1, backgroundColor: 'transparent' }]}>
+                <AnimatedArabicText bold style={[styles.modalTitle, animatedText]}>إضافة طبيب جديد مع رمز PIN</AnimatedArabicText>
                 <TouchableOpacity onPress={() => setShowAddProfileModal(false)}>
                   <Ionicons name="close" size={24} color="#94A3B8" />
                 </TouchableOpacity>
-              </View>
+              </Animated.View>
 
               <ScrollView contentContainerStyle={styles.modalScroll}>
                 <TextInputField
@@ -522,19 +571,216 @@ export default function SettingsScreen() {
                   <ArabicText bold style={styles.saveNewProfileBtnText}>إنشاء وتنشيط الحساب</ArabicText>
                 </TouchableOpacity>
               </ScrollView>
-            </View>
+            </Animated.View>
           </View>
         </Modal>
 
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </Animated.View>
   );
 }
+
+function CloudAccountSection() {
+  const router = useRouter();
+  const { user, isCloudConfigured, isLoading, logout } = useAuthStore();
+
+  if (!isCloudConfigured) {
+    return (
+      <View style={cloudStyles.infoBox}>
+        <Ionicons name="information-circle-outline" size={18} color="#94A3B8" />
+        <ArabicText style={cloudStyles.infoText}>
+          لم يتم تهيئة الخدمة السحابية. قم بتعيين متغيرات EXPO_PUBLIC_SUPABASE_URL و EXPO_PUBLIC_SUPABASE_ANON_KEY للتفعيل.
+        </ArabicText>
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={cloudStyles.gap}>
+        <ArabicText style={cloudStyles.detailText}>
+          غير مسجل الدخول. قم بتسجيل الدخول للمزامنة مع الخادم السحابي.
+        </ArabicText>
+        <TouchableOpacity
+          style={cloudStyles.loginBtn}
+          onPress={() => router.push('/auth/login')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-in-outline" size={18} color={colors.primaryContrast} />
+          <ArabicText bold style={cloudStyles.loginBtnText}>تسجيل الدخول</ArabicText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={cloudStyles.registerBtn}
+          onPress={() => router.push('/auth/register')}
+          activeOpacity={0.8}
+        >
+          <ArabicText bold style={cloudStyles.registerBtnText}>إنشاء حساب جديد</ArabicText>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={cloudStyles.gap}>
+      <View style={cloudStyles.userRow}>
+        <Ionicons name="person-circle-outline" size={36} color={colors.primary} />
+        <View style={cloudStyles.userInfo}>
+          <ArabicText bold style={cloudStyles.userName}>{user.fullName}</ArabicText>
+          <ArabicText style={cloudStyles.userEmail}>{user.email}</ArabicText>
+          {user.clinicName ? (
+            <ArabicText style={cloudStyles.userClinic}>{user.clinicName}</ArabicText>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={cloudStyles.badgeRow}>
+        <View style={cloudStyles.planBadge}>
+          <ArabicText bold style={cloudStyles.planText}>
+            {user.subscriptionPlan === 'free' ? 'مجاني' : user.subscriptionPlan === 'pro' ? 'احترافي' : 'عيادة'}
+          </ArabicText>
+        </View>
+        <ArabicText style={cloudStyles.planLimit}>
+          {user.patientLimit === Infinity ? 'غير محدود' : `${user.patientLimit} مريض`}
+        </ArabicText>
+      </View>
+
+      <TouchableOpacity
+        style={cloudStyles.logoutBtn}
+        onPress={logout}
+        disabled={isLoading}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+        <ArabicText bold style={cloudStyles.logoutBtnText}>
+          {isLoading ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج من الحساب السحابي'}
+        </ArabicText>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const cloudStyles = StyleSheet.create({
+  gap: { gap: spacing.sm },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    borderRadius: 8,
+    padding: spacing.sm,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontFamily: fontFamilies.medium,
+    flex: 1,
+    textAlign: 'right',
+  },
+  detailText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontFamily: fontFamilies.medium,
+    textAlign: 'right',
+  },
+  loginBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    minHeight: 44,
+  },
+  loginBtnText: {
+    color: colors.primaryContrast,
+    fontSize: 14,
+    fontFamily: fontFamilies.bold,
+  },
+  registerBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    minHeight: 44,
+  },
+  registerBtnText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontFamily: fontFamilies.bold,
+  },
+  userRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  userInfo: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  userName: {
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontFamily: fontFamilies.bold,
+  },
+  userEmail: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontFamily: fontFamilies.regular,
+  },
+  userClinic: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontFamily: fontFamilies.medium,
+  },
+  badgeRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  planBadge: {
+    backgroundColor: 'rgba(27, 107, 74, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  planText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontFamily: fontFamilies.bold,
+  },
+  planLimit: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontFamily: fontFamilies.medium,
+  },
+  logoutBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: 8,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    minHeight: 44,
+  },
+  logoutBtnText: {
+    color: colors.danger,
+    fontSize: 14,
+    fontFamily: fontFamilies.bold,
+  },
+});
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
@@ -550,9 +796,9 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? 40 : 20,
     paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
-    backgroundColor: '#1E293B',
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: 'transparent',
   },
   backBtnRow: {
     flexDirection: 'row-reverse',

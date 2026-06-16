@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
+import { combineLatest, of } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
 import { validateLabMetrics, ClinicalAlert } from '../../utils/clinicalAlertsEngine';
-import { getDatabase } from '../../data/database';
-import { Q } from '@nozbe/watermelondb';
 import { useSettingsStore } from '../stores/settingsStore';
+import {
+  observePatientById,
+  observeVitalsHistory,
+  observeLabResults,
+  observeLaboratoryRecords,
+  observeIcuAdmissions,
+} from '../../data/repositories/ReactiveQuery';
 
 /**
- * Custom React hook to query the latest database laboratory results for a patient
- * and return evaluated clinical guidance alerts.
+ * Reactive Clinical Alerts Hook.
+ * Combined observable stream updates automatically whenever labs, vitals,
+ * or patient context change, trigger alert recalculation in real-time.
  *
  * @param patientId The unique database identifier of the patient
  */
@@ -20,18 +28,50 @@ export default function useClinicalAlerts(patientId: string): {
   const { thresholdUrea, thresholdCreatinine, thresholdPotassium, thresholdSodium } = useSettingsStore();
 
   useEffect(() => {
-    let active = true;
+    const combined$ = combineLatest([
+      observePatientById(patientId),
+      observeVitalsHistory(patientId),
+      observeLabResults(patientId),
+      observeLaboratoryRecords(patientId),
+      observeIcuAdmissions(patientId),
+    ]).pipe(
+      catchError((err) => {
+        console.error('[useClinicalAlerts] Stream error:', err);
+        return of([] as any);
+      }),
+      map(([patient, vitals, labs, records, icuAdmissions]) => {
+        if (!patient) {
+          return [];
+        }
 
-    async function fetchAlerts() {
-      try {
-        setLoading(true);
-        const db = await getDatabase();
-        
-        // Fetch lab results and records with safe any casting to avoid type compile conflicts
-        const labs = (await db.get('lab_results').query(Q.where('patient_id', patientId)).fetch()) as any[];
-        const records = (await db.get('laboratory_records').query(Q.where('patient_id', patientId)).fetch()) as any[];
+        // Compile patient context for Refeeding Syndrome evaluation
+        let patientWeight = 70;
+        let patientBmi = 22;
+        let weightChangePercent = 0;
+        let npoDays = 0;
+        let hasMalnutrition = false;
 
-        if (!active) return;
+        if (vitals.length > 0) {
+          const latestVital = vitals[0];
+          if (latestVital.weightKg) patientWeight = latestVital.weightKg;
+          else if (latestVital.weight) patientWeight = latestVital.weight;
+          
+          if (latestVital.bmi) patientBmi = latestVital.bmi;
+          if (latestVital.npoStatus || latestVital.npo_status) {
+            npoDays = latestVital.npoDuration ? parseInt(latestVital.npoDuration) || 1 : 1;
+          }
+          if (latestVital.malnutritionRisk === 'high' || latestVital.screeningStatus === 'at_risk') hasMalnutrition = true;
+          if (latestVital.weightChange3m) weightChangePercent = Math.abs(latestVital.weightChange3m);
+        } else if (icuAdmissions.length > 0) {
+          const latestIcu = icuAdmissions[0];
+          if (latestIcu.weightKg) patientWeight = latestIcu.weightKg;
+          if (latestIcu.bmi) patientBmi = latestIcu.bmi;
+          if (latestIcu.weightChangePercent) weightChangePercent = Math.abs(latestIcu.weightChangePercent);
+          if (latestIcu.npoStatus || latestIcu.npo_status) {
+            npoDays = latestIcu.npoDuration ? parseInt(latestIcu.npoDuration) || 1 : 1;
+          }
+          if (latestIcu.malnutritionRisk === 'high' || latestIcu.nutritionConcern) hasMalnutrition = true;
+        }
 
         const compiledLabs: any = {
           urea: undefined,
@@ -41,16 +81,12 @@ export default function useClinicalAlerts(patientId: string): {
           albumin: undefined,
           hba1c: undefined,
           randomBloodSugar: undefined,
+          phosphorus: undefined,
+          magnesium: undefined,
         };
 
-        // Sort laboratory_records by testDate descending
-        const sortedRecords = [...records].sort((a: any, b: any) => {
-          const dateA = a.testDate ? new Date(a.testDate).getTime() : 0;
-          const dateB = b.testDate ? new Date(b.testDate).getTime() : 0;
-          return dateB - dateA;
-        });
-
-        for (const rec of sortedRecords) {
+        // Compile structured laboratory records
+        for (const rec of records) {
           if (compiledLabs.albumin === undefined && rec.albumin !== undefined && rec.albumin !== null) {
             compiledLabs.albumin = rec.albumin;
           }
@@ -72,16 +108,13 @@ export default function useClinicalAlerts(patientId: string): {
           if (compiledLabs.randomBloodSugar === undefined && rec.bloodGlucose !== undefined && rec.bloodGlucose !== null) {
             compiledLabs.randomBloodSugar = rec.bloodGlucose;
           }
+          if (compiledLabs.phosphorus === undefined && rec.phosphorus !== undefined && rec.phosphorus !== null) {
+            compiledLabs.phosphorus = rec.phosphorus;
+          }
         }
 
-        // Sort generic lab_results by testDate descending
-        const sortedLabs = [...labs].sort((a: any, b: any) => {
-          const dateA = a.testDate ? new Date(a.testDate).getTime() : 0;
-          const dateB = b.testDate ? new Date(b.testDate).getTime() : 0;
-          return dateB - dateA;
-        });
-
-        sortedLabs.forEach((l: any) => {
+        // Compile generic lab results
+        labs.forEach((l: any) => {
           const name = (l.testName || '').toLowerCase().trim();
           const val = l.resultValue;
           if (val === undefined || val === null || isNaN(Number(val))) return;
@@ -100,30 +133,42 @@ export default function useClinicalAlerts(patientId: string): {
             if (compiledLabs.hba1c === undefined) compiledLabs.hba1c = val;
           } else if (name.includes('sugar') || name.includes('glucose') || name.includes('سكر') || name.includes('جلوكوز')) {
             if (compiledLabs.randomBloodSugar === undefined) compiledLabs.randomBloodSugar = val;
+          } else if (name.includes('phosphorus') || name.includes('phosphate') || name.includes('فوسفور') || name.includes('فسفور') || name === 'phos' || name === 'p') {
+            if (compiledLabs.phosphorus === undefined) compiledLabs.phosphorus = val;
+          } else if (name.includes('magnesium') || name.includes('ماغنسيوم') || name === 'mg') {
+            if (compiledLabs.magnesium === undefined) compiledLabs.magnesium = val;
           }
         });
 
-        const validatedAlerts = validateLabMetrics(compiledLabs, {
+        return validateLabMetrics(compiledLabs, {
           thresholdUrea,
           thresholdCreatinine,
           thresholdPotassium,
           thresholdSodium,
+        }, {
+          weightKg: patientWeight,
+          bmi: patientBmi,
+          weightLossPercent: weightChangePercent,
+          npoDays,
+          hasMalnutrition,
         });
-        setAlerts(validatedAlerts);
-      } catch (error) {
-        console.error('Error fetching clinical alerts in hook:', error);
-        setAlerts([]);
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
+      })
+    );
 
-    fetchAlerts();
+    setLoading(true);
+    const subscription = combined$.subscribe({
+      next: (val) => {
+        setAlerts(val);
+        setLoading(false);
+      },
+      error: (err) => {
+        console.error('[useClinicalAlerts] error:', err);
+        setLoading(false);
+      },
+    });
 
     return () => {
-      active = false;
+      subscription.unsubscribe();
     };
   }, [patientId, thresholdUrea, thresholdCreatinine, thresholdPotassium, thresholdSodium]);
 

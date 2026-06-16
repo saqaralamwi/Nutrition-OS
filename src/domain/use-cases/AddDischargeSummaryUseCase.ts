@@ -12,6 +12,16 @@ export interface AddDischargeSummaryInput {
   homeNutritionPlan: string;
   followUpRequired: boolean;
   nextFollowUpDate?: number;
+  finalEnergyIntake: number;
+  finalProteinIntake: number;
+  finalFluidIntake: number;
+  weightChangeKg?: number;
+  nutritionCompliance: number;
+  dischargeNutritionRecommendation: string;
+  followupNeededDays?: number;
+  complicationsRelatedToNutrition?: boolean;
+  complicationsNotes?: string;
+  nextEnergyTargetKcal?: number;
 }
 
 export class AddDischargeSummaryUseCase {
@@ -42,6 +52,16 @@ export class AddDischargeSummaryUseCase {
       homeNutritionPlan: input.homeNutritionPlan,
       followUpRequired: input.followUpRequired,
       nextFollowUpDate: input.nextFollowUpDate,
+      finalEnergyIntake: input.finalEnergyIntake,
+      finalProteinIntake: input.finalProteinIntake,
+      finalFluidIntake: input.finalFluidIntake,
+      weightChangeKg: input.weightChangeKg,
+      nutritionCompliance: input.nutritionCompliance,
+      dischargeNutritionRecommendation: input.dischargeNutritionRecommendation,
+      followupNeededDays: input.followupNeededDays,
+      complicationsRelatedToNutrition: input.complicationsRelatedToNutrition,
+      complicationsNotes: input.complicationsNotes,
+      nextEnergyTargetKcal: input.nextEnergyTargetKcal,
     };
 
     return this.dischargeRepository.create(record);

@@ -14,11 +14,22 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
-import { Patient } from '../../../src/domain/entities/Patient';
-import { spacing } from '../../../src/presentation/theme';
+import { Patient, PatientGender, PatientStatus, PatientType } from '../../../src/domain/entities/Patient';
+import { spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import { SaveInterventionUseCase } from '../../../src/domain/use-cases/SaveInterventionUseCase';
+import { InterventionRecord } from '../../../src/domain/repositories/IInterventionRepository';
 import useClinicalAlerts from '../../../src/presentation/hooks/useClinicalAlerts';
+import { combineLatest, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+import {
+  observePatientById,
+  observeVitalsHistory,
+  observeActiveMedications,
+  observeIcuAdmissions,
+  observeLabResults,
+  observeLaboratoryRecords,
+} from '../../../src/data/repositories/ReactiveQuery';
 
 // Theme local color palette (slate dark theme)
 const darkTheme = {
@@ -76,52 +87,172 @@ export default function NutritionCalculatorScreen() {
   const [cycleHours, setCycleHours] = useState('24');
   const [formulaDensity, setFormulaDensity] = useState('1.0');
 
-  // Dropdown open states
   const [openEnergy, setOpenEnergy] = useState(false);
   const [openProtein, setOpenProtein] = useState(false);
   const [openFormula, setOpenFormula] = useState(false);
+  const [medications, setMedications] = useState<any[]>([]);
+
+  // Refeeding risk and limits info
+  const [refeedingInfo, setRefeedingInfo] = useState<{
+    isRisk: boolean;
+    riskScore: number;
+    day1Limit: number;
+    day2Limit: number;
+    day3Limit: number;
+  }>({ isRisk: false, riskScore: 0, day1Limit: 0, day2Limit: 0, day3Limit: 0 });
 
   // Load patient and baseline weight
   useEffect(() => {
-    async function loadData() {
-      try {
-        setIsLoading(true);
-        const { GetPatientUseCase } = await import('../../../src/domain/use-cases/GetPatientUseCase');
-        const patientUC = new GetPatientUseCase();
-        const p = await patientUC.execute(patientId);
-        setPatient(p);
+    const combined$ = combineLatest([
+      observePatientById(patientId),
+      observeVitalsHistory(patientId),
+      observeActiveMedications(patientId),
+      observeIcuAdmissions(patientId),
+      observeLabResults(patientId),
+      observeLaboratoryRecords(patientId),
+    ]);
 
-        // Prepopulate weight from calculations if available
-        const { CalculationRepository } = await import('../../../src/data/repositories/CalculationRepository');
-        const calcRepo = new CalculationRepository();
-        const calcs = await calcRepo.getByPatientId(patientId);
-        if (calcs.length > 0) {
-          const w = calcs[0].inputValues?.weightKg;
-          if (w) {
-            setWeightKg(String(w));
-            return;
-          }
+    setIsLoading(true);
+    const subscription = combined$.pipe(
+      catchError((err) => {
+        console.error('[NutritionCalculator] Stream error:', err);
+        return of([null, [], [], [], [], []] as any);
+      }),
+    ).subscribe({
+      next: ([pModel, vitals, meds, icuAdmissions, labs, records]) => {
+        if (!pModel) {
+          setPatient(null);
+          setIsLoading(false);
+          return;
         }
 
-        // Fallback to latest follow-up visit weight
-        const { FollowUpVisitRepository } = await import('../../../src/data/repositories/FollowUpVisitRepository');
-        const visitRepo = new FollowUpVisitRepository();
-        const visits = await visitRepo.getByPatientId(patientId);
-        if (visits.length > 0) {
-          const w = visits[0].currentWeight;
-          if (w) {
-            setWeightKg(String(w));
-            return;
+        // Map PatientModel to Patient entity type
+        let incompleteArr: string[] = [];
+        if (pModel.incompleteSections) {
+          try {
+            incompleteArr = JSON.parse(pModel.incompleteSections);
+          } catch {
+            incompleteArr = [];
           }
         }
-      } catch (e) {
-        console.error('Error loading calculator requirements:', e);
+        const mappedPatient: Patient = {
+          id: pModel.id,
+          fileNumber: pModel.fileNumber,
+          fullName: pModel.fullName,
+          age: pModel.age,
+          dateOfBirth: pModel.dateOfBirth || null,
+          gender: pModel.gender as PatientGender,
+          nationalId: pModel.nationalId || null,
+          nationality: pModel.nationality || null,
+          phoneNumber: pModel.phoneNumber || null,
+          department: pModel.department,
+          bedNumber: pModel.bedNumber || null,
+          admissionDate: pModel.admissionDate?.toISOString() || new Date().toISOString(),
+          referringPhysician: pModel.referringPhysician || null,
+          primaryDiagnosis: pModel.primaryDiagnosis,
+          patientType: pModel.patientType as PatientType,
+          status: pModel.status as PatientStatus,
+          notes: pModel.notes || null,
+          incompleteSections: incompleteArr,
+          createdAt: pModel.createdAt?.toISOString() || new Date().toISOString(),
+          updatedAt: pModel.updatedAt?.toISOString() || new Date().toISOString(),
+        };
+
+        setPatient(mappedPatient);
+        setMedications(meds);
+
+        // Prepopulate weight and calculate refeeding risk
+        let pBmi = pModel.age > 0 ? 22 : 20;
+        let pWeight = 70;
+        let pMalnutrition = false;
+        let pNpoDays = 0;
+        let pWeightLoss = 0;
+
+        if (vitals.length > 0) {
+          const v = vitals[0];
+          if (v.bmi) pBmi = v.bmi;
+          if (v.weightKg || v.weight) pWeight = v.weightKg || v.weight;
+          if (v.malnutritionRisk === 'high' || v.screeningStatus === 'at_risk') pMalnutrition = true;
+          if (v.npoStatus || v.npo_status) pNpoDays = v.npoDuration ? parseInt(v.npoDuration) || 1 : 1;
+          if (v.weightChange3m) pWeightLoss = Math.abs(v.weightChange3m);
+        } else if (icuAdmissions.length > 0) {
+          const i = icuAdmissions[0];
+          if (i.bmi) pBmi = i.bmi;
+          if (i.weightKg) pWeight = i.weightKg;
+          if (i.malnutritionRisk === 'high' || i.nutritionConcern) pMalnutrition = true;
+          if (i.npoStatus || i.npo_status) pNpoDays = i.npoDuration ? parseInt(i.npoDuration) || 1 : 1;
+          if (i.weightChangePercent) pWeightLoss = Math.abs(i.weightChangePercent);
+        }
+
+        // Refeeding logic:
+        let phos = undefined;
+        let pot = undefined;
+        let mag = undefined;
+
+        for (const r of records) {
+          if (phos === undefined && r.phosphorus !== undefined && r.phosphorus !== null) phos = r.phosphorus;
+          if (pot === undefined && r.potassium !== undefined && r.potassium !== null) pot = r.potassium;
+        }
+
+        labs.forEach((l: Record<string, unknown>) => {
+          const name = (l.testName || '').toLowerCase().trim();
+          const val = l.resultValue;
+          if (val === undefined || val === null || isNaN(Number(val))) return;
+          if (name.includes('phosphorus') || name.includes('phosphate') || name.includes('فوسفور') || name.includes('فسفور') || name === 'phos' || name === 'p') {
+            if (phos === undefined) phos = val;
+          } else if (name.includes('potassium') || name.includes('بوتاسيوم') || name === 'k') {
+            if (pot === undefined) pot = val;
+          } else if (name.includes('magnesium') || name.includes('ماغنسيوم') || name === 'mg') {
+            if (mag === undefined) mag = val;
+          }
+        });
+
+        const hasLowP = phos !== undefined && phos < 0.8;
+        const hasLowK = pot !== undefined && pot < 3.5;
+        const hasLowM = mag !== undefined && mag < 0.7;
+        const hasSevMal = pBmi < 16 || pMalnutrition;
+        const hasNoIntake = pNpoDays >= 5;
+        const hasWeightLoss = pWeightLoss > 10;
+
+        const score = (hasLowP ? 2 : 0) + (hasLowK ? 2 : 0) + (hasLowM ? 2 : 0) + (hasSevMal ? 3 : 0) + (hasNoIntake ? 1 : 0) + (hasWeightLoss ? 1 : 0);
+        const isRisk = score > 0;
+        
+        let day1Limit = pWeight * 12;
+        let day2Limit = pWeight * 14;
+        let day3Limit = pWeight * 16;
+        if (score >= 3) {
+          day1Limit = pWeight * 10;
+          day2Limit = pWeight * 12;
+          day3Limit = pWeight * 15;
+        }
+
+        setRefeedingInfo({
+          isRisk,
+          riskScore: score,
+          day1Limit,
+          day2Limit,
+          day3Limit
+        });
+
+        setWeightKg((prev) => {
+          if (!prev || prev === '' || prev === '70') {
+            return String(pWeight);
+          }
+          return prev;
+        });
+
+        setIsLoading(false);
+      },
+      error: (err) => {
+        console.error('Error in reactive calculator subscription:', err);
         showToast('فشل في تحميل البيانات الأساسية للمريض', 'error');
-      } finally {
         setIsLoading(false);
       }
-    }
-    loadData();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [patientId]);
 
   // Reactive calculations
@@ -135,21 +266,41 @@ export default function NutritionCalculatorScreen() {
   const totalProtein = useMemo(() => w * pMult, [w, pMult]);
   const totalFluid = useMemo(() => w * 30, [w]); // 30 ml/kg standard fluid target
 
-  // Enteral outputs
-  const enteralVolume = useMemo(() => (density > 0 ? totalCalories / density : 0), [totalCalories, density]);
+  // Hidden Calories Calculations
+  const hiddenCalories = useMemo(() => medications.reduce((sum, med) => sum + (med.hiddenCalories || 0), 0), [medications]);
+  const netCalories = useMemo(() => Math.max(500, totalCalories - hiddenCalories), [totalCalories, hiddenCalories]);
+
+  // Enteral outputs (based on net calories)
+  const enteralVolume = useMemo(() => (density > 0 ? netCalories / density : 0), [netCalories, density]);
   const flowRate = useMemo(() => (cycle > 0 ? enteralVolume / cycle : 0), [enteralVolume, cycle]);
   const freeWaterFlush = useMemo(() => Math.max(0, totalFluid - enteralVolume), [totalFluid, enteralVolume]);
 
-  // Parenteral outputs
+  // Parenteral outputs (subtracting hidden carbohydrates and lipids from flushes/propofol)
   const proteinCalories = useMemo(() => totalProtein * 4, [totalProtein]);
-  const isProteinOverCalories = useMemo(() => totalCalories < proteinCalories, [totalCalories, proteinCalories]);
+  const isProteinOverCalories = useMemo(() => netCalories < proteinCalories, [netCalories, proteinCalories]);
 
-  const nonProteinCalories = useMemo(() => Math.max(0, totalCalories - proteinCalories), [totalCalories, proteinCalories]);
+  const nonProteinCalories = useMemo(() => Math.max(0, netCalories - proteinCalories), [netCalories, proteinCalories]);
   const dextroseCalories = useMemo(() => nonProteinCalories * 0.70, [nonProteinCalories]);
   const lipidCalories = useMemo(() => nonProteinCalories * 0.30, [nonProteinCalories]);
 
-  const dextroseGrams = useMemo(() => dextroseCalories / 3.4, [dextroseCalories]); // 3.4 kcal/g for IV Dextrose
-  const lipidGrams = useMemo(() => lipidCalories / 9.0, [lipidCalories]); // 9.0 kcal/g of Lipids
+  // Hidden carbohydrates (dextrose) and lipids (propofol/smoflipid)
+  const dextroseHiddenCalories = useMemo(() => {
+    return medications
+      .filter(m => (m.name || m.drugName || '').toLowerCase().includes('dextrose') || (m.name || m.drugName || '').toLowerCase().includes('d5w'))
+      .reduce((sum, m) => sum + (m.hiddenCalories || 0), 0);
+  }, [medications]);
+
+  const lipidHiddenCalories = useMemo(() => {
+    return medications
+      .filter(m => (m.name || m.drugName || '').toLowerCase().includes('propofol') || (m.name || m.drugName || '').toLowerCase().includes('diprivan') || (m.name || m.drugName || '').toLowerCase().includes('lipid'))
+      .reduce((sum, m) => sum + (m.hiddenCalories || 0), 0);
+  }, [medications]);
+
+  const netDextroseCalories = useMemo(() => Math.max(0, dextroseCalories - dextroseHiddenCalories), [dextroseCalories, dextroseHiddenCalories]);
+  const netLipidCalories = useMemo(() => Math.max(0, lipidCalories - lipidHiddenCalories), [lipidCalories, lipidHiddenCalories]);
+
+  const dextroseGrams = useMemo(() => netDextroseCalories / 3.4, [netDextroseCalories]); // 3.4 kcal/g for IV Dextrose
+  const lipidGrams = useMemo(() => netLipidCalories / 9.0, [netLipidCalories]); // 9.0 kcal/g of Lipids
 
   // Holliday-Segar water calculation for comparison
   const hollidaySegarFluid = useMemo(() => {
@@ -172,19 +323,26 @@ export default function NutritionCalculatorScreen() {
     try {
       setIsSaving(true);
 
+      const propofolMed = medications.find(m => (m.name || m.drugName || '').toLowerCase().includes('propofol'));
+      const propofolRateVal = propofolMed ? (propofolMed.mlPerHour || 0) : 0;
+
+      const dextroseMed = medications.find(m => (m.name || m.drugName || '').toLowerCase().includes('dextrose'));
+      const dextroseVolumeVal = dextroseMed ? (dextroseMed.totalMlPerDay || 0) : 0;
+      const dextroseConcentrationVal = dextroseMed ? (dextroseMed.percent || 0) : 0;
+
       const comments = route === 'enteral'
-        ? `طريقة التغذية: أنبوبية (Enteral Nutrition)\nالصيغة المغذية: ${FORMULA_OPTIONS.find((o) => o.value === formulaDensity)?.label || formulaDensity}\nحجم الصيغة المقدر: ${Math.round(enteralVolume)} مل/يوم\nمعدل سرعة التدفق: ${flowRate.toFixed(1)} مل/ساعة\nمدة الدورة: ${cycle} ساعة\nالماء الإضافي المطلوب (Free Water flushes): ${Math.round(freeWaterFlush)} مل/يوم\n(مقارنة Holliday-Segar للسوائل: ${hollidaySegarFluid} مل/يوم)`
-        : `طريقة التغذية: وريدية كلية (Parenteral Nutrition)\nتفصيل المغذيات الكبرى في المحلول:\n- أحماض أمينية (بروتين): ${totalProtein.toFixed(1)} غرام (${proteinCalories.toFixed(0)} سعرة)\n- دكستروز (كربوهيدرات 70%): ${dextroseGrams.toFixed(1)} غرام (${dextroseCalories.toFixed(0)} سعرة)\n- ليبتيدات (دهون 30%): ${lipidGrams.toFixed(1)} غرام (${lipidCalories.toFixed(0)} سعرة)\n- السوائل الوريدية الإجمالية: ${Math.round(totalFluid)} مل/يوم\n(مقارنة Holliday-Segar للسوائل: ${hollidaySegarFluid} مل/يوم)`;
+        ? `طريقة التغذية: أنبوبية (Enteral Nutrition)\nالصيغة المغذية: ${FORMULA_OPTIONS.find((o) => o.value === formulaDensity)?.label || formulaDensity}\nالسعرات الإجمالية المقدرة (TEE): ${Math.round(totalCalories)} سعرة/يوم\nالسعرات المخفية من الأدوية والمحاليل: ${hiddenCalories.toFixed(0)} سعرة/يوم\nصافي سعرات التغذية المطلوبة: ${Math.round(netCalories)} سعرة/يوم\nحجم الصيغة المقدر: ${Math.round(enteralVolume)} مل/يوم\nمعدل سرعة التدفق: ${flowRate.toFixed(1)} مل/ساعة\nمدة الدورة: ${cycle} ساعة\nالماء الإضافي المطلوب (Free Water flushes): ${Math.round(freeWaterFlush)} مل/يوم\n(مقارنة Holliday-Segar للسوائل: ${hollidaySegarFluid} مل/يوم)`
+        : `طريقة التغذية: وريدية كلية (Parenteral Nutrition)\nالسعرات الإجمالية المقدرة (TEE): ${Math.round(totalCalories)} سعرة/يوم\nالسعرات المخفية من الأدوية والمحاليل: ${hiddenCalories.toFixed(0)} سعرة/يوم\nصافي سعرات التغذية المطلوبة: ${Math.round(netCalories)} سعرة/يوم\nتفصيل المغذيات الكبرى في المحلول:\n- أحماض أمينية (بروتين): ${totalProtein.toFixed(1)} غرام (${proteinCalories.toFixed(0)} سعرة)\n- دكستروز (كربوهيدرات الصافية): ${dextroseGrams.toFixed(1)} غرام (${netDextroseCalories.toFixed(0)} سعرة)\n- ليبتيدات (دهون الصافية): ${lipidGrams.toFixed(1)} غرام (${netLipidCalories.toFixed(0)} سعرة)\n- السوائل الوريدية الإجمالية: ${Math.round(totalFluid)} ml/day\n(مقارنة Holliday-Segar للسوائل: ${hollidaySegarFluid} مل/يوم)`;
 
       const uc = new SaveInterventionUseCase();
-      await uc.execute({
+      const interventionRecord: InterventionRecord = {
         patientId,
         nutritionDiagnosis: `خطة تغذية ${route === 'enteral' ? 'أنبوبية (EN)' : 'وريدية (PN)'} محسوبة سريرياً`,
-        mainGoal: `تأمين الاحتياجات للحالة بضرب: ${eMult} kcal/kg و ${pMult} g/kg`,
+        mainGoal: `تأمين الاحتياجات الصافية بضرب: ${eMult} kcal/kg و ${pMult} g/kg (مطروح منها السعرات المخفية: ${hiddenCalories.toFixed(0)} سعرة)`,
         dietType: route === 'enteral' ? 'enteral_formula' : 'parenteral_nutrition',
         foodTexture: 'liquid',
         routeOfFeeding: route === 'enteral' ? 'ng_tube' : 'tpn',
-        targetCalories: Math.round(totalCalories),
+        targetCalories: Math.round(netCalories),
         targetProtein: Math.round(totalProtein),
         targetCarbohydrates: route === 'parenteral' ? Math.round(dextroseGrams) : 0,
         targetFat: route === 'parenteral' ? Math.round(lipidGrams) : 0,
@@ -194,7 +352,12 @@ export default function NutritionCalculatorScreen() {
         followUpInterval: 'weekly',
         status: 'active',
         comments,
-      });
+        propofolRate: propofolRateVal,
+        dextroseVolume: dextroseVolumeVal,
+        dextroseConcentration: dextroseConcentrationVal,
+        nonNutritionalCalories: hiddenCalories,
+      };
+      await uc.execute(interventionRecord);
 
       showToast('تم حفظ الخطة التغذوية للحالة وتحديث الملف الطبي بنجاح', 'success');
       router.back();
@@ -215,17 +378,20 @@ export default function NutritionCalculatorScreen() {
     totalCalories,
     totalProtein,
     totalFluid,
+    hiddenCalories,
+    netCalories,
     enteralVolume,
     flowRate,
     freeWaterFlush,
     dextroseGrams,
-    dextroseCalories,
+    netDextroseCalories,
     lipidGrams,
-    lipidCalories,
+    netLipidCalories,
     proteinCalories,
     hollidaySegarFluid,
     showToast,
     router,
+    medications,
   ]);
 
   if (isLoading) {
@@ -280,17 +446,52 @@ export default function NutritionCalculatorScreen() {
                     alert.type === 'danger' ? styles.dangerAlert : styles.warningAlert,
                   ]}
                 >
-                  <View style={styles.alertHeader}>
+                  <View style={alert.type === 'danger' ? { backgroundColor: darkTheme.dangerBg, padding: spacing.sm, borderRadius: 8, borderWidth: 1, borderColor: darkTheme.danger } : styles.alertHeader}>
                     <Ionicons name="alert-circle" size={20} color={darkTheme.white} style={styles.alertIcon} />
                     <ArabicText bold style={styles.alertTitle}>
                       {alert.title}
                     </ArabicText>
                   </View>
-                  <ArabicText style={styles.alertMessage}>
+                  <ArabicText style={[styles.alertMessage, { marginTop: 4 }]}>
                     {alert.message}
                   </ArabicText>
                 </View>
               ))}
+            </View>
+          )}
+
+          {/* Refeeding Caloric Lock Banner */}
+          {refeedingInfo.isRisk && (
+            <View style={[styles.card, { borderColor: darkTheme.danger, borderWidth: 1.5 }]}>
+              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs }}>
+                <Ionicons name="shield-half" size={22} color={darkTheme.danger} />
+                <ArabicText bold style={[styles.cardTitle, { color: darkTheme.danger, marginBottom: 0, flex: 1 }]}>
+                  حماية متلازمة إعادة التغذية (Refeeding Syndrome)
+                </ArabicText>
+              </View>
+              <ArabicText style={{ color: darkTheme.textPrimary, fontSize: 13, textAlign: 'right', marginBottom: spacing.sm, fontFamily: 'ThmanyahSans-Medium' }}>
+                تم كشف خطورة إعادة تغذية بمعدل ({refeedingInfo.riskScore}/6). يوصى بتطبيق بروتوكول تقييد وتدرج السعرات الحرارية لحماية المريض من توقف القلب.
+              </ArabicText>
+              <View style={styles.metricsGrid}>
+                <View style={[styles.metricItem, { backgroundColor: '#88133722' }]}>
+                  <ArabicText style={styles.metricLabel}>اليوم الأول (حد أقصى)</ArabicText>
+                  <ArabicText bold style={[styles.metricValue, { color: darkTheme.danger, fontSize: 18 }]}>
+                    {Math.round(refeedingInfo.day1Limit)} <ArabicText style={styles.metricUnit}>سعرة ({refeedingInfo.riskScore >= 3 ? '10' : '12'} kcal/kg)</ArabicText>
+                  </ArabicText>
+                </View>
+                <View style={styles.metricItem}>
+                  <ArabicText style={styles.metricLabel}>اليوم الثاني (حد أقصى)</ArabicText>
+                  <ArabicText bold style={[styles.metricValue, { color: darkTheme.textPrimary, fontSize: 18 }]}>
+                    {Math.round(refeedingInfo.day2Limit)} <ArabicText style={styles.metricUnit}>سعرة ({refeedingInfo.riskScore >= 3 ? '12' : '14'} kcal/kg)</ArabicText>
+                  </ArabicText>
+                </View>
+                <View style={styles.metricItem}>
+                  <ArabicText style={styles.metricLabel}>اليوم الثالث (حد أقصى)</ArabicText>
+                  <ArabicText bold style={[styles.metricValue, { color: darkTheme.textPrimary, fontSize: 18 }]}>
+                    {Math.round(refeedingInfo.day3Limit)} <ArabicText style={styles.metricUnit}>سعرة ({refeedingInfo.riskScore >= 3 ? '15' : '16'} kcal/kg)</ArabicText>
+                  </ArabicText>
+                </View>
+              </View>
             </View>
           )}
 
@@ -389,9 +590,14 @@ export default function NutritionCalculatorScreen() {
             <View style={styles.metricsGrid}>
               <View style={styles.metricItem}>
                 <ArabicText style={styles.metricLabel}>السعرات المستهدفة</ArabicText>
-                <ArabicText bold style={[styles.metricValue, { color: darkTheme.accent }]}>
+                <ArabicText bold style={[styles.metricValue, { color: refeedingInfo.isRisk && totalCalories > refeedingInfo.day1Limit ? darkTheme.danger : darkTheme.accent }]}>
                   {Math.round(totalCalories)} <ArabicText style={styles.metricUnit}>سعرة/يوم</ArabicText>
                 </ArabicText>
+                {refeedingInfo.isRisk && totalCalories > refeedingInfo.day1Limit && (
+                  <ArabicText style={{ color: darkTheme.danger, fontSize: 11, marginTop: 4, fontFamily: 'ThmanyahSans-Medium', textAlign: 'right' }}>
+                    ⚠️ يتجاوز الحد الآمن لليوم الأول ({Math.round(refeedingInfo.day1Limit)} سعرة)
+                  </ArabicText>
+                )}
               </View>
 
               <View style={styles.metricItem}>
@@ -641,7 +847,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: darkTheme.forestGreen,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
   },

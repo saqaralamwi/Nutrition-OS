@@ -52,8 +52,14 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         bioEnabled = bio === 'true';
       }
 
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      let hasHardware = false;
+      let isEnrolled = false;
+      try {
+        hasHardware = await LocalAuthentication.hasHardwareAsync();
+        isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      } catch (bioError) {
+        console.warn('[securityStore] LocalAuthentication check failed:', bioError);
+      }
 
       set({
         hasPIN: pinExists,
@@ -106,17 +112,22 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     const { isBiometricsSupported, biometricsEnabled } = get();
     if (!isBiometricsSupported || !biometricsEnabled) return false;
 
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'الدخول الآمن للنظام',
-      fallbackLabel: 'استخدم رمز PIN',
-      cancelLabel: 'إلغاء',
-    });
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'الدخول الآمن للنظام',
+        fallbackLabel: 'استخدم رمز PIN',
+        cancelLabel: 'إلغاء',
+      });
 
-    if (result.success) {
-      set({ isLocked: false });
-      return true;
+      if (result.success) {
+        set({ isLocked: false });
+        return true;
+      }
+      return false;
+    } catch (authErr) {
+      console.error('[securityStore] Biometric authentication failed:', authErr);
+      return false;
     }
-    return false;
   },
 
   lockApp: () => {

@@ -1,7 +1,8 @@
 import { Q } from '@nozbe/watermelondb';
 import { getDatabase } from '../database';
 import PatientModel from '../models/Patient';
-import { Patient, CreatePatientInput } from '../../domain/entities/Patient';
+import FileNumberCounterModel from '../models/FileNumberCounter';
+import { Patient, CreatePatientInput, PatientGender, PatientStatus, PatientType } from '../../domain/entities/Patient';
 import { IPatientRepository, PatientSearchQuery, SortOrder } from '../../domain/repositories/IPatientRepository';
 
 function toDomain(model: PatientModel): Patient {
@@ -19,7 +20,7 @@ function toDomain(model: PatientModel): Patient {
     fullName: model.fullName,
     age: model.age,
     dateOfBirth: model.dateOfBirth || null,
-    gender: model.gender as any,
+    gender: model.gender as PatientGender,
     nationalId: model.nationalId || null,
     nationality: model.nationality || null,
     phoneNumber: model.phoneNumber || null,
@@ -28,8 +29,8 @@ function toDomain(model: PatientModel): Patient {
     admissionDate: model.admissionDate?.toISOString() || new Date().toISOString(),
     referringPhysician: model.referringPhysician || null,
     primaryDiagnosis: model.primaryDiagnosis,
-    patientType: model.patientType as any,
-    status: model.status as any,
+    patientType: model.patientType as PatientType,
+    status: model.status as PatientStatus,
     notes: model.notes || null,
     incompleteSections: incompleteArr,
     createdAt: model.createdAt?.toISOString() || new Date().toISOString(),
@@ -95,27 +96,46 @@ export class PatientRepository implements IPatientRepository {
 
   async create(input: CreatePatientInput): Promise<Patient> {
     const db = await getDatabase();
-    const fileNumber = await this.generateFileNumber();
     const result = await db.write(async () => {
+      let fileNumber = await this.generateFileNumberInternal(db);
+
+      // Check for duplicate
+      let duplicatePatients = await db.get<PatientModel>('patients').query(
+        Q.where('file_number', fileNumber)
+      ).fetch();
+
+      if (duplicatePatients.length > 0) {
+        console.warn(`[PatientRepository] Duplicate file number detected: ${fileNumber}. Retrying...`);
+        fileNumber = await this.generateFileNumberInternal(db);
+        duplicatePatients = await db.get<PatientModel>('patients').query(
+          Q.where('file_number', fileNumber)
+        ).fetch();
+        if (duplicatePatients.length > 0) {
+          throw new Error('الرقم التعريفي للمريض مكرر، يرجى المحاولة مرة أخرى.');
+        }
+      }
+
       const collection = db.get<PatientModel>('patients');
       return collection.create((record) => {
         record.fileNumber = fileNumber;
         record.fullName = input.fullName;
         record.age = input.age;
-        if (input.dateOfBirth) record.dateOfBirth = input.dateOfBirth;
+        if (input.dateOfBirth !== undefined) record.dateOfBirth = input.dateOfBirth ?? '';
         record.gender = input.gender;
-        if (input.nationalId) record.nationalId = input.nationalId;
-        if (input.nationality) record.nationality = input.nationality;
-        if (input.phoneNumber) record.phoneNumber = input.phoneNumber;
+        if (input.nationalId !== undefined) record.nationalId = input.nationalId ?? '';
+        if (input.nationality !== undefined) record.nationality = input.nationality ?? '';
+        if (input.phoneNumber !== undefined) record.phoneNumber = input.phoneNumber ?? '';
         record.department = input.department;
-        if (input.bedNumber) record.bedNumber = input.bedNumber;
-        if (input.admissionDate) record.admissionDate = new Date(input.admissionDate);
-        if (input.referringPhysician) record.referringPhysician = input.referringPhysician;
+        if (input.bedNumber !== undefined) record.bedNumber = input.bedNumber ?? '';
+        if (input.admissionDate !== undefined) record.admissionDate = new Date(input.admissionDate);
+        if (input.referringPhysician !== undefined) record.referringPhysician = input.referringPhysician ?? '';
         record.primaryDiagnosis = input.primaryDiagnosis;
         record.patientType = input.patientType;
         record.status = input.status || 'active';
-        if (input.notes) record.notes = input.notes;
-        if (input.incompleteSections) record.incompleteSections = JSON.stringify(input.incompleteSections);
+        if (input.notes !== undefined) record.notes = input.notes ?? '';
+        if (input.incompleteSections !== undefined) {
+          record.incompleteSections = input.incompleteSections ? JSON.stringify(input.incompleteSections) : '';
+        }
       });
     });
     return toDomain(result);
@@ -128,20 +148,22 @@ export class PatientRepository implements IPatientRepository {
       await existing.update((record) => {
         record.fullName = patient.fullName;
         record.age = patient.age;
-        if (patient.dateOfBirth) record.dateOfBirth = patient.dateOfBirth;
+        if (patient.dateOfBirth !== undefined) record.dateOfBirth = patient.dateOfBirth ?? '';
         record.gender = patient.gender;
-        if (patient.nationalId) record.nationalId = patient.nationalId;
-        if (patient.nationality) record.nationality = patient.nationality;
-        if (patient.phoneNumber) record.phoneNumber = patient.phoneNumber;
+        if (patient.nationalId !== undefined) record.nationalId = patient.nationalId ?? '';
+        if (patient.nationality !== undefined) record.nationality = patient.nationality ?? '';
+        if (patient.phoneNumber !== undefined) record.phoneNumber = patient.phoneNumber ?? '';
         record.department = patient.department;
-        if (patient.bedNumber) record.bedNumber = patient.bedNumber;
-        if (patient.admissionDate) record.admissionDate = new Date(patient.admissionDate);
-        if (patient.referringPhysician) record.referringPhysician = patient.referringPhysician;
+        if (patient.bedNumber !== undefined) record.bedNumber = patient.bedNumber ?? '';
+        if (patient.admissionDate !== undefined) record.admissionDate = new Date(patient.admissionDate);
+        if (patient.referringPhysician !== undefined) record.referringPhysician = patient.referringPhysician ?? '';
         record.primaryDiagnosis = patient.primaryDiagnosis;
         record.patientType = patient.patientType;
         record.status = patient.status;
-        if (patient.notes) record.notes = patient.notes;
-        record.incompleteSections = patient.incompleteSections ? JSON.stringify(patient.incompleteSections) : '';
+        if (patient.notes !== undefined) record.notes = patient.notes ?? '';
+        if (patient.incompleteSections !== undefined) {
+          record.incompleteSections = patient.incompleteSections ? JSON.stringify(patient.incompleteSections) : '';
+        }
       });
     });
   }
@@ -159,10 +181,49 @@ export class PatientRepository implements IPatientRepository {
     return db.get<PatientModel>('patients').query().fetchCount();
   }
 
+  async isFileNumberDuplicate(fileNumber: string): Promise<boolean> {
+    const db = await getDatabase();
+    const results = await db.get<PatientModel>('patients').query(
+      Q.where('file_number', fileNumber)
+    ).fetch();
+    return results.length > 0;
+  }
+
   async generateFileNumber(): Promise<string> {
     const db = await getDatabase();
-    const count = await db.get<PatientModel>('patients').query().fetchCount();
-    const padded = String(count + 1).padStart(5, '0');
-    return `CN-${padded}`;
+    return db.write(async () => {
+      return this.generateFileNumberInternal(db);
+    });
+  }
+
+  private async generateFileNumberInternal(db: any): Promise<string> {
+    const year = new Date().getFullYear();
+    const countersCollection = db.get<FileNumberCounterModel>('file_number_counters');
+    
+    // Find counter for current year
+    const existingCounters = await countersCollection.query(
+      Q.where('year', year)
+    ).fetch();
+    
+    let count = 0;
+    if (existingCounters.length > 0) {
+      const counter = existingCounters[0];
+      await counter.update((record) => {
+        const currentCount = Number(record._raw.count || 0);
+        record._raw.count = currentCount + 1;
+        record._raw.last_incremented_at = new Date().getTime();
+      });
+      count = Number(counter._raw.count);
+    } else {
+      const counter = await countersCollection.create((record) => {
+        record._raw.year = year;
+        record._raw.count = 1;
+        record._raw.last_incremented_at = new Date().getTime();
+      });
+      count = Number(counter._raw.count);
+    }
+    
+    const padded = String(count).padStart(5, '0');
+    return `CN-${year}-${padded}`;
   }
 }

@@ -11,48 +11,70 @@ export interface VentilatedREEInput {
 }
 
 // 1.2 Harris-Benedict Baseline Metabolic Rate (RMR) Module
+function safeNum(v: unknown, fallback: number = 0): number {
+  if (typeof v === 'number' && isFinite(v)) return v;
+  if (typeof v === 'string') { const p = parseFloat(v); return isFinite(p) ? p : fallback; }
+  return fallback;
+}
+
 export function calculateHarrisBenedictBMR(weightKg: number, heightCm: number, age: number, isMale: boolean): number {
+  const w = safeNum(weightKg, 70);
+  const h = safeNum(heightCm, 170);
+  const a = safeNum(age, 40);
+  if (w <= 0 || h <= 0) return 0;
   if (isMale) {
-    return 66.5 + (13.8 * weightKg) + (5 * heightCm) - (6.8 * age);
+    return Math.max(0, 66.5 + (13.8 * w) + (5 * h) - (6.8 * a));
   } else {
-    return 655.1 + (9.6 * weightKg) + (1.7 * heightCm) - (4.7 * age);
+    return Math.max(0, 655.1 + (9.6 * w) + (1.7 * h) - (4.7 * a));
   }
 }
 
-// 1.3 Mifflin-St Jeor Baseline Module
 export function calculateMifflinStJeorBMR(weightKg: number, heightCm: number, age: number, isMale: boolean): number {
+  const w = safeNum(weightKg, 70);
+  const h = safeNum(heightCm, 170);
+  const a = safeNum(age, 40);
+  if (w <= 0 || h <= 0) return 0;
   if (isMale) {
-    return (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
+    return Math.max(0, (10 * w) + (6.25 * h) - (5 * a) + 5);
   } else {
-    return (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
+    return Math.max(0, (10 * w) + (6.25 * h) - (5 * a) - 161);
   }
 }
 
-// Ireton-Jones 1992 Equation
 export function calculateIretonJones1992(weightKg: number, age: number, isMale: boolean, trauma: boolean, burn: boolean): number {
+  const w = safeNum(weightKg, 70);
+  const a = safeNum(age, 40);
   const sexVal = isMale ? 1 : 0;
   const traumaVal = trauma ? 1 : 0;
   const burnVal = burn ? 1 : 0;
-  return 1925 - (10 * age) + (5 * weightKg) + (281 * sexVal) + (292 * traumaVal) + (851 * burnVal);
+  return Math.max(0, 1925 - (10 * a) + (5 * w) + (281 * sexVal) + (292 * traumaVal) + (851 * burnVal));
 }
 
-// Penn State 2003b Equation
 export function calculatePennState2003b(mifflinVal: number, ve: number, tmax: number): number {
-  return (mifflinVal * 0.96) + (ve * 31) + (tmax * 167) - 6212;
+  const m = safeNum(mifflinVal, 1500);
+  const v = safeNum(ve, 0);
+  const t = safeNum(tmax, 37);
+  return Math.max(0, (m * 0.96) + (v * 31) + (t * 167) - 6212);
 }
 
-// Penn State 2010 Equation (Modified PSU)
 export function calculatePennState2010(mifflinVal: number, ve: number, tmax: number): number {
-  return (mifflinVal * 0.71) + (ve * 64) + (tmax * 85) - 3085;
+  const m = safeNum(mifflinVal, 1500);
+  const v = safeNum(ve, 0);
+  const t = safeNum(tmax, 37);
+  return Math.max(0, (m * 0.71) + (v * 64) + (t * 85) - 3085);
 }
 
 // 1.1 Mechanically Ventilated Predictive Energy Flowchart Logic
 export function calculateVentilatedREE(input: VentilatedREEInput): { value: number; formulaName: string; steps: { label: string; value: string }[] } {
+  if (!input || typeof input !== 'object') {
+    return { value: 0, formulaName: 'none', steps: [{ label: 'خطأ', value: 'مدخلات غير صالحة' }] };
+  }
   const { weightKg, heightCm, age, isMale, mechanicallyVentilated, trauma, burn, ve = 0, tmax = 37.0 } = input;
   const steps: { label: string; value: string }[] = [];
 
   const mifflinBMR = calculateMifflinStJeorBMR(weightKg, heightCm, age, isMale);
-  const bmi = weightKg / Math.pow(heightCm / 100, 2);
+  const safeHeightCm = safeNum(heightCm, 170);
+  const bmi = safeHeightCm > 0 ? weightKg / Math.pow(safeHeightCm / 100, 2) : 0;
 
   if (!mechanicallyVentilated) {
     steps.push({ label: 'الحالة', value: 'تنفس طبيعي (غير موصول بجهاز تنفس)' });
@@ -144,19 +166,168 @@ export const KAU_ILLNESS_MATRIX: Record<string, IllnessRequirement> = {
 
 // 3. DAILY WATER REQUIREMENT ENGINE
 export function calculateHollidaySegarFluid(weightKg: number): number {
-  if (weightKg <= 10) {
-    return weightKg * 100;
-  } else if (weightKg <= 20) {
-    return 1000 + (weightKg - 10) * 50;
+  const w = safeNum(weightKg, 70);
+  if (w <= 0) return 1500;
+  if (w <= 10) {
+    return w * 100;
+  } else if (w <= 20) {
+    return 1000 + (w - 10) * 50;
   } else {
-    return 1500 + (weightKg - 20) * 20;
+    return 1500 + (w - 20) * 20;
   }
 }
 
 // 4.3 Glucose Utilization Rate (GUR) Safety Verifier
 export function calculateGUR(volumeMl: number, dextroseStrengthPercent: number, weightKg: number): number {
-  if (weightKg <= 0) return 0;
-  const gramDextrose = volumeMl * (dextroseStrengthPercent / 100);
+  const v = safeNum(volumeMl, 0);
+  const d = safeNum(dextroseStrengthPercent, 0);
+  const w = safeNum(weightKg, 70);
+  if (w <= 0 || v <= 0) return 0;
+  const gramDextrose = v * (d / 100);
   const mgDextrose = gramDextrose * 1000;
-  return mgDextrose / (weightKg * 1440);
+  return mgDextrose / (w * 1440);
+}
+
+/**
+ * Hidden Calories from Medications
+ * Calculates non-nutritional calories from IV medications
+ */
+
+/**
+ * Calculate Propofol Calories
+ * Propofol = 1.1 kcal/ml (lipid emulsion 10%)
+ * @param mlPerHour Propofol rate (ml/hr)
+ * @returns Calories per day
+ */
+export function calculatePropofolCalories(mlPerHour: number): number {
+  const rate = safeNum(mlPerHour, 0);
+  if (rate <= 0) return 0;
+  const caloriesPerMl = 1.1;
+  const hoursPerDay = 24;
+  return Math.round(rate * hoursPerDay * caloriesPerMl);
+}
+
+/**
+ * Calculate Dextrose IV Flush Calories
+ * Dextrose = 3.4 kcal/g
+ * @param ml Total volume (ml)
+ * @param percent Dextrose concentration (e.g., 5 for 5%)
+ * @returns Calories
+ */
+export function calculateDextroseCalories(ml: number, percent: number): number {
+  const v = safeNum(ml, 0);
+  const pct = safeNum(percent, 0);
+  if (v <= 0) return 0;
+  const caloriesPerG = 3.4;
+  const gramsPerMl = pct / 100;
+  return Math.round(v * gramsPerMl * caloriesPerG);
+}
+
+/**
+ * Calculate Midol (Midazolam) Calories
+ * Midol = 0.78 kcal/ml (propylene glycol vehicle)
+ * @param mlPerHour Midol rate (ml/hr)
+ * @returns Calories per day
+ */
+export function calculateMidolCalories(mlPerHour: number): number {
+  const rate = safeNum(mlPerHour, 0);
+  if (rate <= 0) return 0;
+  const caloriesPerMl = 0.78;
+  const hoursPerDay = 24;
+  return Math.round(rate * hoursPerDay * caloriesPerMl);
+}
+
+/**
+ * Calculate Lipid Emulsion Calories (Non-Propofol)
+ * Lipid emulsion 10% = 1.1 kcal/ml
+ * Lipid emulsion 20% = 2.0 kcal/ml
+ * @param ml Total volume (ml)
+ * @param percent Lipid concentration (10 or 20)
+ * @returns Calories
+ */
+export function calculateLipidEmulsionCalories(ml: number, percent: number): number {
+  const v = safeNum(ml, 0);
+  if (v <= 0) return 0;
+  const pct = safeNum(percent, 10);
+  const caloriesPerMl = pct === 10 ? 1.1 : 2.0;
+  return Math.round(v * caloriesPerMl);
+}
+
+/**
+ * Calculate Total Hidden Calories
+ * @param medications Patient medications
+ * @returns Total hidden calories per day
+ */
+export function calculateTotalHiddenCalories(
+  medications: any[]
+): {
+  total: number;
+  propofol: number;
+  dextrose: number;
+  midol: number;
+  lipids: number;
+  breakdown: string;
+} {
+  let propofolCalories = 0;
+  let dextroseCalories = 0;
+  let midolCalories = 0;
+  let lipidCalories = 0;
+
+  let propofolRate = 0;
+  let dextroseVol = 0;
+  let dextrosePct = 5;
+  let midolRate = 0;
+  let lipidsVol = 0;
+  let lipidsPct = 10;
+
+  for (const med of medications) {
+    const medName = (med.name || med.drugName || '').toLowerCase().trim();
+    const mlPerHour = med.mlPerHour ?? med.ml_per_hour ?? 0;
+    const totalMlPerDay = med.totalMlPerDay ?? med.total_ml_per_day ?? 0;
+    const percent = med.percent ?? 0;
+
+    // Propofol
+    if (medName === 'propofol' || medName === 'diprivan' || medName === 'بروبوفول') {
+      propofolRate = mlPerHour;
+      propofolCalories += calculatePropofolCalories(mlPerHour);
+    }
+
+    // Dextrose IV Flush
+    if (medName === 'dextrose' || medName === 'd5w' || medName === 'دكستروز') {
+      dextroseVol = totalMlPerDay;
+      dextrosePct = percent || 5;
+      dextroseCalories += calculateDextroseCalories(totalMlPerDay, percent || 5);
+    }
+
+    // Midol (Midazolam)
+    if (medName === 'midazolam' || medName === 'versed' || medName === 'midol' || medName === 'ميدازولام') {
+      midolRate = mlPerHour;
+      midolCalories += calculateMidolCalories(mlPerHour);
+    }
+
+    // Lipid Emulsion (non-Propofol)
+    if (medName === 'lipid emulsion' || medName === 'smoflipid' || medName === 'دهون' || medName === 'ليبتيد') {
+      lipidsVol = totalMlPerDay;
+      lipidsPct = percent || 10;
+      lipidCalories += calculateLipidEmulsionCalories(totalMlPerDay, percent || 10);
+    }
+  }
+
+  const total = propofolCalories + dextroseCalories + midolCalories + lipidCalories;
+
+  const breakdown = `البروفوفول: ${propofolCalories.toFixed(0)} سعرة/يوم (${propofolRate} مل/ساعة)
+الدكستروز الوريدي: ${dextroseCalories.toFixed(0)} سعرة/يوم (${dextroseVol} مل/يوم بتركيز ${dextrosePct}%)
+الميدازولام: ${midolCalories.toFixed(0)} سعرة/يوم (${midolRate} مل/ساعة)
+مستحلب الدهون: ${lipidCalories.toFixed(0)} سعرة/يوم (${lipidsVol} مل/يوم بتركيز ${lipidsPct}%)
+──────────────────────
+إجمالي السعرات المخفية: ${total.toFixed(0)} سعرة/يوم`;
+
+  return {
+    total,
+    propofol: propofolCalories,
+    dextrose: dextroseCalories,
+    midol: midolCalories,
+    lipids: lipidCalories,
+    breakdown,
+  };
 }

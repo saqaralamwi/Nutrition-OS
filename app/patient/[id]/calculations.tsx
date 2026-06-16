@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
-import { colors, spacing } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import SegmentedControl from '../../../src/presentation/components/SegmentedControl';
@@ -1061,13 +1061,13 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.primary,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
   },
   backBtn: {
     position: 'absolute',
-    top: 54,
+    top: safeHeaderPaddingTop - 6,
     start: spacing.md,
     zIndex: 1,
     padding: 4,

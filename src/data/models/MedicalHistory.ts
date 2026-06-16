@@ -1,5 +1,6 @@
 import { Model } from '@nozbe/watermelondb';
-import { field, date, immutableRelation } from '@nozbe/watermelondb/decorators';
+import { field, date, readonly, relation } from '@nozbe/watermelondb/decorators';
+import Patient from './Patient';
 
 export default class MedicalHistory extends Model {
   static table = 'medical_histories';
@@ -8,7 +9,7 @@ export default class MedicalHistory extends Model {
     patients: { type: 'belongs_to' as const, key: 'patient_id' },
   };
 
-  @immutableRelation('patients', 'patient_id') patient!: any;
+  @relation('patients', 'patient_id') patient?: Patient;
   @field('patient_id') patientId!: string;
   @field('chief_complaint') chiefComplaint!: string;
   @field('current_diagnosis') currentDiagnosis!: string;
@@ -20,6 +21,7 @@ export default class MedicalHistory extends Model {
   @field('medication_allergies') medicationAllergies!: string;
   @field('covid_19_status') covid19Status!: string;
   @field('comments') comments!: string;
-  @date('created_at') createdAt!: Date;
-  @date('updated_at') updatedAt!: Date;
+
+  @readonly @date('created_at') createdAt!: Date;
+  @readonly @date('updated_at') updatedAt!: Date;
 }

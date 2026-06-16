@@ -20,6 +20,10 @@ export interface InterventionRecord {
   status: string;
   supersededBy?: string;
   comments?: string;
+  propofolRate?: number;
+  dextroseVolume?: number;
+  dextroseConcentration?: number;
+  nonNutritionalCalories?: number;
   createdAt?: string;
   updatedAt?: string;
 }

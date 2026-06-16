@@ -7,12 +7,16 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontFamilies } from '../theme';
 import ArabicText from './ArabicText';
 import { PatientRepository } from '../../data/repositories/PatientRepository';
 import { usePatientStore } from '../stores/patientStore';
+import { useAppTheme } from '../hooks/useAppTheme';
+
+const AnimatedArabicText = Animated.createAnimatedComponent(ArabicText);
 
 interface TripleActionFooterProps {
   patientId?: string; // undefined during new patient creation
@@ -161,9 +165,10 @@ export default function TripleActionFooter({
   };
 
   const activeSaving = isSaving || localSaving;
+  const { animatedCard, animatedText, animatedSubtext } = useAppTheme();
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, animatedCard]}>
       {/* Action 2: Solid Forest Green Save and Continue */}
       <TouchableOpacity
         style={[styles.btn, styles.btnGreen, (!isValid || activeSaving) && styles.btnDisabled]}
@@ -219,10 +224,10 @@ export default function TripleActionFooter({
           activeOpacity={1}
           onPress={() => setShowMenu(false)}
         >
-          <View style={styles.modalContent}>
-            <ArabicText bold style={styles.modalTitle}>
+          <Animated.View style={[styles.modalContent, animatedCard]}>
+            <AnimatedArabicText bold style={[styles.modalTitle, animatedText]}>
               حفظ والانتقال المخصص إلى:
-            </ArabicText>
+            </AnimatedArabicText>
             <ScrollView style={styles.menuScroll}>
               {ADJACENT_SECTIONS.filter((s) => s.value !== screenKey).map((item) => (
                 <TouchableOpacity
@@ -231,19 +236,19 @@ export default function TripleActionFooter({
                   onPress={() => handleCustomJump(item.pathname, item.value)}
                 >
                   <Ionicons name="chevron-back" size={18} color={colors.primary} />
-                  <ArabicText style={styles.menuItemText}>{item.label}</ArabicText>
+                  <AnimatedArabicText style={[styles.menuItemText, animatedText]}>{item.label}</AnimatedArabicText>
                 </TouchableOpacity>
               ))}
             </ScrollView>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setShowMenu(false)}>
-              <ArabicText bold style={styles.closeBtnText}>
+              <AnimatedArabicText bold style={[styles.closeBtnText, animatedSubtext]}>
                 إلغاء
-              </ArabicText>
+              </AnimatedArabicText>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 

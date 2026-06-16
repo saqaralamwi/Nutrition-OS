@@ -1,6 +1,10 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Patient } from '../../domain/entities/Patient';
 import { colors, spacing } from '../theme';
+import { useAppTheme } from '../hooks/useAppTheme';
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 interface PatientCardProps {
   patient: Patient;
@@ -30,6 +34,7 @@ const DEPARTMENT_LABELS: Record<string, string> = {
 };
 
 export default function PatientCard({ patient, onPress, onDelete }: PatientCardProps) {
+  const { animatedCard, animatedText, animatedSubtext } = useAppTheme();
   const deptLabel = DEPARTMENT_LABELS[patient.department] || patient.department;
   const statusLabel = STATUS_LABELS[patient.status] || patient.status;
   const statusColor = STATUS_COLORS[patient.status] || colors.textDisabled;
@@ -48,29 +53,29 @@ export default function PatientCard({ patient, onPress, onDelete }: PatientCardP
   const admissionDate = getDisplayDate(patient.admissionDate);
 
   return (
-    <TouchableOpacity
-      style={styles.card}
+    <AnimatedTouchableOpacity
+      style={[styles.card, animatedCard]}
       onPress={() => onPress(patient)}
       onLongPress={() => onDelete?.(patient.id)}
       activeOpacity={0.7}
       accessibilityLabel={`${patient.fullName}، رقم الملف ${patient.fileNumber}`}
     >
       <View style={styles.header}>
-        <Text style={styles.fileNumber}>{patient.fileNumber}</Text>
+        <Animated.Text style={[styles.fileNumber, animatedSubtext]}>{patient.fileNumber}</Animated.Text>
         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
           <Text style={styles.statusText}>{statusLabel}</Text>
         </View>
       </View>
 
-      <Text style={styles.name}>{patient.fullName}</Text>
+      <Animated.Text style={[styles.name, animatedText]}>{patient.fullName}</Animated.Text>
 
       <View style={styles.footer}>
-        <Text style={styles.meta}>
+        <Animated.Text style={[styles.meta, animatedSubtext]}>
           {deptLabel} · {admissionDate}
-        </Text>
-        <Text style={styles.meta}>{patient.age} سنة</Text>
+        </Animated.Text>
+        <Animated.Text style={[styles.meta, animatedSubtext]}>{patient.age} سنة</Animated.Text>
       </View>
-    </TouchableOpacity>
+    </AnimatedTouchableOpacity>
   );
 }
 

@@ -1,13 +1,16 @@
-import { Stack } from 'expo-router';
+import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, I18nManager, Text, TextInput, AppState, AppStateStatus } from 'react-native';
-import { colors } from '../src/presentation/theme';
+import { View, I18nManager, Text, TextInput, AppState, AppStateStatus, ActivityIndicator } from 'react-native';
+import { colors, spacing } from '../src/presentation/theme';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect } from 'react';
 import { useSecurityStore } from '../src/presentation/stores/securityStore';
 import { useSettingsStore } from '../src/presentation/stores/settingsStore';
+import { useAuthStore } from '../src/presentation/stores/authStore';
 import LockScreen from '../src/presentation/components/LockScreen';
+import Animated from 'react-native-reanimated';
+import { useAppTheme } from '../src/presentation/hooks/useAppTheme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,13 +43,38 @@ export default function RootLayout() {
     'ThmanyahSans-Light': require('../assets/fonts/thmanyah-sans-light.otf'),
   });
 
+  const router = useRouter();
+  const segments = useSegments();
   const activeProfileId = useSettingsStore((s) => s.activeProfileId);
   const initSecurity = useSecurityStore((s) => s.initSecurity);
+  const hydrationState = useAuthStore((s) => s.hydrationState);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isCloudConfigured = useAuthStore((s) => s.isCloudConfigured);
+  const restoreSession = useAuthStore((s) => s.restoreSession);
 
   // Initialize security for the active clinician profile on change/launch
   useEffect(() => {
     initSecurity(activeProfileId);
   }, [activeProfileId]);
+
+  // Restore auth session on mount
+  useEffect(() => {
+    restoreSession();
+  }, []);
+
+  // Redirect based on auth state
+  useEffect(() => {
+    if (hydrationState !== 'hydrated') return;
+    if (!isCloudConfigured) return;
+
+    const inAuthGroup = segments[0] === 'auth';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace('/auth/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      router.replace('/');
+    }
+  }, [isAuthenticated, hydrationState, isCloudConfigured, segments]);
 
   // AppState listener for 2-minute background auto-lock
   useEffect(() => {
@@ -78,17 +106,41 @@ export default function RootLayout() {
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
+  const { themeMode, animatedContainer } = useAppTheme();
+
+  if (!fontsLoaded || hydrationState === 'idle' || hydrationState === 'hydrating') {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary }}>
-        <Text style={{ color: colors.primaryContrast, fontSize: 18, fontFamily: 'System' }}>جاري التحميل...</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.textSecondary, fontSize: 15, marginTop: spacing.md, fontFamily: 'ThmanyahSans-Medium' }}>
+          {hydrationState === 'idle' || hydrationState === 'hydrating' ? 'جاري التحقق من الجلسة...' : 'جاري التحميل...'}
+        </Text>
+      </View>
+    );
+  }
+
+  if (hydrationState === 'error') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary, paddingHorizontal: spacing.lg }}>
+        <Text style={{ color: colors.textPrimary, fontSize: 18, fontFamily: 'ThmanyahSans-Bold', textAlign: 'center', marginBottom: spacing.sm }}>
+          خطأ في الاتصال
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 14, fontFamily: 'ThmanyahSans-Regular', textAlign: 'center', marginBottom: spacing.lg }}>
+          {useAuthStore.getState().hydrationError || 'تعذر الاتصال بالخادم. يرجى المحاولة مرة أخرى.'}
+        </Text>
+        <Text
+          style={{ color: colors.primary, fontSize: 15, fontFamily: 'ThmanyahSans-Bold' }}
+          onPress={() => restoreSession()}
+        >
+          إعادة المحاولة
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <StatusBar style="light" />
+    <Animated.View style={[{ flex: 1 }, animatedContainer]} onLayout={onLayoutRootView}>
+      <StatusBar style={themeMode === 'night' ? 'light' : 'dark'} />
       <LockScreen />
       <Stack
         screenOptions={{
@@ -97,7 +149,7 @@ export default function RootLayout() {
           headerTitleStyle: { fontFamily: 'ThmanyahSans-Bold', fontSize: 18 },
           headerBackTitleStyle: { fontFamily: 'ThmanyahSans-Regular' },
           headerTitleAlign: 'center',
-          contentStyle: { backgroundColor: colors.surfaceSecondary },
+          contentStyle: { backgroundColor: 'transparent' },
           animation: 'slide_from_left',
         }}
       >
@@ -178,10 +230,26 @@ export default function RootLayout() {
           options={{ title: 'غرفة التحكم والإعدادات', headerShown: false }}
         />
         <Stack.Screen
+          name="meal-planner/dietary-history"
+          options={{ title: 'تقييم التاريخ التغذوي (24h Recall)', headerShown: false }}
+        />
+        <Stack.Screen
+          name="meal-planner/smart-planner"
+          options={{ title: 'تخطيط الوجبات والوصفة العلاجية', headerShown: false }}
+        />
+        <Stack.Screen
           name="admin/index"
           options={{ title: 'لوحة التحكم', presentation: 'modal' }}
         />
+        <Stack.Screen
+          name="auth/login"
+          options={{ title: 'تسجيل الدخول', headerShown: false }}
+        />
+        <Stack.Screen
+          name="auth/register"
+          options={{ title: 'إنشاء حساب جديد', headerShown: false }}
+        />
       </Stack>
-    </View>
+    </Animated.View>
   );
 }

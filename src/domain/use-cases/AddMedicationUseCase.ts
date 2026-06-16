@@ -10,9 +10,16 @@ export class AddMedicationUseCase {
 
   async execute(record: MedicationRecord): Promise<string> {
     if (!record.patientId) throw new Error('Patient ID is required');
+    if (!record.drugName?.trim()) {
+      record.drugName = record.name;
+    }
     if (!record.drugName?.trim()) throw new Error('اسم الدواء مطلوب');
-    if (!record.route?.trim()) throw new Error('طريقة الإعطاء مطلوبة');
-    if (!record.dniRisk?.trim()) throw new Error('تقييم التفاعل دوائي غذائي مطلوب');
+    if (!record.route?.trim()) {
+      record.route = 'IV';
+    }
+    if (!record.dniRisk?.trim()) {
+      record.dniRisk = 'low';
+    }
     return this.repository.save(record);
   }
 }

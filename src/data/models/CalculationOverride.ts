@@ -1,5 +1,6 @@
 import { Model } from '@nozbe/watermelondb';
-import { field, date, immutableRelation } from '@nozbe/watermelondb/decorators';
+import { field, date, readonly, relation } from '@nozbe/watermelondb/decorators';
+import Calculation from './Calculation';
 
 export default class CalculationOverride extends Model {
   static table = 'calculation_overrides';
@@ -8,11 +9,12 @@ export default class CalculationOverride extends Model {
     calculations: { type: 'belongs_to' as const, key: 'calculation_id' },
   };
 
-  @immutableRelation('calculations', 'calculation_id') calculation!: any;
+  @relation('calculations', 'calculation_id') calculation?: Calculation;
   @field('calculation_id') calculationId!: string;
   @field('original_value') originalValue!: number;
   @field('overridden_value') overriddenValue!: number;
   @field('reason') reason!: string;
   @field('overridden_by') overriddenBy!: string;
-  @date('created_at') createdAt!: Date;
+
+  @readonly @date('created_at') createdAt!: Date;
 }

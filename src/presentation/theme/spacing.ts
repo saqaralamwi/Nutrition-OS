@@ -1,3 +1,6 @@
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -11,3 +14,6 @@ export const touchTarget = {
   minimum: 44,
   default: 48,
 } as const;
+
+export const safeHeaderPaddingTop = Platform.OS === 'web' ? 16 : Constants.statusBarHeight + 12;
+

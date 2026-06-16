@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { Patient } from '../../../src/domain/entities/Patient';
-import { spacing } from '../../../src/presentation/theme';
+import { spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 
 // Premium Midnight-Slate local color palette
@@ -196,8 +196,15 @@ export default function NRS2002ScreeningScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
@@ -411,7 +418,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: darkTheme.surface,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
     borderBottomWidth: 1,
@@ -419,7 +426,7 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     position: 'absolute',
-    top: 54,
+    top: safeHeaderPaddingTop - 6,
     start: spacing.md,
     zIndex: 1,
     padding: 4,

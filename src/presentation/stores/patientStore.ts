@@ -106,9 +106,13 @@ const storeCreator: StateCreator<PatientState> = (set, get) => ({
       const useCase = new CreatePatientUseCase();
       const patient = await useCase.execute(input);
       return { success: true, patient };
-    } catch {
-      get().showToast(DB_NOT_READY, 'error');
-      return { success: false };
+    } catch (e: any) {
+      if (e && e.type === 'VALIDATION_ERROR') {
+        return { success: false, errors: e.errors };
+      }
+      const errMsg = e instanceof Error ? e.message : String(e);
+      // Propagate the specific error back to the UI
+      return { success: false, errors: [{ field: 'fullName', message: errMsg }] };
     }
   },
 

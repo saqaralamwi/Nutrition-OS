@@ -19,7 +19,7 @@ import PatientCard from '../src/presentation/components/PatientCard';
 import EmptyState from '../src/presentation/components/EmptyState';
 import ErrorView from '../src/presentation/components/ErrorView';
 import SearchBar from '../src/presentation/components/SearchBar';
-import { colors, spacing } from '../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop } from '../src/presentation/theme';
 import { Patient } from '../src/domain/entities/Patient';
 
 const LIST_ITEM_HEIGHT = 110;
@@ -54,29 +54,38 @@ export default function PatientListScreen() {
       try {
         const { getDatabase } = await import('../src/data/database');
         const { Q } = await import('@nozbe/watermelondb');
-        const db = await getDatabase();
+        let db;
+        try {
+          db = await getDatabase();
+        } catch {
+          console.warn('fetchStats: database not available');
+          return;
+        }
+        if (!db) return;
 
         // 1. ICU Admissions
         const icu = patients.filter((p) => p.department === 'ICU' || p.department === 'عناية مركزة').length;
         setIcuCount(icu);
 
         // 2. Malnutrition Risk (NRS Score >= 3)
-        const malnutritionCalcs = (await db.get('calculations').query(
-          Q.where('calculation_type', 'nrs_2002'),
-          Q.where('result_value', Q.gte(3))
-        ).fetch()) as any[];
-        const uniqueAtRiskIds = new Set(malnutritionCalcs.map((c) => c.patientId));
-        const atRiskCount = patients.filter((p) => uniqueAtRiskIds.has(p.id)).length;
-        setMalnutritionRiskCount(atRiskCount);
+        const calcCollection = db.get('calculations');
+        if (calcCollection) {
+          const malnutritionCalcs = (await calcCollection.query(
+            Q.where('calculation_type', 'nrs_2002'),
+            Q.where('result_value', Q.gte(3))
+          ).fetch()) as any[];
+          const uniqueAtRiskIds = new Set(malnutritionCalcs.map((c) => c.patientId));
+          const atRiskCount = patients.filter((p) => uniqueAtRiskIds.has(p.id)).length;
+          setMalnutritionRiskCount(atRiskCount);
 
-        // 3. Stable Cases (NRS Score < 3 or non-active status)
-        const stableCalcs = (await db.get('calculations').query(
-          Q.where('calculation_type', 'nrs_2002'),
-          Q.where('result_value', Q.lt(3))
-        ).fetch()) as any[];
-        const uniqueStableIds = new Set(stableCalcs.map((c) => c.patientId));
-        const stable = patients.filter((p) => p.status !== 'active' || (uniqueStableIds.has(p.id) && !uniqueAtRiskIds.has(p.id))).length;
-        setStableCount(stable);
+          const stableCalcs = (await calcCollection.query(
+            Q.where('calculation_type', 'nrs_2002'),
+            Q.where('result_value', Q.lt(3))
+          ).fetch()) as any[];
+          const uniqueStableIds = new Set(stableCalcs.map((c) => c.patientId));
+          const stable = patients.filter((p) => p.status !== 'active' || (uniqueStableIds.has(p.id) && !uniqueAtRiskIds.has(p.id))).length;
+          setStableCount(stable);
+        }
       } catch (err) {
         console.error('Error fetching stats:', err);
       }
@@ -119,10 +128,22 @@ export default function PatientListScreen() {
       };
 
       const { getDatabase } = await import('../src/data/database');
-      const db = await getDatabase();
+      let db;
+      try {
+        db = await getDatabase();
+      } catch {
+        Alert.alert('خطأ', 'تعذر الاتصال بقاعدة البيانات');
+        return;
+      }
+      if (!db) return;
+
+      const patientCollection = db.get('patients');
+      if (!patientCollection) {
+        Alert.alert('خطأ', 'جدول المرضى غير متاح');
+        return;
+      }
 
       await db.write(async () => {
-        const patientCollection = db.get('patients');
         const count = await patientCollection.query().fetchCount();
         const fileNumber = `CN-${String(count + 1).padStart(5, '0')}`;
 
@@ -386,10 +407,22 @@ export default function PatientListScreen() {
       
       const { getDatabase } = await import('../src/data/database');
       const { Q } = await import('@nozbe/watermelondb');
-      const db = await getDatabase();
+      let db;
+      try {
+        db = await getDatabase();
+      } catch {
+        showToast('تعذر الاتصال بقاعدة البيانات للتصدير', 'error');
+        return;
+      }
+      if (!db) return;
 
       // Fetch all patients with any casting
-      const allPatients = (await db.get('patients').query().fetch()) as any[];
+      const patientCollection = db.get('patients');
+      if (!patientCollection) {
+        showToast('جدول المرضى غير متاح للتصدير', 'error');
+        return;
+      }
+      const allPatients = (await patientCollection.query().fetch()) as any[];
 
       if (allPatients.length === 0) {
         Alert.alert('تنبيه', 'لا يوجد مرضى مسجلين في النظام لتصدير بياناتهم.');
@@ -753,7 +786,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.primary,
-    paddingTop: 60,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
   },

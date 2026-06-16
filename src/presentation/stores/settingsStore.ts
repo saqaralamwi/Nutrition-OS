@@ -31,6 +31,8 @@ export interface SettingsState {
   switchProfile: (profileId: string) => Promise<void>;
   updateProfile: (username: string, professionalTitle: string, hospitalName: string) => void;
   deleteProfile: (profileId: string) => void;
+  themeMode: 'night' | 'morning';
+  setThemeMode: (mode: 'night' | 'morning') => void;
   updateClinicalSettings: (settings: Partial<Pick<SettingsState, 'thresholdUrea' | 'thresholdCreatinine' | 'thresholdPotassium' | 'thresholdSodium' | 'defaultEnergyFormula'>>) => void;
 }
 
@@ -56,6 +58,7 @@ export const useSettingsStore = create<SettingsState>()(
       thresholdPotassium: 5.0,
       thresholdSodium: 145,
       defaultEnergyFormula: 'Mifflin',
+      themeMode: 'night',
 
       addProfile: (username, professionalTitle, hospitalName) => {
         const id = 'profile_' + Date.now();
@@ -130,6 +133,10 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({
           profiles: state.profiles.filter((p) => p.id !== profileId),
         }));
+      },
+
+      setThemeMode: (mode) => {
+        set({ themeMode: mode });
       },
 
       updateClinicalSettings: (settings) => {

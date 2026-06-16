@@ -9,6 +9,16 @@ export interface DischargeSummaryRecord {
   homeNutritionPlan: string;
   followUpRequired: boolean;
   nextFollowUpDate?: number;
+  finalEnergyIntake: number;
+  finalProteinIntake: number;
+  finalFluidIntake: number;
+  weightChangeKg?: number;
+  nutritionCompliance: number;
+  dischargeNutritionRecommendation: string;
+  followupNeededDays?: number;
+  complicationsRelatedToNutrition?: boolean;
+  complicationsNotes?: string;
+  nextEnergyTargetKcal?: number;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -1,5 +1,6 @@
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../../src/presentation/theme';
 import { PatientRepository } from '../../src/data/repositories/PatientRepository';
@@ -21,15 +22,20 @@ interface AnalyticsData {
 }
 
 export default function AdminDashboardScreen() {
+  const router = useRouter();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAnalytics();
+    let cancelled = false;
+    loadAnalytics(() => cancelled);
+    return () => { cancelled = true; };
   }, []);
 
-  async function loadAnalytics() {
+  async function loadAnalytics(isCancelled: () => boolean = () => false) {
     try {
+      if (isCancelled()) return;
+
       const repo = new PatientRepository();
       const allPatients = await repo.findAll();
       const activePatients = allPatients.filter((p) => p.status === 'active');
@@ -56,19 +62,21 @@ export default function AdminDashboardScreen() {
           percentage: total > 0 ? Math.round((count / total) * 100) : 0,
         }));
 
-      setData({
-        totalPatients: allPatients.length,
-        activePatients: activePatients.length,
-        avgAge,
-        avgBmi: 0,
-        diseaseDistribution,
-        inpatientCount: inpatients.length,
-        outpatientCount: outpatients.length,
-      });
+      if (!isCancelled()) {
+        setData({
+          totalPatients: allPatients.length,
+          activePatients: activePatients.length,
+          avgAge,
+          avgBmi: 0,
+          diseaseDistribution,
+          inpatientCount: inpatients.length,
+          outpatientCount: outpatients.length,
+        });
+      }
     } catch {
-      setData(null);
+      if (!isCancelled()) setData(null);
     } finally {
-      setLoading(false);
+      if (!isCancelled()) setLoading(false);
     }
   }
 
@@ -143,6 +151,60 @@ export default function AdminDashboardScreen() {
               count={data.totalPatients - data.inpatientCount - data.outpatientCount}
               icon="chatbubbles"
             />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>صيانة البيانات والترقيم</Text>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/admin/file-number-monitoring')}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
+              <Text style={styles.menuLabel}>عدادات وأرقام ملفات المرضى</Text>
+              <Ionicons name="speedometer-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomWidth: 0 }]}
+              onPress={() => router.push('/admin/hidden-calories-dashboard')}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
+              <Text style={styles.menuLabel}>مراقبة السعرات المخفية وتجنب الإفراط</Text>
+              <Ionicons name="flame-outline" size={20} color={colors.warning} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>بدائل الطعام والوجبات</Text>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/admin/food-exchanges')}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
+              <Text style={styles.menuLabel}>إدارة بدائل الطعام (Food Exchanges)</Text>
+              <Ionicons name="nutrition-outline" size={20} color={colors.success} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>التحليلات والتدقيق الإكلينيكي</Text>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/admin/calculations-analytics')}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
+              <Text style={styles.menuLabel}>تحليلات السجلات الحسابية وبنشمارك الأداء</Text>
+              <Ionicons name="bar-chart-outline" size={20} color={colors.success} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomWidth: 0 }]}
+              onPress={() => router.push('/admin/clinical-audit')}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
+              <Text style={styles.menuLabel}>تدقيق المخاطر الإكلينيكية والقصور</Text>
+              <Ionicons name="shield-half-outline" size={20} color={colors.danger} />
+            </TouchableOpacity>
           </View>
         </>
       )}
@@ -289,5 +351,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceSecondary,
+    justifyContent: 'space-between',
+  },
+  menuLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textPrimary,
+    textAlign: 'right',
+    marginRight: spacing.sm,
   },
 });
