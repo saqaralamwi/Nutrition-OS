@@ -20,6 +20,7 @@ import DropdownField from '../../../src/presentation/components/DropdownField';
 import DatePickerField from '../../../src/presentation/components/DatePickerField';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { getDatabase } from '../../../src/data/database';
 import { Q } from '@nozbe/watermelondb';
 import { Patient } from '../../../src/domain/entities/Patient';
@@ -59,7 +60,7 @@ const CATEGORIES = [
 export default function DietPlanScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);

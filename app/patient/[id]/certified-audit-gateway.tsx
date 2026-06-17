@@ -39,11 +39,12 @@ import ArabicText from '../../../src/presentation/components/ArabicText';
 import Button from '../../../src/presentation/components/Button';
 import { useAuthStore } from '../../../src/presentation/stores/authStore';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
 export default function CertifiedAuditGatewayScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
   const currentUser = useAuthStore((s) => s.user);
 
   // Core observed stream states

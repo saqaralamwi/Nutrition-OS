@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { ICUAdmission, IcuType, SeverityLevel, AdmissionSource, OxygenTherapy, AppetiteLevel, EatingDifficulty, PreviousNutritionSupport } from '../../../src/domain/entities/ICUAdmission';
 import { validateICUAdmission, ValidationErrors, calculateBMI, calculateWeightChangePercent } from '../../../src/domain/validation/icuAdmissionValidation';
 
@@ -110,7 +111,7 @@ function BoolToggle({ label, value, onChange }: {
 export default function ICUAdmissionScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
 
   const [isLoading, setIsLoading] = useState(true);

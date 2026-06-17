@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontFamilies } from '../theme';
 import ArabicText from './ArabicText';
 import { PatientRepository } from '../../data/repositories/PatientRepository';
-import { usePatientStore } from '../stores/patientStore';
+import { useToastStore } from '../stores/toastStore';
 import { useAppTheme } from '../hooks/useAppTheme';
 
 const AnimatedArabicText = Animated.createAnimatedComponent(ArabicText);
@@ -68,7 +68,7 @@ export default function TripleActionFooter({
   const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   const updatePatientTracking = async (id: string, actionType: 'draft' | 'advance') => {
     const repo = new PatientRepository();

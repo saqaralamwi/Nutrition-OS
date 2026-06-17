@@ -5,22 +5,25 @@ export default class DrugNutrientInteraction extends Model {
   static table = 'drug_nutrient_interactions';
 
   @field('active_ingredient') activeIngredient!: string;
+  @field('pharmacological_class') pharmacologicalClass?: string;
   @field('clinical_severity') clinicalSeverity!: string;
-  @field('mechanism_description') mechanismDescription!: string;
-  @field('dietary_action_required') dietaryActionRequired!: string;
+  @field('mechanism_ar') mechanismAr?: string;
+  @field('mechanism_en') mechanismEn?: string;
+  @field('dietary_action_ar') dietaryActionAr?: string;
+  @field('dietary_action_en') dietaryActionEn?: string;
 
   @readonly @date('created_at') createdAt!: Date;
   @readonly @date('updated_at') updatedAt!: Date;
 
   get isCritical(): boolean {
-    return this.clinicalSeverity === 'critical';
+    return this.clinicalSeverity.toLowerCase() === 'high' || this.clinicalSeverity.toLowerCase() === 'severe';
   }
 
   get isModerate(): boolean {
-    return this.clinicalSeverity === 'moderate';
+    return this.clinicalSeverity.toLowerCase() === 'medium' || this.clinicalSeverity.toLowerCase() === 'moderate';
   }
 
   get isMild(): boolean {
-    return this.clinicalSeverity === 'mild';
+    return this.clinicalSeverity.toLowerCase() === 'low' || this.clinicalSeverity.toLowerCase() === 'mild';
   }
 }

@@ -1,10 +1,15 @@
-import { useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { useMemo, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import SmartMealPlanner from '../../src/presentation/components/intervention/SmartMealPlanner';
 import { ClinicalIntegrationOrchestrator } from '../../src/domain/orchestrators/ClinicalIntegrationOrchestrator';
+import { FoodRepository } from '../../src/data/repositories/FoodRepository';
+import { IFoodExchange } from '../../src/data/types/meal_planner';
 import type { IClinicalIntegrationInput } from '../../src/domain/orchestrators/ClinicalIntegrationOrchestrator';
 import { colors } from '../../src/presentation/theme';
+
+import useClinicalAlerts from '../../src/presentation/hooks/useClinicalAlerts';
+import ClinicalAlertsBanner from '../../src/presentation/components/ClinicalAlertsBanner';
 
 export default function SmartPlannerRoute() {
   const { patientId, weight, data } = useLocalSearchParams<{
@@ -12,6 +17,22 @@ export default function SmartPlannerRoute() {
     weight?: string;
     data?: string;
   }>();
+
+  const { alerts } = useClinicalAlerts(patientId || '');
+  const [masterFoods, setMasterFoods] = useState<IFoodExchange[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const results = await FoodRepository.getAllExchanges();
+        const mapped = results.map(FoodRepository.mapExchangeToInterface);
+        setMasterFoods(mapped);
+      } catch (err) {
+        console.error('Failed to load master foods:', err);
+      }
+    };
+    load();
+  }, []);
 
   const integrationInput = useMemo((): IClinicalIntegrationInput | null => {
     if (!patientId) return null;
@@ -49,21 +70,26 @@ export default function SmartPlannerRoute() {
           ))}
         </View>
       )}
-      <SmartMealPlanner
-        patientId={patientId}
-        masterFoods={[]}
-        targets={integrationResult?.targets ?? { calories: 0, protein: 0, carbs: 0, fat: 0, fluidMl: 0 }}
-        aversions={[]}
-      />
+      <ScrollView style={{ flex: 1 }}>
+        <ClinicalAlertsBanner alerts={alerts} />
+        <View style={{ marginTop: 10 }}>
+          <SmartMealPlanner
+            patientId={patientId}
+            masterFoods={masterFoods}
+            targets={integrationResult?.targets ?? { calories: 0, protein: 0, carbs: 0, fat: 0, fluidMl: 0 }}
+            aversions={[]}
+          />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.surfaceSecondary },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, color: colors.text, fontFamily: 'ThmanyahSans-Bold', textAlign: 'center' },
+  emptyTitle: { fontSize: 20, color: colors.textPrimary, fontFamily: 'ThmanyahSans-Bold', textAlign: 'center' },
   notesBanner: {
     backgroundColor: '#1A2332',
     paddingHorizontal: 16,

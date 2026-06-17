@@ -35,8 +35,39 @@ function classifyZScore(zScore: number): IZScoreResult['classification'] {
 }
 
 export class PediatricZScoreEngine {
+  /**
+   * Calculates adjusted WHO Z-score
+   */
+  private static calculateAdjustedZScore(y: number, L: number, M: number, S: number, isWeightBased: boolean): number {
+    if (M <= 0 || S === 0) return 0;
+
+    let z: number;
+    if (L !== 0) {
+      z = (Math.pow(y / M, L) - 1) / (L * S);
+    } else {
+      z = Math.log(y / M) / S;
+    }
+
+    if (isWeightBased) {
+      if (z > 3) {
+        const sd2pos = L !== 0 ? M * Math.pow(1 + L * S * 2, 1 / L) : M * Math.exp(S * 2);
+        const sd3pos = L !== 0 ? M * Math.pow(1 + L * S * 3, 1 / L) : M * Math.exp(S * 3);
+        const diff = sd3pos - sd2pos;
+        return diff !== 0 ? 3 + (y - sd3pos) / diff : z;
+      }
+      if (z < -3) {
+        const sd2neg = L !== 0 ? M * Math.pow(1 + L * S * (-2), 1 / L) : M * Math.exp(S * (-2));
+        const sd3neg = L !== 0 ? M * Math.pow(1 + L * S * (-3), 1 / L) : M * Math.exp(S * (-3));
+        const diff = sd2neg - sd3neg;
+        return diff !== 0 ? -3 + (y - sd3neg) / diff : z;
+      }
+    }
+
+    return z;
+  }
+
   public static async calculateZScore(input: IZScoreInput): Promise<IZScoreResult> {
-    if (input.measurementValue <= 0) {
+    if (!input.measurementValue || input.measurementValue <= 0) {
       return {
         zScore: 0,
         classification: 'normal',
@@ -72,29 +103,17 @@ export class PediatricZScoreEngine {
     });
 
     const raw = closest._raw as WhoGrowthRecord;
-    const L = raw.l_value;
-    const M = raw.m_value;
-    const S = raw.s_value;
+    const isWeightBased = ['wfa', 'wfh', 'bmifa'].includes(input.indicatorType);
+    
+    const zScoreRaw = this.calculateAdjustedZScore(
+      input.measurementValue,
+      raw.l_value,
+      raw.m_value,
+      raw.s_value,
+      isWeightBased
+    );
 
-    if (S === 0 || M <= 0) {
-      return {
-        zScore: 0,
-        classification: 'normal',
-        isSafe: false,
-        errorMessage: 'بيانات مرجعية غير صالحة (قيم إحصائية خاطئة)',
-      };
-    }
-
-    const ratio = input.measurementValue / M;
-    let zScore: number;
-
-    if (L !== 0) {
-      zScore = (Math.pow(ratio, L) - 1) / (L * S);
-    } else {
-      zScore = Math.log(ratio) / S;
-    }
-
-    zScore = Math.round(zScore * 100) / 100;
+    const zScore = Math.round(zScoreRaw * 100) / 100;
 
     return {
       zScore,

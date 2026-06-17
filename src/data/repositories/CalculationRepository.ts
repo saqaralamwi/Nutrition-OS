@@ -86,7 +86,6 @@ export class CalculationRepository implements ICalculationRepository {
         Q.sortBy('created_at', Q.desc),
       ).fetch();
 
-    const now = new Date();
     const inputJson = JSON.stringify(calculation.inputValues);
 
     if (existing.length > 0) {
@@ -100,7 +99,6 @@ export class CalculationRepository implements ICalculationRepository {
           r.overrideValue = calculation.overrideValue ?? 0;
           r.overrideReason = calculation.overrideReason ?? '';
           populateFlatColumns(r, calculation);
-          r.updatedAt = now;
         });
       });
       return record.id;
@@ -118,8 +116,6 @@ export class CalculationRepository implements ICalculationRepository {
         r.overrideValue = calculation.overrideValue ?? 0;
         r.overrideReason = calculation.overrideReason ?? '';
         populateFlatColumns(r, calculation);
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;
@@ -127,7 +123,6 @@ export class CalculationRepository implements ICalculationRepository {
 
   async upsertBatch(calculations: CalculationResult[]): Promise<string[]> {
     const db = await getDatabase();
-    const now = new Date();
     const ids: string[] = [];
 
     await db.write(async () => {
@@ -152,7 +147,6 @@ export class CalculationRepository implements ICalculationRepository {
             r.overrideValue = calculation.overrideValue ?? 0;
             r.overrideReason = calculation.overrideReason ?? '';
             populateFlatColumns(r, calculation);
-            r.updatedAt = now;
           });
           ids.push(record.id);
         } else {
@@ -166,8 +160,6 @@ export class CalculationRepository implements ICalculationRepository {
             r.overrideValue = calculation.overrideValue ?? 0;
             r.overrideReason = calculation.overrideReason ?? '';
             populateFlatColumns(r, calculation);
-            r.createdAt = now;
-            r.updatedAt = now;
           });
           ids.push(record.id);
         }
@@ -202,7 +194,6 @@ export async function createCalculation(
   }
 ): Promise<CalculationModel> {
   const db = await getDatabase();
-  const now = new Date();
   const inputValuesJson = JSON.stringify({
     weightKg: calculationData.input_weight_kg,
     heightCm: calculationData.input_height_cm,
@@ -247,9 +238,6 @@ export async function createCalculation(
       r.resultFluidMl = calculationData.result_fluid_ml ?? 0;
       r.resultCalories = calculationData.result_calories;
       r.createdBy = calculationData.created_by;
-
-      r.createdAt = now;
-      r.updatedAt = now;
     });
   });
   return result;

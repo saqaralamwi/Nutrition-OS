@@ -1,3 +1,8 @@
+import { calculateBmr } from '../calculators/BmrCalculator';
+import { calculateBmrHarris } from '../calculators/BmrHarrisCalculator';
+import { PennStateEngine } from '../calculators/PennStateEngine';
+import { calculateFluidRequirement } from '../calculators/FluidCalculator';
+
 export interface VentilatedREEInput {
   weightKg: number;
   heightCm: number;
@@ -22,11 +27,8 @@ export function calculateHarrisBenedictBMR(weightKg: number, heightCm: number, a
   const h = safeNum(heightCm, 170);
   const a = safeNum(age, 40);
   if (w <= 0 || h <= 0) return 0;
-  if (isMale) {
-    return Math.max(0, 66.5 + (13.8 * w) + (5 * h) - (6.8 * a));
-  } else {
-    return Math.max(0, 655.1 + (9.6 * w) + (1.7 * h) - (4.7 * a));
-  }
+  const result = calculateBmrHarris(w, h, a, isMale);
+  return Math.max(0, result.value);
 }
 
 export function calculateMifflinStJeorBMR(weightKg: number, heightCm: number, age: number, isMale: boolean): number {
@@ -34,10 +36,11 @@ export function calculateMifflinStJeorBMR(weightKg: number, heightCm: number, ag
   const h = safeNum(heightCm, 170);
   const a = safeNum(age, 40);
   if (w <= 0 || h <= 0) return 0;
-  if (isMale) {
-    return Math.max(0, (10 * w) + (6.25 * h) - (5 * a) + 5);
-  } else {
-    return Math.max(0, (10 * w) + (6.25 * h) - (5 * a) - 161);
+  try {
+    const result = calculateBmr(w, h, a, isMale);
+    return Math.max(0, result.value);
+  } catch {
+    return 0;
   }
 }
 
@@ -54,14 +57,18 @@ export function calculatePennState2003b(mifflinVal: number, ve: number, tmax: nu
   const m = safeNum(mifflinVal, 1500);
   const v = safeNum(ve, 0);
   const t = safeNum(tmax, 37);
-  return Math.max(0, (m * 0.96) + (v * 31) + (t * 167) - 6212);
+  if (m <= 0 || v <= 0 || t < 35 || t > 43) return 0;
+  const result = PennStateEngine.calculatePennState({ mifflinRee: m, minuteVentilationLMin: v, maxTemperatureCelsius: t, isObese: false });
+  return Math.max(0, result.rmrValue);
 }
 
 export function calculatePennState2010(mifflinVal: number, ve: number, tmax: number): number {
   const m = safeNum(mifflinVal, 1500);
   const v = safeNum(ve, 0);
   const t = safeNum(tmax, 37);
-  return Math.max(0, (m * 0.71) + (v * 64) + (t * 85) - 3085);
+  if (m <= 0 || v <= 0 || t < 35 || t > 43) return 0;
+  const result = PennStateEngine.calculatePennState({ mifflinRee: m, minuteVentilationLMin: v, maxTemperatureCelsius: t, isObese: true });
+  return Math.max(0, result.rmrValue);
 }
 
 // 1.1 Mechanically Ventilated Predictive Energy Flowchart Logic
@@ -168,13 +175,8 @@ export const KAU_ILLNESS_MATRIX: Record<string, IllnessRequirement> = {
 export function calculateHollidaySegarFluid(weightKg: number): number {
   const w = safeNum(weightKg, 70);
   if (w <= 0) return 1500;
-  if (w <= 10) {
-    return w * 100;
-  } else if (w <= 20) {
-    return 1000 + (w - 10) * 50;
-  } else {
-    return 1500 + (w - 20) * 20;
-  }
+  const result = calculateFluidRequirement(w, 'holliday_segar');
+  return result.value;
 }
 
 // 4.3 Glucose Utilization Rate (GUR) Safety Verifier

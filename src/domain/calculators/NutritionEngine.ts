@@ -93,8 +93,8 @@ export function generateNutritionPlan(input: GeneratePlanInput): NutritionPlan {
 import { getDatabase } from '../../data/database';
 import { Q } from '@nozbe/watermelondb';
 import Medication from '../../data/models/Medication';
+import { calculateTotalEnergy } from './TotalEnergyCalculator';
 import {
-  calculateMifflinStJeorBMR,
   calculateHollidaySegarFluid,
   calculateTotalHiddenCalories,
 } from '../utils/kauRequirementsEngine';
@@ -225,8 +225,10 @@ export async function calculateNutritionalRequirementsWithHiddenCalories(
   const safeH = safeNum(height, 170);
   const safeAge = safeNum(age, 30);
 
-  const mifflinBMR = calculateMifflinStJeorBMR(safeW, safeH, safeAge, isMale);
-  const baseTee = Math.round(mifflinBMR * activityFactor * stressFactor);
+  const bmrValue = calculateBmr(safeW, safeH, safeAge, isMale).value;
+  const activityLabel = activityFactor <= 1.2 ? 'sedentary' : activityFactor <= 1.375 ? 'light' : activityFactor <= 1.55 ? 'moderate' : 'active';
+  const totalEnergyResult = calculateTotalEnergy(bmrValue, activityLabel, stressFactor);
+  const baseTee = totalEnergyResult.value;
 
   const adjustedTee = baseTee - hiddenCaloriesResult.total;
 
@@ -242,15 +244,11 @@ export async function calculateNutritionalRequirementsWithHiddenCalories(
       if (inputs.proteinFactor) proteinFactor = safeNum(inputs.proteinFactor, 1.2);
     } catch {}
   }
-  const protein = Math.round(safeW * proteinFactor);
 
-  const carbPercent = 55;
-  const fatPercent = 30;
-  const macroTotal = carbPercent + fatPercent;
-
-  const netNutritionalCalories = Math.max(0, finalCalories - (protein * 4));
-  const carbs = macroTotal > 0 ? Math.round((netNutritionalCalories * (carbPercent / macroTotal)) / 4) : 0;
-  const fat = macroTotal > 0 ? Math.round((netNutritionalCalories * (fatPercent / macroTotal)) / 9) : 0;
+  const macros = calculateMacros(finalCalories, safeW, proteinFactor, 0.30);
+  const protein = macros.proteinGrams;
+  const carbs = macros.carbsGrams;
+  const fat = macros.fatGrams;
 
   const fluid = Math.round(calculateHollidaySegarFluid(safeW));
 

@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../src/presentation/stores/patientStore';
+import { useToastStore } from '../src/presentation/stores/toastStore';
 import { useSettingsStore } from '../src/presentation/stores/settingsStore';
 import PatientCard from '../src/presentation/components/PatientCard';
 import EmptyState from '../src/presentation/components/EmptyState';
@@ -36,8 +37,7 @@ export default function PatientListScreen() {
   const loadPatients = usePatientStore((s) => s.loadPatients);
   const searchPatients = usePatientStore((s) => s.searchPatients);
   const setSortOrder = usePatientStore((s) => s.setSortOrder);
-  const deletePatient = usePatientStore((s) => s.deletePatient);
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   const settingsUsername = useSettingsStore((s) => s.username);
   const settingsTitle = useSettingsStore((s) => s.professionalTitle);
@@ -586,11 +586,20 @@ export default function PatientListScreen() {
         {
           text: 'حذف',
           style: 'destructive',
-          onPress: () => deletePatient(id),
+          onPress: async () => {
+            try {
+              const { PatientRepository } = await import('../src/data/repositories/PatientRepository');
+              const repo = new PatientRepository();
+              await repo.delete(id);
+              loadPatients();
+            } catch (e) {
+              showToast('فشل حذف المريض', 'error');
+            }
+          },
         },
       ]);
     },
-    [deletePatient]
+    [loadPatients, showToast]
   );
 
   const handleSearch = useCallback(

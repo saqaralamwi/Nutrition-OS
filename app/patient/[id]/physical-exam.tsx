@@ -15,6 +15,7 @@ import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import SegmentedControl from '../../../src/presentation/components/SegmentedControl';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import {
   EXAM_TEMPLATES,
   EXAM_DOMAINS,
@@ -29,7 +30,7 @@ interface ItemState {
 export default function PhysicalExamScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState<string>(EXAM_DOMAINS[0].value);

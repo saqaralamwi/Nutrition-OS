@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { Patient, PatientGender, PatientStatus, PatientType } from '../../../src/domain/entities/Patient';
 import { spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
@@ -72,7 +73,7 @@ const FORMULA_OPTIONS = [
 export default function NutritionCalculatorScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
   const { alerts, loading: alertsLoading } = useClinicalAlerts(patientId);
 
   const [isLoading, setIsLoading] = useState(true);

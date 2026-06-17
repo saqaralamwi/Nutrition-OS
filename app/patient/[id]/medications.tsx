@@ -8,6 +8,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -15,15 +16,21 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop, fontFamilies, fontSizes } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
+import SearchableDropdownField from '../../../src/presentation/components/SearchableDropdownField';
 import DatePickerField from '../../../src/presentation/components/DatePickerField';
 import Button from '../../../src/presentation/components/Button';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { formatSafeDate } from '../../../src/utils/date';
+import { DrugNutrientInteractionRepository } from '../../../src/data/repositories/DrugNutrientInteractionRepository';
+import { DrugNutrientEngine, IDNIInteractionMatch } from '../../../src/utils/DrugNutrientEngine';
+import useClinicalAlerts from '../../../src/presentation/hooks/useClinicalAlerts';
+import ClinicalAlertsBanner from '../../../src/presentation/components/ClinicalAlertsBanner';
 
 const ROUTE_OPTIONS = [
   { label: 'فموي', value: 'oral' },
@@ -45,45 +52,15 @@ const FREQUENCY_OPTIONS = [
   { label: 'شهرياً', value: 'monthly' },
 ] as const;
 
-const DNI_RISK_OPTIONS = [
-  { label: 'لا يوجد', value: 'none' },
-  { label: 'منخفض', value: 'low' },
-  { label: 'متوسط', value: 'moderate' },
-  { label: 'مرتفع', value: 'high' },
-  { label: 'شديد', value: 'severe' },
-] as const;
-
-const SUPPLEMENT_TYPE_OPTIONS = [
-  { label: 'فيتامين', value: 'vitamin' },
-  { label: 'معدن', value: 'mineral' },
-  { label: 'بروتين', value: 'protein' },
-  { label: 'أحماض أمينية', value: 'amino_acid' },
-  { label: 'أعشاب', value: 'herbal' },
-  { label: 'زيوت', value: 'oil' },
-  { label: 'أخرى', value: 'other' },
-] as const;
-
 const medicationSchema = z.object({
   drugName: z.string().min(1, 'اسم الدواء مطلوب'),
   dosage: z.string(),
   frequency: z.string(),
   route: z.string().min(1, 'طريقة الإعطاء مطلوبة'),
-  startDate: z.string(),
-  endDate: z.string(),
   prescribingPhysician: z.string(),
-  dniRisk: z.string().min(1, 'تقييم التفاعل الدوائي الغذائي مطلوب'),
-  dniNotes: z.string(),
 });
 
 type MedicationFormValues = z.infer<typeof medicationSchema>;
-
-const supplementSchema = z.object({
-  supplementName: z.string().min(1, 'اسم المكمل مطلوب'),
-  dosage: z.string(),
-  supplementType: z.string().min(1, 'نوع المكمل مطلوب'),
-});
-
-type SupplementFormValues = z.infer<typeof supplementSchema>;
 
 interface MedicationItemData {
   id: string;
@@ -97,19 +74,13 @@ interface MedicationItemData {
   endDate?: string;
 }
 
-interface SupplementItemData {
-  id: string;
-  supplementName: string;
-  dosage: string;
-  supplementType: string;
-}
-
 const DNI_COLORS: Record<string, string> = {
   none: colors.textDisabled,
   low: colors.success,
   moderate: colors.warning,
   high: '#E67E22',
   severe: colors.danger,
+  critical: colors.danger,
 };
 
 const DNI_LABELS: Record<string, string> = {
@@ -118,6 +89,7 @@ const DNI_LABELS: Record<string, string> = {
   moderate: 'متوسط',
   high: 'مرتفع',
   severe: 'شديد',
+  critical: 'حرج',
 };
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -140,55 +112,72 @@ const FREQUENCY_LABELS: Record<string, string> = {
   monthly: 'شهرياً',
 };
 
-const SUPPLEMENT_TYPE_LABELS: Record<string, string> = {
-  vitamin: 'فيتامين',
-  mineral: 'معدن',
-  protein: 'بروتين',
-  amino_acid: 'أحماض أمينية',
-  herbal: 'أعشاب',
-  oil: 'زيوت',
-  other: 'أخرى',
-};
+/**
+ * Defensive definition to satisfy compiler for any stale remnants.
+ * Note: Supplements should be handled in a separate module.
+ */
+const SUPPLEMENT_TYPE_OPTIONS: any[] = [];
 
 export default function MedicationsScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const { alerts } = useClinicalAlerts(patientId);
+  const showToast = useToastStore((s) => s.showToast);
   const [isLoading, setIsLoading] = useState(true);
   const [medications, setMedications] = useState<MedicationItemData[]>([]);
-  const [supplements, setSupplements] = useState<SupplementItemData[]>([]);
   const [showMedModal, setShowMedModal] = useState(false);
-  const [showSupModal, setShowSupModal] = useState(false);
   const [isSavingMed, setIsSavingMed] = useState(false);
-  const [isSavingSup, setIsSavingSup] = useState(false);
+
+  const [referenceDrugs, setReferenceDrugs] = useState<{ label: string, value: string }[]>([]);
+  const [selectedDni, setSelectedDni] = useState<{ mechanism: string, severity: string, actionReq: boolean } | null>(null);
 
   const medForm = useForm<MedicationFormValues>({
     resolver: zodResolver(medicationSchema),
     defaultValues: {
       drugName: '',
       dosage: '',
-      frequency: '',
-      route: '',
-      startDate: '',
-      endDate: '',
+      frequency: 'once_daily',
+      route: 'oral',
       prescribingPhysician: '',
-      dniRisk: '',
-      dniNotes: '',
-    },
-  });
-
-  const supForm = useForm<SupplementFormValues>({
-    resolver: zodResolver(supplementSchema),
-    defaultValues: {
-      supplementName: '',
-      dosage: '',
-      supplementType: '',
     },
   });
 
   useEffect(() => {
     loadData();
+    fetchReferenceMeds();
   }, [patientId]);
+
+  async function fetchReferenceMeds() {
+    try {
+      const repo = new DrugNutrientInteractionRepository();
+      const all = await repo.getAll();
+      setReferenceDrugs(all.map(d => ({ label: d.activeIngredient, value: d.activeIngredient })));
+    } catch (e) {
+      console.error('[Medications] Failed to fetch reference meds:', e);
+    }
+  }
+
+  const handleDrugSelect = async (drugName: string) => {
+    medForm.setValue('drugName', drugName, { shouldValidate: true });
+    
+    // Auto-fetch DNI details for preview
+    try {
+      const repo = new DrugNutrientInteractionRepository();
+      const matches = await repo.getByIngredient(drugName);
+      if (matches.length > 0) {
+        const m = matches[0];
+        setSelectedDni({
+          mechanism: m.mechanismDescription || 'تفاعل محتمل مع الغذاء',
+          severity: m.clinicalSeverity,
+          actionReq: String(m.dietaryActionRequired).toLowerCase() === 'true' || m.dietaryActionRequired === 'yes',
+        });
+      } else {
+        setSelectedDni(null);
+      }
+    } catch (e) {
+      setSelectedDni(null);
+    }
+  };
 
   const handleSave = useCallback(async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
     return patientId;
@@ -197,12 +186,8 @@ export default function MedicationsScreen() {
   async function loadData() {
     try {
       setIsLoading(true);
-      const [medsResult, supsResult] = await Promise.all([
-        loadMedications(),
-        loadSupplements(),
-      ]);
+      const medsResult = await loadMedications();
       setMedications(medsResult);
-      setSupplements(supsResult);
     } catch {
       showToast('فشل تحميل البيانات', 'error');
     } finally {
@@ -227,20 +212,8 @@ export default function MedicationsScreen() {
     }));
   }
 
-  async function loadSupplements(): Promise<SupplementItemData[]> {
-    const { GetSupplementsUseCase } = await import('../../../src/domain/use-cases/GetSupplementsUseCase');
-    const uc = new GetSupplementsUseCase();
-    const records = await uc.execute(patientId);
-    return records.map((r) => ({
-      id: r.id!,
-      supplementName: r.supplementName,
-      dosage: r.dosage || '',
-      supplementType: r.supplementType,
-    }));
-  }
-
   const handleDeleteMedication = useCallback((id: string, name: string) => {
-    Alert.alert('حذف دواء', `هل أنت متأكد من حذف "${name}"؟`, [
+    Alert.alert('حذف دواء', `هل أنت متأكد من حذف \"${name}\"؟`, [
       { text: 'إلغاء', style: 'cancel' },
       {
         text: 'حذف',
@@ -260,27 +233,6 @@ export default function MedicationsScreen() {
     ]);
   }, [showToast]);
 
-  const handleDeleteSupplement = useCallback((id: string, name: string) => {
-    Alert.alert('حذف مكمل', `هل أنت متأكد من حذف "${name}"؟`, [
-      { text: 'إلغاء', style: 'cancel' },
-      {
-        text: 'حذف',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const { DeleteSupplementUseCase } = await import('../../../src/domain/use-cases/DeleteSupplementUseCase');
-            const uc = new DeleteSupplementUseCase();
-            await uc.execute(id);
-            setSupplements((prev) => prev.filter((s) => s.id !== id));
-            showToast('تم حذف المكمل', 'success');
-          } catch {
-            showToast('فشل الحذف', 'error');
-          }
-        },
-      },
-    ]);
-  }, [showToast]);
-
   const [medStartDate, setMedStartDate] = useState<Date | null>(null);
   const [medEndDate, setMedEndDate] = useState<Date | null>(null);
 
@@ -289,7 +241,7 @@ export default function MedicationsScreen() {
       setIsSavingMed(true);
       const { AddMedicationUseCase } = await import('../../../src/domain/use-cases/AddMedicationUseCase');
       const uc = new AddMedicationUseCase();
-      const newId = await uc.execute({
+      await uc.execute({
         patientId,
         drugName: values.drugName,
         dosage: values.dosage || undefined,
@@ -298,8 +250,8 @@ export default function MedicationsScreen() {
         startDate: medStartDate?.toISOString() || undefined,
         endDate: medEndDate?.toISOString() || undefined,
         prescribingPhysician: values.prescribingPhysician || undefined,
-        dniRisk: values.dniRisk,
-        dniNotes: values.dniNotes || undefined,
+        dniRisk: selectedDni?.severity || 'none',
+        dniNotes: selectedDni?.mechanism || undefined,
       });
       const fresh = await loadMedications();
       setMedications(fresh);
@@ -307,36 +259,15 @@ export default function MedicationsScreen() {
       medForm.reset();
       setMedStartDate(null);
       setMedEndDate(null);
-      showToast('تم إضافة الدواء', 'success');
-    } catch {
+      setSelectedDni(null);
+      showToast('تم إضافة الدواء وتفعيل مراقبة DNI ✓', 'success');
+    } catch (error) {
+      console.error(error);
       showToast('فشل إضافة الدواء', 'error');
     } finally {
       setIsSavingMed(false);
     }
-  }, [patientId, medStartDate, medEndDate, medForm, showToast]);
-
-  const handleAddSupplement = useCallback(async (values: SupplementFormValues) => {
-    try {
-      setIsSavingSup(true);
-      const { AddSupplementUseCase } = await import('../../../src/domain/use-cases/AddSupplementUseCase');
-      const uc = new AddSupplementUseCase();
-      await uc.execute({
-        patientId,
-        supplementName: values.supplementName,
-        dosage: values.dosage || undefined,
-        supplementType: values.supplementType,
-      });
-      const fresh = await loadSupplements();
-      setSupplements(fresh);
-      setShowSupModal(false);
-      supForm.reset();
-      showToast('تم إضافة المكمل', 'success');
-    } catch {
-      showToast('فشل إضافة المكمل', 'error');
-    } finally {
-      setIsSavingSup(false);
-    }
-  }, [patientId, supForm, showToast]);
+  }, [patientId, medStartDate, medEndDate, medForm, selectedDni, showToast]);
 
   if (isLoading) {
     return (
@@ -350,29 +281,26 @@ export default function MedicationsScreen() {
   return (
     <View style={styles.flex}>
       <ScrollView style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <Ionicons name="medical-outline" size={24} color={colors.primaryContrast} />
-            <ArabicText bold style={styles.headerTitle}>الأدوية والمكملات</ArabicText>
+            <ArabicText bold style={styles.headerTitle}>إدارة الأدوية وDNI</ArabicText>
           </View>
         </View>
 
-        {/* Medications Section */}
+        <ClinicalAlertsBanner alerts={alerts} />
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <ArabicText bold style={styles.sectionTitle}>الأدوية</ArabicText>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowMedModal(true)}
-            >
+            <ArabicText bold style={styles.sectionTitle}>قائمة الأدوية النشطة</ArabicText>
+            <TouchableOpacity style={styles.addButton} onPress={() => setShowMedModal(true)}>
               <Ionicons name="add-circle" size={22} color={colors.primary} />
               <ArabicText style={styles.addButtonText}>إضافة دواء</ArabicText>
             </TouchableOpacity>
           </View>
 
           {medications.length === 0 ? (
-            <ArabicText style={styles.emptyText}>لا توجد أدوية مسجلة</ArabicText>
+            <ArabicText style={styles.emptyText}>لا توجد أدوية مسجلة لهذه الحالة</ArabicText>
           ) : (
             medications.map((med) => (
               <TouchableOpacity
@@ -384,9 +312,7 @@ export default function MedicationsScreen() {
                 <View style={styles.cardHeader}>
                   <ArabicText bold style={styles.cardTitle}>{med.drugName}</ArabicText>
                   <View style={[styles.dniBadge, { backgroundColor: DNI_COLORS[med.dniRisk] || colors.textDisabled }]}>
-                    <ArabicText style={styles.dniBadgeText}>
-                      {DNI_LABELS[med.dniRisk] || med.dniRisk}
-                    </ArabicText>
+                    <ArabicText style={styles.dniBadgeText}>{DNI_LABELS[med.dniRisk] || med.dniRisk}</ArabicText>
                   </View>
                 </View>
                 <View style={styles.cardBody}>
@@ -397,9 +323,7 @@ export default function MedicationsScreen() {
                       {med.frequency && (FREQUENCY_LABELS[med.frequency] || med.frequency)}
                     </ArabicText>
                   )}
-                  <ArabicText style={styles.cardDetail}>
-                    {ROUTE_LABELS[med.route] || med.route}
-                  </ArabicText>
+                  <ArabicText style={styles.cardDetail}>{ROUTE_LABELS[med.route] || med.route}</ArabicText>
                   {med.startDate && (
                     <ArabicText style={styles.cardDetail}>
                       من: {formatSafeDate(med.startDate)}
@@ -412,53 +336,7 @@ export default function MedicationsScreen() {
           )}
         </View>
 
-        {/* Supplements Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <ArabicText bold style={styles.sectionTitle}>المكملات الغذائية</ArabicText>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowSupModal(true)}
-            >
-              <Ionicons name="add-circle" size={22} color={colors.primary} />
-              <ArabicText style={styles.addButtonText}>إضافة مكمل</ArabicText>
-            </TouchableOpacity>
-          </View>
-
-          {supplements.length === 0 ? (
-            <ArabicText style={styles.emptyText}>لا توجد مكملات مسجلة</ArabicText>
-          ) : (
-            supplements.map((sup) => (
-              <TouchableOpacity
-                key={sup.id}
-                style={styles.card}
-                onLongPress={() => handleDeleteSupplement(sup.id, sup.supplementName)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.cardHeader}>
-                  <ArabicText bold style={styles.cardTitle}>{sup.supplementName}</ArabicText>
-                  <View style={styles.typeBadge}>
-                    <ArabicText style={styles.typeBadgeText}>
-                      {SUPPLEMENT_TYPE_LABELS[sup.supplementType] || sup.supplementType}
-                    </ArabicText>
-                  </View>
-                </View>
-                {sup.dosage && (
-                  <ArabicText style={styles.cardDetail}>الجرعة: {sup.dosage}</ArabicText>
-                )}
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-
-        <TripleActionFooter
-          patientId={patientId}
-          screenKey="medications"
-          onSave={handleSave}
-          isSaving={false}
-          isValid={true}
-        />
-
+        <TripleActionFooter patientId={patientId} screenKey="medications" onSave={handleSave} isSaving={false} isValid={true} />
         <View style={styles.spacer} />
       </ScrollView>
 
@@ -468,137 +346,66 @@ export default function MedicationsScreen() {
           <ScrollView style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <ArabicText bold style={styles.modalTitle}>إضافة دواء جديد</ArabicText>
-              <TouchableOpacity onPress={() => { setShowMedModal(false); medForm.reset(); setMedStartDate(null); setMedEndDate(null); }}>
+              <TouchableOpacity onPress={() => { setShowMedModal(false); medForm.reset(); setMedStartDate(null); setMedEndDate(null); setSelectedDni(null); }}>
                 <Ionicons name="close" size={28} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalContent}>
-              <TextInputField
-                label="اسم الدواء"
-                value={medForm.watch('drugName')}
-                onChangeText={(v) => medForm.setValue('drugName', v, { shouldValidate: true })}
+              <SearchableDropdownField
+                label="اسم الدواء (المادة الفعالة)"
+                options={referenceDrugs}
+                selectedValue={medForm.watch('drugName')}
+                onValueChange={handleDrugSelect}
                 error={medForm.formState.errors.drugName?.message}
+                placeholder="ابحث عن المادة الفعالة..."
                 required
-              />
-              <TextInputField
-                label="الجرعة"
-                value={medForm.watch('dosage')}
-                onChangeText={(v) => medForm.setValue('dosage', v)}
-              />
-              <DropdownField
-                label="عدد مرات الإعطاء"
-                options={FREQUENCY_OPTIONS}
-                selectedValue={medForm.watch('frequency')}
-                onValueChange={(v) => medForm.setValue('frequency', v)}
-                placeholder="اختر عدد المرات..."
-              />
-              <DropdownField
-                label="طريقة الإعطاء"
-                options={ROUTE_OPTIONS}
-                selectedValue={medForm.watch('route')}
-                onValueChange={(v) => medForm.setValue('route', v, { shouldValidate: true })}
-                error={medForm.formState.errors.route?.message}
-                placeholder="اختر طريقة الإعطاء..."
-                required
-              />
-              <DatePickerField
-                label="تاريخ البدء"
-                value={medStartDate}
-                onChange={(d) => setMedStartDate(d)}
-              />
-              <DatePickerField
-                label="تاريخ الانتهاء"
-                value={medEndDate}
-                onChange={(d) => setMedEndDate(d)}
-              />
-              <TextInputField
-                label="الطبيب المصرح"
-                value={medForm.watch('prescribingPhysician')}
-                onChangeText={(v) => medForm.setValue('prescribingPhysician', v)}
-              />
-              <DropdownField
-                label="تقييم التفاعل الدوائي الغذائي (DNI)"
-                options={DNI_RISK_OPTIONS}
-                selectedValue={medForm.watch('dniRisk')}
-                onValueChange={(v) => medForm.setValue('dniRisk', v, { shouldValidate: true })}
-                error={medForm.formState.errors.dniRisk?.message}
-                placeholder="اختر مستوى الخطورة..."
-                required
-              />
-              <TextInputField
-                label="ملاحظات DNI"
-                value={medForm.watch('dniNotes')}
-                onChangeText={(v) => medForm.setValue('dniNotes', v)}
-                multiline
               />
 
-              <View style={styles.modalActions}>
-                <Button
-                  title="إضافة"
-                  onPress={medForm.handleSubmit(handleAddMedication)}
-                  loading={isSavingMed}
-                  disabled={isSavingMed}
-                />
-                <Button
-                  title="إلغاء"
-                  variant="secondary"
-                  onPress={() => { setShowMedModal(false); medForm.reset(); setMedStartDate(null); setMedEndDate(null); }}
-                  disabled={isSavingMed}
-                />
+              <View style={styles.row}>
+                <View style={styles.flex}>
+                  <TextInputField label="الجرعة" value={medForm.watch('dosage')} onChangeText={(v) => medForm.setValue('dosage', v)} />
+                </View>
+                <View style={[styles.flex, { marginRight: spacing.sm }]}>
+                  <DropdownField label="طريقة الإعطاء" options={ROUTE_OPTIONS} selectedValue={medForm.watch('route')} onValueChange={(v) => medForm.setValue('route', v, { shouldValidate: true })} error={medForm.formState.errors.route?.message} required />
+                </View>
               </View>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
 
-      {/* Add Supplement Modal */}
-      <Modal visible={showSupModal} animationType="slide" onRequestClose={() => setShowSupModal(false)}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <ArabicText bold style={styles.modalTitle}>إضافة مكمل غذائي</ArabicText>
-              <TouchableOpacity onPress={() => { setShowSupModal(false); supForm.reset(); }}>
-                <Ionicons name="close" size={28} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
+              <DropdownField label="التكرار" options={FREQUENCY_OPTIONS} selectedValue={medForm.watch('frequency')} onValueChange={(v) => medForm.setValue('frequency', v)} />
+              
+              <View style={styles.row}>
+                <View style={styles.flex}>
+                  <DatePickerField label="تاريخ البدء" value={medStartDate} onChange={(d) => setMedStartDate(d)} />
+                </View>
+                <View style={[styles.flex, { marginRight: spacing.sm }]}>
+                  <DatePickerField label="تاريخ الانتهاء" value={medEndDate} onChange={(d) => setMedEndDate(d)} />
+                </View>
+              </View>
 
-            <View style={styles.modalContent}>
-              <TextInputField
-                label="اسم المكمل"
-                value={supForm.watch('supplementName')}
-                onChangeText={(v) => supForm.setValue('supplementName', v, { shouldValidate: true })}
-                error={supForm.formState.errors.supplementName?.message}
-                required
-              />
-              <TextInputField
-                label="الجرعة"
-                value={supForm.watch('dosage')}
-                onChangeText={(v) => supForm.setValue('dosage', v)}
-              />
-              <DropdownField
-                label="نوع المكمل"
-                options={SUPPLEMENT_TYPE_OPTIONS}
-                selectedValue={supForm.watch('supplementType')}
-                onValueChange={(v) => supForm.setValue('supplementType', v, { shouldValidate: true })}
-                error={supForm.formState.errors.supplementType?.message}
-                placeholder="اختر نوع المكمل..."
-                required
-              />
+              <TextInputField label="الطبيب المصرح" value={medForm.watch('prescribingPhysician')} onChangeText={(v) => medForm.setValue('prescribingPhysician', v)} />
+
+              {/* AUTOMATED DNI PREVIEW CARD */}
+              {selectedDni && (
+                <View style={[styles.dniPreviewCard, { borderColor: DNI_COLORS[selectedDni.severity] || colors.border }]}>
+                  <View style={styles.dniPreviewHeader}>
+                    <Ionicons name="shield-checkmark" size={18} color={DNI_COLORS[selectedDni.severity]} />
+                    <ArabicText bold style={[styles.dniPreviewTitle, { color: DNI_COLORS[selectedDni.severity] }]}>
+                      تقييم التفاعل التلقائي (Automated DNI)
+                    </ArabicText>
+                  </View>
+                  <ArabicText style={styles.dniPreviewText}>{selectedDni.mechanism}</ArabicText>
+                  {selectedDni.actionReq && (
+                    <View style={styles.actionBadge}>
+                      <Ionicons name="flash" size={12} color="#FFF" />
+                      <ArabicText style={styles.actionBadgeText}>مطلوب تعديل الحمية الغذائية</ArabicText>
+                    </View>
+                  )}
+                </View>
+              )}
 
               <View style={styles.modalActions}>
-                <Button
-                  title="إضافة"
-                  onPress={supForm.handleSubmit(handleAddSupplement)}
-                  loading={isSavingSup}
-                  disabled={isSavingSup}
-                />
-                <Button
-                  title="إلغاء"
-                  variant="secondary"
-                  onPress={() => { setShowSupModal(false); supForm.reset(); }}
-                  disabled={isSavingSup}
-                />
+                <Button title="إضافة الدواء وتفعيل المراقبة" onPress={medForm.handleSubmit(handleAddMedication)} loading={isSavingMed} disabled={isSavingMed} />
+                <Button title="إلغاء" variant="secondary" onPress={() => { setShowMedModal(false); medForm.reset(); setMedStartDate(null); setMedEndDate(null); setSelectedDni(null); }} disabled={isSavingMed} />
               </View>
             </View>
           </ScrollView>
@@ -610,148 +417,36 @@ export default function MedicationsScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: {
-    flex: 1,
-    backgroundColor: colors.surfaceSecondary,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceSecondary,
-    gap: spacing.md,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  header: {
-    backgroundColor: colors.primary,
-    paddingTop: safeHeaderPaddingTop,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.md,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: 22,
-    color: colors.primaryContrast,
-    flex: 1,
-  },
-  section: {
-    backgroundColor: colors.surface,
-    margin: spacing.md,
-    marginBottom: 0,
-    borderRadius: 12,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceSecondary,
-    paddingBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    padding: spacing.xs,
-  },
-  addButtonText: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textDisabled,
-    textAlign: 'center',
-    paddingVertical: spacing.lg,
-  },
-  card: {
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: 8,
-    padding: spacing.sm + 2,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  cardTitle: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  cardBody: {
-    gap: 2,
-  },
-  cardDetail: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  dniBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  dniBadgeText: {
-    fontSize: 10,
-    color: colors.surface,
-    fontWeight: '700',
-  },
-  typeBadge: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  typeBadgeText: {
-    fontSize: 10,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  spacer: {
-    height: 40,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: colors.surfaceSecondary,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingTop: safeHeaderPaddingTop,
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  modalTitle: {
-    fontSize: 20,
-    color: colors.primaryContrast,
-  },
-  modalContent: {
-    padding: spacing.md,
-  },
-  modalActions: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
+  container: { flex: 1, backgroundColor: colors.surfaceSecondary },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary, gap: spacing.md },
+  loadingText: { fontSize: 16, color: colors.textSecondary },
+  header: { backgroundColor: colors.primaryDark, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.lg, paddingHorizontal: spacing.md },
+  headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  headerTitle: { fontSize: 22, color: colors.primaryContrast, flex: 1, textAlign: 'right' },
+  section: { backgroundColor: colors.surface, margin: spacing.md, marginBottom: 0, borderRadius: 12, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  sectionHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.surfaceSecondary, paddingBottom: spacing.sm },
+  sectionTitle: { fontSize: 16, color: colors.textPrimary, fontFamily: fontFamilies.bold },
+  addButton: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, padding: spacing.xs },
+  addButtonText: { fontSize: 13, color: colors.success, fontWeight: '600' },
+  emptyText: { fontSize: 14, color: colors.textDisabled, textAlign: 'center', paddingVertical: spacing.lg },
+  card: { backgroundColor: colors.surfaceSecondary, borderRadius: 8, padding: spacing.sm + 2, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  cardHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
+  cardTitle: { fontSize: 15, color: colors.textPrimary, flex: 1, textAlign: 'right' },
+  cardBody: { gap: 2 },
+  cardDetail: { fontSize: 13, color: colors.textSecondary, textAlign: 'right' },
+  dniBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  dniBadgeText: { fontSize: 10, color: colors.primaryContrast, fontWeight: '700' },
+  spacer: { height: 80 },
+  modalContainer: { flex: 1, backgroundColor: colors.surfaceSecondary },
+  modalHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primaryDark, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.md, paddingHorizontal: spacing.md },
+  modalTitle: { fontSize: 20, color: colors.primaryContrast, fontFamily: fontFamilies.bold },
+  modalContent: { padding: spacing.md },
+  modalActions: { gap: spacing.sm, marginTop: spacing.lg },
+  row: { flexDirection: 'row-reverse', gap: spacing.sm },
+  dniPreviewCard: { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, marginTop: spacing.md, borderWidth: 1.5, borderStyle: 'dashed' },
+  dniPreviewHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: 6 },
+  dniPreviewTitle: { fontSize: 13, color: colors.textPrimary },
+  dniPreviewText: { fontSize: 12, color: colors.textSecondary, textAlign: 'right', lineHeight: 18 },
+  actionBadge: { backgroundColor: colors.danger, alignSelf: 'flex-end', flexDirection: 'row-reverse', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 8 },
+  actionBadgeText: { color: '#FFF', fontSize: 11, fontFamily: fontFamilies.bold },
 });

@@ -71,7 +71,7 @@ export default function SmartMealPlanner({
       );
       const dist = JSON.parse(plan.mealDistributionJson) as IMealDistributionPlan;
       const cards = JSON.parse(plan.educationalInsightsJson) as { title: string; body: string; type: string }[];
-      return { plan, dist, cards, plan };
+      return { plan, dist, cards };
     } catch {
       return null;
     }
@@ -131,7 +131,7 @@ export default function SmartMealPlanner({
     const totalCarb = r2(newSlots.reduce((s, sl) => s + sl.slotCarbs, 0));
     const totalFat = r2(newSlots.reduce((s, sl) => s + sl.slotFat, 0));
 
-    setDistribution({ slots: newSlots, totalCalories: totalCal, totalProtein: totalProt, totalCarbs: totalCarb, totalFat: totalFat });
+    setLocalDist({ slots: newSlots, totalCalories: totalCal, totalProtein: totalProt, totalCarbs: totalCarb, totalFat: totalFat });
     setSwapModalVisible(false);
   }, [distribution, swapSlotIdx, swapItemIdx]);
 
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceSecondary,
     gap: spacing.md,
   },
   loadingText: {

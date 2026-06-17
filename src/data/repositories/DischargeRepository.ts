@@ -43,7 +43,6 @@ export class DischargeRepository implements IDischargeRepository {
 
   async create(record: DischargeSummaryRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
     const result = await db.write(async () => {
       const collection = db.get<DischargeSummaryModel>('discharge_summaries');
       return collection.create((r) => {
@@ -66,8 +65,6 @@ export class DischargeRepository implements IDischargeRepository {
         r.complicationsRelatedToNutrition = record.complicationsRelatedToNutrition ?? undefined;
         r.complicationsNotes = record.complicationsNotes ?? undefined;
         r.nextEnergyTargetKcal = record.nextEnergyTargetKcal ?? undefined;
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

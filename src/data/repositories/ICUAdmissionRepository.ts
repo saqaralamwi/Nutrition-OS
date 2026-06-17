@@ -101,7 +101,6 @@ function toRecord(model: ICUAdmissionModel): ICUAdmissionRecord {
 export class ICUAdmissionRepository implements IICUAdmissionRepository {
   async create(record: ICUAdmissionRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
     const result = await db.write(async () => {
       const collection = db.get<ICUAdmissionModel>('icu_admissions');
       return collection.create((r) => {
@@ -190,8 +189,6 @@ export class ICUAdmissionRepository implements IICUAdmissionRepository {
         r.signedBy = record.signedBy ?? '';
         if (record.consentDate) r.consentDate = new Date(record.consentDate);
         r.createdBy = record.createdBy;
-        r.createdAt = now;
-        r.updatedAt = now;
         r.isTransferredToICU = record.isTransferredToICU;
         if (record.transferredAt) r.transferredAt = new Date(record.transferredAt);
       });

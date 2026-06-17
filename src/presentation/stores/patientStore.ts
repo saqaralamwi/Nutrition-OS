@@ -1,13 +1,4 @@
 import { create, StateCreator } from 'zustand';
-import { PatientMetrics } from '../../domain/entities/PatientMetrics';
-import { NutritionPlan } from '../../domain/entities/NutritionPlan';
-
-
-export interface ToastMessage {
-  id: string;
-  text: string;
-  type: 'success' | 'error' | 'info';
-}
 
 export interface PatientState {
   patients: any[];
@@ -18,29 +9,11 @@ export interface PatientState {
   sortOrder: string;
   searchQuery: string;
 
-  currentMetrics: PatientMetrics | null;
-  currentPlan: NutritionPlan | null;
-  isCalculating: boolean;
-  isGeneratingPlan: boolean;
-
-  toast: ToastMessage | null;
-
   loadPatients: () => Promise<void>;
   searchPatients: (query: string) => Promise<void>;
   setSortOrder: (order: string) => Promise<void>;
-  deletePatient: (id: string) => Promise<boolean>;
-  addPatient: (input: any) => Promise<{ success: boolean; errors?: any[]; patient?: any }>;
-
-  loadMetricsForPatient: (patientId: string) => Promise<void>;
-  loadPlanForPatient: (patientId: string) => Promise<void>;
-  calculateMetrics: (input: any) => Promise<void>;
-  generatePlan: (input: any) => Promise<void>;
-
-  showToast: (text: string, type: ToastMessage['type']) => void;
-  hideToast: () => void;
+  addPatient: (input: any) => Promise<{ success: boolean; patient?: any; errors?: any[] }>;
 }
-
-const DB_NOT_READY = 'قاعدة البيانات قيد إعادة البناء (Phase 4). الرجاء المحاولة لاحقاً.';
 
 const storeCreator: StateCreator<PatientState> = (set, get) => ({
   patients: [],
@@ -51,20 +24,13 @@ const storeCreator: StateCreator<PatientState> = (set, get) => ({
   sortOrder: 'newest',
   searchQuery: '',
 
-  currentMetrics: null,
-  currentPlan: null,
-  isCalculating: false,
-  isGeneratingPlan: false,
-
-  toast: null,
-
   loadPatients: async () => {
     set({ isLoading: true, error: null });
     try {
       const { GetPatientsUseCase } = await import('../../domain/use-cases/GetPatientsUseCase');
       const useCase = new GetPatientsUseCase();
       const result = await useCase.execute();
-      set({ patients: result, isLoading: false });
+      set({ patients: result, isLoading: false, totalCount: result.length, activeCount: result.filter((p: any) => p.status === 'active').length });
     } catch (e: any) {
       set({ error: e.message, isLoading: false });
     }
@@ -86,66 +52,35 @@ const storeCreator: StateCreator<PatientState> = (set, get) => ({
     set({ sortOrder: order });
   },
 
-  deletePatient: async (id: string): Promise<boolean> => {
-    try {
-      const { DeletePatientUseCase } = await import('../../domain/use-cases/DeletePatientUseCase');
-      const useCase = new DeletePatientUseCase();
-      await useCase.execute(id);
-      const current = get().patients.filter((p: any) => p.id !== id);
-      set({ patients: current });
-      return true;
-    } catch {
-      get().showToast(DB_NOT_READY, 'error');
-      return false;
-    }
-  },
-
   addPatient: async (input: any) => {
     try {
-      const { CreatePatientUseCase } = await import('../../domain/use-cases/CreatePatientUseCase');
-      const useCase = new CreatePatientUseCase();
+      const { AddPatientUseCase } = await import('../../domain/use-cases/AddPatientUseCase');
+      const { PatientRepository } = await import('../../data/repositories/PatientRepository');
+      
+      const repository = new PatientRepository();
+      const useCase = new AddPatientUseCase(repository);
+      
       const patient = await useCase.execute(input);
+      
+      // Update local state reactively
+      const currentPatients = get().patients;
+      set({ 
+        patients: [patient, ...currentPatients],
+        totalCount: get().totalCount + 1,
+        activeCount: patient.status === 'active' ? get().activeCount + 1 : get().activeCount
+      });
+      
       return { success: true, patient };
     } catch (e: any) {
-      if (e && e.type === 'VALIDATION_ERROR') {
+      if (e.type === 'VALIDATION_ERROR') {
         return { success: false, errors: e.errors };
       }
-      const errMsg = e instanceof Error ? e.message : String(e);
-      // Propagate the specific error back to the UI
-      return { success: false, errors: [{ field: 'fullName', message: errMsg }] };
+      return { 
+        success: false, 
+        errors: [{ field: 'general', message: e.message || 'حدث خطأ غير متوقع أثناء إضافة المريض' }] 
+      };
     }
   },
-
-  loadMetricsForPatient: async (_patientId: string) => {
-    set({ isCalculating: false, currentMetrics: null });
-  },
-
-  loadPlanForPatient: async (_patientId: string) => {
-    set({ currentPlan: null });
-  },
-
-  calculateMetrics: async (_input: any) => {
-    set({ isCalculating: false });
-  },
-
-  generatePlan: async (_input: any) => {
-    set({ isGeneratingPlan: false });
-  },
-
-
-
-  showToast: (text: string, type: ToastMessage['type']) => {
-    const id = Date.now().toString();
-    set({ toast: { id, text, type } });
-    setTimeout(() => {
-      const current = get().toast;
-      if (current?.id === id) {
-        set({ toast: null });
-      }
-    }, 3000);
-  },
-
-  hideToast: () => set({ toast: null }),
 });
 
 export const usePatientStore = create<PatientState>(storeCreator);

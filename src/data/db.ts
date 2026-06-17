@@ -3,12 +3,14 @@ import { schema } from './database/schema';
 import { migrations } from './database/migrations';
 import { seedDatabase } from './database/seed';
 import { setupAuditTriggers } from './database/auditTrigger';
+import { waitForDatabaseReady } from './database/utils';
 
 import { PatientModel } from './models/CoreModels';
 import { VitalsRecordModel } from './models/CoreModels';
 import { NutritionalPlanModel } from './models/CoreModels';
 import { FileNumberCounterModel } from './models/CoreModels';
 import { NutritionRequirementsModel } from './models/CoreModels';
+import { LaboratoryRecordModel } from './models/CoreModels';
 
 import { PediatricGrowthChartModel } from './models/PediatricModels';
 import { PediatricMalnutritionCriterionModel } from './models/PediatricModels';
@@ -59,6 +61,7 @@ const modelClasses = [
   NutritionalPlanModel,
   FileNumberCounterModel,
   NutritionRequirementsModel,
+  LaboratoryRecordModel,
   PediatricGrowthChartModel,
   PediatricMalnutritionCriterionModel,
   StampPediatricScreeningModel,
@@ -137,6 +140,9 @@ export async function initializeDB(): Promise<Database> {
     adapter,
     modelClasses,
   });
+
+  // CRITICAL: Ensure database is ready (especially LokiJS on Web) before seeding
+  await waitForDatabaseReady(db);
 
   await seedDatabase(db);
 

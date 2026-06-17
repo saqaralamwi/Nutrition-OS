@@ -29,7 +29,6 @@ export class CalculationOverrideRepository implements ICalculationOverrideReposi
 
   async create(override: CalculationOverride): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
     const result = await db.write(async () => {
       const collection = db.get<CalculationOverrideModel>('calculation_overrides');
       return collection.create((r) => {
@@ -38,7 +37,6 @@ export class CalculationOverrideRepository implements ICalculationOverrideReposi
         r.overriddenValue = override.overriddenValue;
         r.reason = override.reason;
         r.overriddenBy = override.overriddenBy;
-        r.createdAt = now;
       });
     });
     return result.id;

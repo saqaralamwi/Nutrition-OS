@@ -8,7 +8,7 @@ import SocialHistory from '../models/SocialHistory';
 import MedicalHistory from '../models/MedicalHistory';
 import Medication from '../models/Medication';
 import Supplement from '../models/Supplement';
-import LabResult from '../models/LabResult';
+import LaboratoryRecord from '../models/LaboratoryRecord';
 import TestCatalog from '../models/TestCatalog';
 import TestReferenceRange from '../models/TestReferenceRange';
 import PhysicalExamItem from '../models/PhysicalExamItem';
@@ -17,7 +17,6 @@ import CalculationOverride from '../models/CalculationOverride';
 import Intervention from '../models/Intervention';
 import FollowUpVisit from '../models/FollowUpVisit';
 import Setting from '../models/Setting';
-import LaboratoryRecord from '../models/LaboratoryRecord';
 import DischargeSummary from '../models/DischargeSummary';
 import FoodItem from '../models/FoodItem';
 import MealPlan from '../models/MealPlan';
@@ -70,6 +69,8 @@ import BurnAssessmentRecord from '../models/BurnAssessmentRecord';
 import RespiratoryAssessmentRecord from '../models/RespiratoryAssessmentRecord';
 import FoodExchange from '../models/FoodExchange';
 import PatientMealPlan from '../models/PatientMealPlan';
+import DietaryHistorySession from '../models/DietaryHistorySession';
+import DietaryHistoryItem from '../models/DietaryHistoryItem';
 import { setupAuditTriggers } from './auditTrigger';
 
 const modelClasses = [
@@ -78,7 +79,7 @@ const modelClasses = [
   MedicalHistory,
   Medication,
   Supplement,
-  LabResult,
+  LaboratoryRecord,
   TestCatalog,
   TestReferenceRange,
   PhysicalExamItem,
@@ -87,7 +88,6 @@ const modelClasses = [
   Intervention,
   FollowUpVisit,
   Setting,
-  LaboratoryRecord,
   DischargeSummary,
   FoodItem,
   MealPlan,
@@ -140,6 +140,8 @@ const modelClasses = [
   RespiratoryAssessmentRecord,
   FoodExchange,
   PatientMealPlan,
+  DietaryHistorySession,
+  DietaryHistoryItem,
 ];
 
 const DB_KEY = '__WATERMELONDB_NATIVE__';
@@ -168,12 +170,12 @@ export async function getDatabase(): Promise<Database> {
 
     console.log('[WatermelonDB] Initializing SQLite adapter...');
 
-    setupAuditTriggers();
-
     const db = new Database({
       adapter,
       modelClasses,
     });
+
+    setupAuditTriggers(db);
 
     await seedDatabase(db);
 

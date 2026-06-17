@@ -38,6 +38,7 @@ import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
 // Helper for Mifflin St-Jeor BMR
 function calculateMifflinBMR(weight: number, height: number, age: number, isMale: boolean): number {
@@ -49,7 +50,7 @@ function calculateMifflinBMR(weight: number, height: number, age: number, isMale
 export default function NCPDiabetesGatewayScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   // Core stream states
   const [patient, setPatient] = useState<Patient | null>(null);

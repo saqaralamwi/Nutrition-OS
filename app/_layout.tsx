@@ -1,10 +1,10 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, I18nManager, Text, TextInput, AppState, AppStateStatus, ActivityIndicator } from 'react-native';
-import { colors, spacing } from '../src/presentation/theme';
+import { View, I18nManager, Text, TextInput, AppState, AppStateStatus, ActivityIndicator, Image } from 'react-native';
+import { colors, spacing, fontFamilies, fontSizes, lineHeights } from '../src/presentation/theme';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback, useEffect } from 'react';
 import { useSecurityStore } from '../src/presentation/stores/securityStore';
 import { useSettingsStore } from '../src/presentation/stores/settingsStore';
 import { useAuthStore } from '../src/presentation/stores/authStore';
@@ -43,6 +43,10 @@ export default function RootLayout() {
     'ThmanyahSans-Light': require('../assets/fonts/thmanyah-sans-light.otf'),
   });
 
+  const [isDbReady, setIsDbReady] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [splashReady, setSplashReady] = useState(false);
+
   const router = useRouter();
   const segments = useSegments();
   const activeProfileId = useSettingsStore((s) => s.activeProfileId);
@@ -52,19 +56,44 @@ export default function RootLayout() {
   const isCloudConfigured = useAuthStore((s) => s.isCloudConfigured);
   const restoreSession = useAuthStore((s) => s.restoreSession);
 
+  // Initialize Database and then Security/Auth
+  useEffect(() => {
+    async function setupApp() {
+      try {
+        const { getDatabase } = await import('../src/data/database');
+        await getDatabase();
+        setIsDbReady(true);
+      } catch (err: any) {
+        console.error('[RootLayout] DB Init failed:', err);
+        setDbError(err.message || 'فشل تهيئة قاعدة البيانات');
+      }
+    }
+    setupApp();
+  }, []);
+
+  // Minimum 1-second splash visibility guarantee
+  useEffect(() => {
+    const timer = setTimeout(() => setSplashReady(true), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Initialize security for the active clinician profile on change/launch
   useEffect(() => {
-    initSecurity(activeProfileId);
-  }, [activeProfileId]);
+    if (isDbReady) {
+      initSecurity(activeProfileId);
+    }
+  }, [activeProfileId, isDbReady]);
 
   // Restore auth session on mount
   useEffect(() => {
-    restoreSession();
-  }, []);
+    if (isDbReady) {
+      restoreSession();
+    }
+  }, [isDbReady]);
 
   // Redirect based on auth state
   useEffect(() => {
-    if (hydrationState !== 'hydrated') return;
+    if (!isDbReady || hydrationState !== 'hydrated') return;
     if (!isCloudConfigured) return;
 
     const inAuthGroup = segments[0] === 'auth';
@@ -74,7 +103,7 @@ export default function RootLayout() {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/');
     }
-  }, [isAuthenticated, hydrationState, isCloudConfigured, segments]);
+  }, [isAuthenticated, hydrationState, isCloudConfigured, segments, isDbReady]);
 
   // AppState listener for 2-minute background auto-lock
   useEffect(() => {
@@ -101,20 +130,43 @@ export default function RootLayout() {
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
+    if (fontsLoaded && isDbReady && splashReady) {
       await SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, isDbReady, splashReady]);
 
   const { themeMode, animatedContainer } = useAppTheme();
 
-  if (!fontsLoaded || hydrationState === 'idle' || hydrationState === 'hydrating') {
+  const isSplashActive = !fontsLoaded || !isDbReady || !splashReady || hydrationState === 'idle' || hydrationState === 'hydrating';
+
+  if (isSplashActive) {
+    let loadingMsg = 'جاري تهيئة النظام السريري...';
+    if (!isDbReady) loadingMsg = 'جاري تهيئة قاعدة البيانات الآمنة...';
+    else if (!splashReady) loadingMsg = 'جاري تهيئة النظام السريري...';
+    else if (hydrationState === 'idle' || hydrationState === 'hydrating') loadingMsg = 'جاري التحقق من الجلسة...';
+
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ color: colors.textSecondary, fontSize: 15, marginTop: spacing.md, fontFamily: 'ThmanyahSans-Medium' }}>
-          {hydrationState === 'idle' || hydrationState === 'hydrating' ? 'جاري التحقق من الجلسة...' : 'جاري التحميل...'}
-        </Text>
+      <View style={splashStyles.root}>
+        <View style={splashStyles.centerGroup}>
+          <View style={splashStyles.logoContainer}>
+            <Image
+              source={require('../assets/icon.png')}
+              style={splashStyles.logo}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={splashStyles.brandName}>ADCN</Text>
+          <Text style={splashStyles.brandSubtitle}>نظام التغذية العلاجية السريري</Text>
+          <View style={splashStyles.indicatorGroup}>
+            <ActivityIndicator size="small" color={colors.primaryContrast} />
+            <Text style={splashStyles.trackingBadge}>{loadingMsg}</Text>
+          </View>
+        </View>
+        {dbError && (
+          <View style={splashStyles.errorContainer}>
+            <Text style={splashStyles.errorText}>{dbError}</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -253,3 +305,80 @@ export default function RootLayout() {
     </Animated.View>
   );
 }
+
+const splashStyles = {
+  root: {
+    flex: 1,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  centerGroup: {
+    alignItems: 'center' as const,
+    gap: spacing.md,
+  },
+  logoContainer: {
+    width: 112,
+    height: 112,
+    borderRadius: 28,
+    overflow: 'hidden' as const,
+    backgroundColor: colors.surfaceElevated,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  logo: {
+    width: 112,
+    height: 112,
+  },
+  brandName: {
+    fontSize: fontSizes.xxl,
+    fontFamily: fontFamilies.black,
+    color: colors.textPrimary,
+    letterSpacing: 4,
+    marginTop: spacing.sm,
+  },
+  brandSubtitle: {
+    fontSize: fontSizes.sm,
+    fontFamily: fontFamilies.medium,
+    color: colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  indicatorGroup: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    backgroundColor: colors.surfaceCard,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  trackingBadge: {
+    fontSize: fontSizes.xs,
+    fontFamily: fontFamilies.medium,
+    color: colors.textTertiary,
+    letterSpacing: 0.3,
+  },
+  errorContainer: {
+    position: 'absolute' as const,
+    bottom: spacing.xxl,
+    left: spacing.lg,
+    right: spacing.lg,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: fontSizes.sm,
+    fontFamily: fontFamilies.medium,
+    textAlign: 'center' as const,
+    lineHeight: fontSizes.sm * lineHeights.relaxed,
+    backgroundColor: colors.surfaceCard,
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.danger + '30',
+  },
+};

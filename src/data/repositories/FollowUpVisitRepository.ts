@@ -46,7 +46,6 @@ export class FollowUpVisitRepository implements IFollowUpVisitRepository {
 
   async create(record: FollowUpVisitRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
     const result = await db.write(async () => {
       const collection = db.get<FollowUpVisitModel>('follow_up_visits');
       return collection.create((r) => {
@@ -72,8 +71,6 @@ export class FollowUpVisitRepository implements IFollowUpVisitRepository {
         r.replanRequired = record.replanRequired;
         r.replanNotes = record.replanNotes ?? '';
         r.comments = record.comments ?? '';
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

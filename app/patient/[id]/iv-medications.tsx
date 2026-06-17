@@ -25,6 +25,7 @@ import {
   calculateLipidEmulsionCalories,
 } from '../../../src/domain/utils/kauRequirementsEngine';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
 const MED_OPTIONS = [
   { label: 'بروبوفول (Propofol / Diprivan)', value: 'Propofol' },
@@ -48,7 +49,7 @@ const LIPID_CONCENTRATIONS = [
 export default function IVMedicationsScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   const [isLoading, setIsLoading] = useState(true);
   const [patient, setPatient] = useState<any>(null);

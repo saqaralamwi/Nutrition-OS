@@ -1,11 +1,13 @@
 import { Collection, Model } from '@nozbe/watermelondb';
 import { useSettingsStore } from '../../presentation/stores/settingsStore';
 
-const CRITICAL_TABLES = ['patients', 'lab_results', 'interventions', 'meal_plans'];
+const CRITICAL_TABLES = ['patients', 'laboratory_results', 'interventions', 'meal_plans'];
 
 let triggersInstalled = false;
+let dbInstance: any = null;
 
-export function setupAuditTriggers() {
+export function setupAuditTriggers(db?: any) {
+  if (db) dbInstance = db;
   if (triggersInstalled) return;
   triggersInstalled = true;
 
@@ -75,9 +77,11 @@ export async function logManualAuditEvent(
   details: object
 ) {
   try {
-    const { getDatabaseInstance } = require('./index');
-    const db = getDatabaseInstance();
-    if (!db) return;
+    const db = dbInstance;
+    if (!db) {
+      console.warn('[AuditTrigger] Manual logging attempted before DB instance registered');
+      return;
+    }
 
     const activeUser = useSettingsStore.getState().username;
     await db.write(async () => {

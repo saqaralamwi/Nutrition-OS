@@ -21,6 +21,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
 - **Phase 7 — Security & Audit**: Schema v29 (clinical_audit_logs table + migration), `RoleAuthorizationGuard` (3×3 permission matrix + 15-char justification + escalation flag, 4/4 tests), `CertifiedReportEngine` (deterministic 64-bit hash + certification stamp, 3/3 tests), `security_audit.ts` types
 - **Phase 7.5 — Migration Fix**: Schema v30, reversed v11–v19 migration ordering (now strictly monotonically descending), added `created_at`/`updated_at` timestamps to 11 tables (`test_catalog`, `test_reference_ranges`, `calculation_overrides`, `attachments`, `settings`, `audit_logs`, `clinical_audit_logs`, `gastro_surgery_assessments`, `icu_critical_assessments`, `renal_assessments`, `who_growth_standards`), added deprecation comments to patient table duplicate columns (`name`, `birth_date`, `phone_ar`)
 - **Full codebase audit**: 61 tables in schema, 26 migration steps (v5–v30), 31 test files with 154/154 tests passing; migration ordering defect corrected
+- **Backup & Restore Service**: `src/data/services/BackupService.ts` (SQLite file export/import via expo-file-system SDK 56 API, SQLite magic-header validation, expo-sharing for export), integrated into `app/settings.tsx` as Section 5 (Backup & Restore card with Teal accent border, restore confirmation modal with danger-styled confirm gate, toast feedback, `resetDatabase()` + `router.replace('/')` on restore)
 
 ### In Progress
 - (none)

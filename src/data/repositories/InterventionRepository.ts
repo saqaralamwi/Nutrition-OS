@@ -56,7 +56,6 @@ export class InterventionRepository implements IInterventionRepository {
 
   async save(record: InterventionRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
 
     if (record.id) {
       const existing = await db.get<InterventionModel>('interventions').find(record.id);
@@ -81,7 +80,6 @@ export class InterventionRepository implements IInterventionRepository {
           r.status = record.status || 'active';
           r.supersededBy = record.supersededBy ?? '';
           r.comments = record.comments ?? '';
-          r.updatedAt = now;
         });
       });
       return existing.id;
@@ -110,8 +108,6 @@ export class InterventionRepository implements IInterventionRepository {
         r.status = record.status || 'active';
         r.supersededBy = record.supersededBy ?? '';
         r.comments = record.comments ?? '';
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

@@ -45,7 +45,6 @@ export class MedicationRepository implements IMedicationRepository {
 
   async save(record: MedicationRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
 
     const result = await db.write(async () => {
       const collection = db.get<MedicationModel>('medications');
@@ -71,9 +70,6 @@ export class MedicationRepository implements IMedicationRepository {
         r.isActive = record.isActive ?? true;
         r.notes = record.notes ?? '';
         r.notesAr = record.notesAr ?? '';
-
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

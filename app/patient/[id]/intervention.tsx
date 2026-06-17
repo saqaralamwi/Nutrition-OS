@@ -20,6 +20,7 @@ import DropdownField from '../../../src/presentation/components/DropdownField';
 import Button from '../../../src/presentation/components/Button';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import NutritionTemplateSelector from '../../../src/presentation/components/NutritionTemplateSelector';
 import type { NutritionTemplate } from '../../../src/domain/entities/NutritionTemplate';
 
@@ -120,7 +121,7 @@ type InterventionFormData = z.infer<typeof interventionSchema>;
 export default function InterventionScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   const [isLoading, setIsLoading] = useState(true);
   const [assessmentComplete, setAssessmentComplete] = useState(false);

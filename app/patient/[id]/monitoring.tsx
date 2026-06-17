@@ -22,6 +22,7 @@ import DatePickerField from '../../../src/presentation/components/DatePickerFiel
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { formatSafeDate } from '../../../src/utils/date';
 import { FollowUpVisitRecord } from '../../../src/domain/repositories/IFollowUpVisitRepository';
 import { LaboratoryRecordRecord } from '../../../src/domain/repositories/ILaboratoryRepository';
@@ -162,7 +163,7 @@ function evaluateRefeedingRisk(potassium?: number, phosphorus?: number, sodium?:
 export default function MonitoringScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   // Layout states
   const [activeTab, setActiveTab] = useState<'visits' | 'labs'>('visits');

@@ -22,6 +22,7 @@ import DropdownField from '../../../src/presentation/components/DropdownField';
 import DatePickerField from '../../../src/presentation/components/DatePickerField';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { formatSafeDate } from '../../../src/utils/date';
 // import Tesseract from 'tesseract.js';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
@@ -118,7 +119,7 @@ const OCR_RULES = [
 export default function LaboratoryScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
   const [isLoading, setIsLoading] = useState(true);
   const [labResults, setLabResults] = useState<LabResultRecord[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);

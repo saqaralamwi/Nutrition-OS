@@ -47,8 +47,6 @@ export class PhysicalExamRepository implements IPhysicalExamRepository {
       existingByKey.set(record.itemKey, record);
     }
 
-    const now = new Date();
-
     await db.write(async () => {
       const operations = items.map((item) => {
         const existingRecord = existingByKey.get(item.itemKey);
@@ -56,7 +54,6 @@ export class PhysicalExamRepository implements IPhysicalExamRepository {
           return existingRecord.prepareUpdate((r) => {
             r.response = item.response;
             r.comments = item.comments ?? '';
-            r.updatedAt = now;
           });
         }
         const collection = db.get<PhysicalExamModel>('physical_exam_items');
@@ -66,8 +63,6 @@ export class PhysicalExamRepository implements IPhysicalExamRepository {
           r.itemKey = item.itemKey;
           r.response = item.response;
           r.comments = item.comments ?? '';
-          r.createdAt = now;
-          r.updatedAt = now;
         });
       });
 

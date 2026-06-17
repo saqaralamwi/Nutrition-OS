@@ -33,16 +33,20 @@ const FOODS: FoodSeed[] = [
   { nameAr: 'خمير', nameEn: 'Khameer Bread', category: 'breads_grains', subcategory: 'flatbread', servingSizeG: 100, servingSizeText: 'قطعة', calories: 290, proteinG: 7.0, carbsG: 52.0, fatG: 5.0, fiberG: 1.8, sodiumMg: 350, isArabic: true },
   { nameAr: 'رز أبيض', nameEn: 'White Rice', category: 'breads_grains', subcategory: 'rice', servingSizeG: 150, servingSizeText: 'كوب', calories: 195, proteinG: 4.0, carbsG: 43.0, fatG: 0.4, fiberG: 0.6, sodiumMg: 2, potassiumMg: 55, isArabic: false },
   { nameAr: 'رز بسمتي', nameEn: 'Basmati Rice', category: 'breads_grains', subcategory: 'rice', servingSizeG: 150, servingSizeText: 'كوب', calories: 190, proteinG: 4.2, carbsG: 42.0, fatG: 0.3, fiberG: 0.5, sodiumMg: 1, potassiumMg: 50, isArabic: true },
-  { nameAr: 'رز مصري', nameEn: 'Egyptian Rice', category: 'breads_grains', subcategory: 'rice', servingSizeG: 150, servingSizeText: 'كوب', calories: 200, proteinG: 3.8, carbsG: 44.0, fatG: 0.4, fiberG: 0.4, sodiumMg: 2, potassiumMg: 48, isArabic: true },
-  { nameAr: 'برغل', nameEn: 'Bulgur', category: 'breads_grains', subcategory: 'grains', servingSizeG: 150, servingSizeText: 'كوب', calories: 151, proteinG: 5.6, carbsG: 33.8, fatG: 0.4, fiberG: 8.0, sodiumMg: 9, potassiumMg: 124, isArabic: true },
-  { nameAr: 'برغل ناعم', nameEn: 'Fine Bulgur', category: 'breads_grains', subcategory: 'grains', servingSizeG: 150, servingSizeText: 'كوب', calories: 148, proteinG: 5.4, carbsG: 33.0, fatG: 0.3, fiberG: 7.5, sodiumMg: 8, potassiumMg: 120, isArabic: true },
-  { nameAr: 'كسكس', nameEn: 'Couscous', category: 'breads_grains', subcategory: 'grains', servingSizeG: 150, servingSizeText: 'كوب', calories: 176, proteinG: 6.0, carbsG: 36.5, fatG: 0.3, fiberG: 2.0, sodiumMg: 8, potassiumMg: 91, isArabic: true },
-  { nameAr: 'كسكسي مغربي', nameEn: 'Moroccan Couscous', category: 'breads_grains', subcategory: 'grains', servingSizeG: 150, servingSizeText: 'كوب', calories: 180, proteinG: 5.8, carbsG: 37.0, fatG: 0.4, fiberG: 2.2, sodiumMg: 7, potassiumMg: 88, isArabic: true },
-  { nameAr: 'شوفان', nameEn: 'Oats', category: 'breads_grains', subcategory: 'grains', servingSizeG: 40, servingSizeText: 'كوب', calories: 154, proteinG: 5.4, carbsG: 27.0, fatG: 2.6, fiberG: 4.0, sodiumMg: 2, potassiumMg: 120, isArabic: false },
-  { nameAr: 'فريكة', nameEn: 'Freekeh', category: 'breads_grains', subcategory: 'grains', servingSizeG: 150, servingSizeText: 'كوب', calories: 170, proteinG: 5.0, carbsG: 36.0, fatG: 0.6, fiberG: 7.0, sodiumMg: 5, potassiumMg: 115, isArabic: true },
-  { nameAr: 'معكرونة', nameEn: 'Pasta', category: 'breads_grains', subcategory: 'pasta', servingSizeG: 150, servingSizeText: 'كوب', calories: 210, proteinG: 7.0, carbsG: 42.0, fatG: 1.0, fiberG: 2.0, sodiumMg: 2, potassiumMg: 58, isArabic: false },
-  { nameAr: 'شعيرية', nameEn: 'Vermicelli', category: 'breads_grains', subcategory: 'pasta', servingSizeG: 50, servingSizeText: 'كوب', calories: 180, proteinG: 5.5, carbsG: 36.0, fatG: 0.8, fiberG: 1.0, sodiumMg: 1, potassiumMg: 40, isArabic: true },
   { nameAr: 'عدس', nameEn: 'Lentils', category: 'legumes', subcategory: 'pulses', servingSizeG: 150, servingSizeText: 'كوب', calories: 170, proteinG: 13.0, carbsG: 30.0, fatG: 0.5, fiberG: 12.0, sodiumMg: 4, potassiumMg: 365, isArabic: true },
+  { nameAr: 'شوفان', nameEn: 'Oats', category: 'breads_grains', subcategory: 'grains', servingSizeG: 40, servingSizeText: 'كوب', calories: 154, proteinG: 5.4, carbsG: 27.0, fatG: 2.6, fiberG: 4.0, sodiumMg: 2, potassiumMg: 120, isArabic: false },
+
+  // ===== CLINICAL & ENTERAL FORMULAS =====
+  { nameAr: 'إنسور بلس', nameEn: 'Ensure Plus', category: 'clinical_nutrition', subcategory: 'enteral_formula', servingSizeG: 200, servingSizeText: 'عبوة', calories: 300, proteinG: 12.5, carbsG: 40.4, fatG: 9.8, fiberG: 0, sodiumMg: 192, potassiumMg: 320, phosphorusMg: 240, isArabic: false },
+  { nameAr: 'فورتيسيب', nameEn: 'Fortisip', category: 'clinical_nutrition', subcategory: 'enteral_formula', servingSizeG: 200, servingSizeText: 'عبوة', calories: 300, proteinG: 12.0, carbsG: 36.8, fatG: 11.6, fiberG: 0, sodiumMg: 180, potassiumMg: 310, phosphorusMg: 230, isArabic: false },
+  { nameAr: 'نيفرو', nameEn: 'Nepro HP', category: 'clinical_nutrition', subcategory: 'enteral_formula', servingSizeG: 220, servingSizeText: 'عبوة', calories: 396, proteinG: 17.8, carbsG: 34.2, fatG: 21.5, fiberG: 2.8, sodiumMg: 187, potassiumMg: 233, phosphorusMg: 161, isArabic: false },
+  { nameAr: 'جلوثيرنا', nameEn: 'Glucerna', category: 'clinical_nutrition', subcategory: 'enteral_formula', servingSizeG: 200, servingSizeText: 'عبوة', calories: 186, proteinG: 9.0, carbsG: 17.6, fatG: 7.0, fiberG: 3.0, sodiumMg: 160, potassiumMg: 280, isArabic: false },
+  
+  // ===== PREDEFINED THERAPEUTIC RECIPES =====
+  { nameAr: 'محلول جفاف منزلي', nameEn: 'Homemade ORS', category: 'therapeutic_recipe', servingSizeG: 1000, servingSizeText: 'لتر', calories: 100, proteinG: 0, carbsG: 25, fatG: 0, sodiumMg: 2300, potassiumMg: 800, isArabic: true },
+  { nameAr: 'وجبة كبدية خفيفة (قبل النوم)', nameEn: 'Hepatic Night Snack (Oats/Honey)', category: 'therapeutic_recipe', servingSizeG: 150, servingSizeText: 'طبق', calories: 250, proteinG: 8.0, carbsG: 45.0, fatG: 5.0, fiberG: 4.0, potassiumMg: 180, isArabic: true },
+  { nameAr: 'شوربة بامية منخفضة البوتاسيوم', nameEn: 'Low-Potassium Okra Stew', category: 'therapeutic_recipe', servingSizeG: 250, servingSizeText: 'طبق', calories: 120, proteinG: 5.0, carbsG: 15.0, fatG: 4.0, fiberG: 3.0, potassiumMg: 150, isArabic: true },
+
   { nameAr: 'عدس أحمر', nameEn: 'Red Lentils', category: 'legumes', subcategory: 'pulses', servingSizeG: 150, servingSizeText: 'كوب', calories: 165, proteinG: 12.5, carbsG: 29.0, fatG: 0.4, fiberG: 8.0, sodiumMg: 5, potassiumMg: 350, isArabic: true },
   { nameAr: 'عدس أصفر', nameEn: 'Yellow Lentils', category: 'legumes', subcategory: 'pulses', servingSizeG: 150, servingSizeText: 'كوب', calories: 168, proteinG: 12.8, carbsG: 29.5, fatG: 0.4, fiberG: 9.0, sodiumMg: 4, potassiumMg: 355, isArabic: true },
   { nameAr: 'حمص', nameEn: 'Chickpeas', category: 'legumes', subcategory: 'pulses', servingSizeG: 150, servingSizeText: 'كوب', calories: 250, proteinG: 12.0, carbsG: 42.0, fatG: 4.0, fiberG: 10.0, sodiumMg: 12, potassiumMg: 350, isArabic: true },
@@ -384,38 +388,60 @@ function generateFoodVariations(): FoodSeed[] {
   return variations;
 }
 
+// Helper to split array into chunks
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
 export async function seedFoods(database: Database): Promise<void> {
   const existing = await database.get('foods').query().fetchCount();
   if (existing > 0) return;
 
   const allFoods = [...FOODS, ...generateFoodVariations()];
   const collection = database.get('foods');
+  const CHUNK_SIZE = 400;
+  const chunks = chunkArray(allFoods, CHUNK_SIZE);
 
-  await database.write(async () => {
-    const records = allFoods.map((f) =>
-      collection.prepareCreate((record: any) => {
-        record.nameAr = f.nameAr;
-        record.nameEn = f.nameEn;
-        record.category = f.category;
-        record.subcategory = f.subcategory ?? '';
-        record.servingSizeG = f.servingSizeG ?? null;
-        record.servingSizeText = f.servingSizeText ?? '';
-        record.calories = f.calories;
-        record.proteinG = f.proteinG;
-        record.carbsG = f.carbsG;
-        record.fatG = f.fatG;
-        record.fiberG = f.fiberG ?? null;
-        record.sugarG = f.sugarG ?? null;
-        record.sodiumMg = f.sodiumMg ?? null;
-        record.potassiumMg = f.potassiumMg ?? null;
-        record.isArabic = f.isArabic;
-        record._raw.created_at = NOW;
-        record._raw.updated_at = NOW;
-      }),
-    );
+  console.log(`[Seed] Starting Foods seeding: ${allFoods.length} records in ${chunks.length} chunks`);
 
-    await database.batch(records);
-  });
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    
+    await database.write(async () => {
+      const records = chunk.map((f) =>
+        collection.prepareCreate((record: any) => {
+          record.nameAr = f.nameAr;
+          record.nameEn = f.nameEn;
+          record.category = f.category;
+          record.subcategory = f.subcategory ?? '';
+          record.servingSizeG = f.servingSizeG ?? null;
+          record.servingSizeText = f.servingSizeText ?? '';
+          record.calories = f.calories;
+          record.proteinG = f.proteinG;
+          record.carbsG = f.carbsG;
+          record.fatG = f.fatG;
+          record.fiberG = f.fiberG ?? null;
+          record.sugarG = f.sugarG ?? null;
+          record.sodiumMg = f.sodiumMg ?? null;
+          record.potassiumMg = f.potassiumMg ?? null;
+          record.isArabic = f.isArabic;
+          record._raw.created_at = NOW;
+          record._raw.updated_at = NOW;
+        }),
+      );
 
-  console.log(`[Seed] Foods: ${allFoods.length} records`);
+      await database.batch(records);
+    });
+
+    console.log(`[Seed] Foods: Processed chunk ${i + 1}/${chunks.length}`);
+    
+    // Microscopic delay to allow GC to free up memory
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  console.log(`[Seed] Foods: Seeding completed successfully`);
 }

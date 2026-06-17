@@ -53,7 +53,6 @@ export class LaboratoryRepository implements ILaboratoryRepository {
 
   async create(record: LaboratoryRecordRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
     const rows = panelToRows(record);
 
     if (rows.length === 0) {
@@ -71,8 +70,6 @@ export class LaboratoryRepository implements ILaboratoryRepository {
         r.isAbnormal = false;
         r.severity = null;
         r.source = 'manual';
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

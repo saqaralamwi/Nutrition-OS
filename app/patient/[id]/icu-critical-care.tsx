@@ -37,6 +37,7 @@ import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { useAuthStore } from '../../../src/presentation/stores/authStore';
 
 interface IcuState {
@@ -66,7 +67,7 @@ interface IcuState {
 export default function IcuCriticalCareScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
   const currentUser = useAuthStore((s) => s.user);
 
   // Specialist signature & justification states

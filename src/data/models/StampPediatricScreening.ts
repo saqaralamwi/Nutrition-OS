@@ -53,6 +53,47 @@ export default class StampPediatricScreening extends Model {
   @field('bmi_percentile') bmiPercentile?: number;
   @field('recommended_action') recommendedAction!: string;
 
+  /**
+   * Calculates the total STAMP score and updates the risk level in the database.
+   * Logic:
+   * 1. Diagnosis Risk (medical_condition_risk): 0, 2, or 3
+   * 2. Nutritional Intake (nutritional_status): 0, 1, or 2
+   * 3. Weight/Growth Trend (weight_loss): 0, 1, or 3
+   */
+  async updateScore(): Promise<void> {
+    const diagScore = this.medicalConditionRisk || 0;
+    const intakeScore = this.nutritionalIntakeScore || 0;
+    const weightScore = this.weightLossScore || 0;
+    const total = diagScore + intakeScore + weightScore;
+
+    let level: string = 'low';
+    let label: string = 'Low Risk';
+    let labelAr: string = 'خطر منخفض';
+    let action: string = 'Routine clinical care';
+
+    if (total >= 4) {
+      level = 'high';
+      label = 'High Risk';
+      labelAr = 'خطر مرتفع';
+      action = 'Refer to Dietitian / Nutritional Support Team';
+    } else if (total >= 2) {
+      level = 'medium';
+      label = 'Medium Risk';
+      labelAr = 'خطر متوسط';
+      action = 'Monitor intake for 3 days and re-evaluate';
+    }
+
+    await this.db.write(async () => {
+      await this.update((record) => {
+        record.totalScore = total;
+        record.riskLevel = level;
+        record.riskLevelLabel = label;
+        record.riskLevelLabelAr = labelAr;
+        record.recommendedAction = action;
+      });
+    });
+  }
+
   get parsedActionDetails(): string[] | null {
     if (!this.actionDetails) return null;
     try { return JSON.parse(this.actionDetails) as string[]; } catch { return null; }

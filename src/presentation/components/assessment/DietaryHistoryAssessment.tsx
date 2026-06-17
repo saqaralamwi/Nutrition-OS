@@ -9,6 +9,7 @@ import DropdownField from '../DropdownField';
 import TextInputField from '../TextInputField';
 import Button from '../Button';
 import { DietaryIntakeAnalyzerEngine } from '../../../domain/calculators/DietaryIntakeAnalyzerEngine';
+import { FoodRepository } from '../../../data/repositories/FoodRepository';
 import type { ICalculatedMetabolicTargets } from '../../../domain/calculators/DietaryIntakeAnalyzerEngine';
 import type {
   IFoodExchange, IDietaryHistorySession, IDietaryHistoryItem,
@@ -143,14 +144,22 @@ export default function DietaryHistoryAssessment({
     if (debounceRef.current[slotKey]) {
       clearTimeout(debounceRef.current[slotKey]);
     }
-    debounceRef.current[slotKey] = setTimeout(() => {
+    debounceRef.current[slotKey] = setTimeout(async () => {
       if (text.trim().length === 0) {
         setTypeaheadResults((prev) => ({ ...prev, [slotKey]: [] }));
         return;
       }
-      const q = text.trim().toLowerCase();
-      const filtered = masterFoods.filter((f) => f.foodNameAr.includes(q));
-      setTypeaheadResults((prev) => ({ ...prev, [slotKey]: filtered }));
+      
+      try {
+        const results = await FoodRepository.searchExchanges(text);
+        const mapped = results.map(FoodRepository.mapExchangeToInterface);
+        setTypeaheadResults((prev) => ({ ...prev, [slotKey]: mapped }));
+      } catch (err) {
+        console.error('Food search failed:', err);
+        const q = text.trim().toLowerCase();
+        const filtered = masterFoods.filter((f) => f.foodNameAr.includes(q));
+        setTypeaheadResults((prev) => ({ ...prev, [slotKey]: filtered }));
+      }
     }, 250);
   }, [masterFoods]);
 

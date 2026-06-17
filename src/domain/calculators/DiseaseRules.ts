@@ -78,7 +78,7 @@ export function getDiseaseAdjustments(
     recommendations,
     restrictions,
     proteinPerKg: weightKg > 0 ? Math.round((protein_g / weightKg) * 10) / 10 : undefined,
-    carbsPercentage: totalCalories > 0 ? Math.round((carbs_g * 4 / totalCalories) * 100) : undefined,
-    fatPercentage: totalCalories > 0 ? Math.round((fat_g * 9 / totalCalories) * 100) : undefined,
+    carbsPercentage: totalCalories > 0 ? (carbs_g * 4 / totalCalories) : undefined,
+    fatPercentage: totalCalories > 0 ? (fat_g * 9 / totalCalories) : undefined,
   };
 }

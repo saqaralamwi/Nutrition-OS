@@ -26,7 +26,6 @@ export class SupplementRepository implements ISupplementRepository {
 
   async save(record: SupplementRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
 
     const result = await db.write(async () => {
       const collection = db.get<SupplementModel>('supplements');
@@ -35,8 +34,6 @@ export class SupplementRepository implements ISupplementRepository {
         r.supplementName = record.supplementName;
         r.dosage = record.dosage ?? '';
         r.supplementType = record.supplementType;
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

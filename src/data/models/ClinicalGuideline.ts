@@ -43,6 +43,8 @@ export default class ClinicalGuideline extends Model {
   @field('url') url?: string;
   @field('version') version?: string;
   @field('is_active') isActive!: boolean;
+  @date('valid_from') validFrom?: Date;
+  @date('valid_until') validUntil?: Date;
   @field('created_by') createdBy?: string;
 
   @readonly @date('created_at') createdAt!: Date;

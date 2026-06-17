@@ -129,22 +129,54 @@ function prepareItemRecord(collection: any, seed: ItemSeed): any {
 }
 
 export async function seedTestPatientMeals(database: Database): Promise<void> {
-  const sessionsCollection = database.get('patient_dietary_history_sessions');
-  const itemsCollection = database.get('patient_dietary_history_items');
+  try {
+    if (!database) {
+      console.warn('[seedTestPatientMeals] Database instance is null, skipping...');
+      return;
+    }
 
-  const existingCount = await sessionsCollection.query().fetchCount();
-  if (existingCount > 0) {
-    console.log(`[seedTestPatientMeals] Skipping — ${existingCount} session(s) already exist.`);
-    return;
+    // ROBUST ASYNCHRONOUS GUARD: Wait for collections to be ready
+    let sessionsCollection: any = null;
+    let itemsCollection: any = null;
+    let retries = 0;
+    const maxRetries = 50; // Total 5 seconds wait
+
+    while (retries < maxRetries) {
+      try {
+        sessionsCollection = database.get('patient_dietary_history_sessions');
+        itemsCollection = database.get('patient_dietary_history_items');
+        if (sessionsCollection && itemsCollection) break;
+      } catch (e) {
+        // Collections might not be registered yet
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+      retries++;
+    }
+
+    if (!sessionsCollection || !itemsCollection) {
+      console.error('[seedTestPatientMeals] Critical Error: Collections not found after waiting. Seeding aborted.');
+      return;
+    }
+
+    const existingCount = await sessionsCollection.query().fetchCount();
+    if (existingCount > 0) {
+      console.log(`[seedTestPatientMeals] Skipping — ${existingCount} session(s) already exist.`);
+      return;
+    }
+
+    console.log('[seedTestPatientMeals] Seeding test patient 24h dietary recall (1 session, 4 items)...');
+
+    await database.write(async () => {
+      const sessionRecord = prepareSessionRecord(sessionsCollection, SESSION);
+      const itemRecords = ITEMS.map((item) => prepareItemRecord(itemsCollection, item));
+      
+      if (!sessionRecord) throw new Error('Failed to prepare session record');
+      
+      await database.batch([sessionRecord, ...itemRecords]);
+    });
+
+    console.log('[seedTestPatientMeals] Seeding completed.');
+  } catch (error) {
+    console.warn('[seedTestPatientMeals] Skipping — failed to seed test patient meals:', error);
   }
-
-  console.log('[seedTestPatientMeals] Seeding test patient 24h dietary recall (1 session, 4 items)...');
-
-  await database.write(async () => {
-    const sessionRecord = prepareSessionRecord(sessionsCollection, SESSION);
-    const itemRecords = ITEMS.map((item) => prepareItemRecord(itemsCollection, item));
-    await database.batch([sessionRecord, ...itemRecords]);
-  });
-
-  console.log('[seedTestPatientMeals] Seeding completed.');
 }

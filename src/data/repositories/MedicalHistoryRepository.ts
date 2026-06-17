@@ -37,8 +37,6 @@ export class MedicalHistoryRepository implements IMedicalHistoryRepository {
       .query(Q.where('patient_id', record.patientId))
       .fetch();
 
-    const now = new Date();
-
     if (existing.length > 0) {
       const existingRecord = existing[0];
       await db.write(async () => {
@@ -53,7 +51,6 @@ export class MedicalHistoryRepository implements IMedicalHistoryRepository {
           r.medicationAllergies = record.medicationAllergies ?? '';
           r.covid19Status = record.covid19Status;
           r.comments = record.comments ?? '';
-          r.updatedAt = now;
         });
       });
       return existingRecord.id;
@@ -73,8 +70,6 @@ export class MedicalHistoryRepository implements IMedicalHistoryRepository {
         r.medicationAllergies = record.medicationAllergies ?? '';
         r.covid19Status = record.covid19Status;
         r.comments = record.comments ?? '';
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

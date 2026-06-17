@@ -115,45 +115,57 @@ const TEST_CATALOG: TestCatalogSeed[] = [
 ];
 
 export async function seedDatabase(database: Database): Promise<void> {
+  if (!database) return;
   if ((globalThis as any).__SKIP_SEEDING__) {
     return;
   }
-  await seedArabicFoods(database);
-  await importSeedData(database);
-  await seedClinicalReferenceData(database);
-  await seedFoodExchanges(database);
-  await seedTestPatientMeals(database);
 
-  const testCatalogCollection = database.get('test_catalog');
-  const settingsCollection = database.get('settings');
+  try {
+    await seedArabicFoods(database);
+    await importSeedData(database);
+    await seedClinicalReferenceData(database);
+    await seedFoodExchanges(database);
+    await seedTestPatientMeals(database);
 
-  const existingTests = await testCatalogCollection.query().fetchCount();
-  if (existingTests > 0) {
-    return;
+    const testCatalogCollection = database.get('test_catalog');
+    const settingsCollection = database.get('settings');
+
+    if (!testCatalogCollection || !settingsCollection) {
+      console.warn('[Seed] Required collections for basic setup not found, skipping final catalog seed.');
+      return;
+    }
+
+    const existingTests = await testCatalogCollection.query().fetchCount();
+    if (existingTests > 0) {
+      return;
+    }
+
+    await database.write(async () => {
+      const testRecords = TEST_CATALOG.map((t) =>
+        testCatalogCollection.prepareCreate((record: any) => {
+          record.testNameAr = t.testNameAr;
+          record.testNameEn = t.testNameEn;
+          record.defaultUnit = t.defaultUnit;
+          record.defaultRangeLow = t.defaultRangeLow;
+          record.defaultRangeHigh = t.defaultRangeHigh;
+          record._raw.critical_low_factor = t.criticalLowFactor;
+          record._raw.critical_high_factor = t.criticalHighFactor;
+          record.category = t.category;
+        }),
+      );
+
+      const settingRecords = SETTINGS.map((s) =>
+        settingsCollection.prepareCreate((record: any) => {
+          record.key = s.key;
+          record.value = s.value;
+          record._raw.updated_at = NOW;
+        }),
+      );
+
+      await database.batch([...testRecords, ...settingRecords]);
+    });
+    console.log('[Seed] Database initialization seed completed.');
+  } catch (err) {
+    console.error('[Seed] Database seeding encountered a failure:', err);
   }
-
-  await database.write(async () => {
-    const testRecords = TEST_CATALOG.map((t) =>
-      testCatalogCollection.prepareCreate((record: any) => {
-        record.testNameAr = t.testNameAr;
-        record.testNameEn = t.testNameEn;
-        record.defaultUnit = t.defaultUnit;
-        record.defaultRangeLow = t.defaultRangeLow;
-        record.defaultRangeHigh = t.defaultRangeHigh;
-        record._raw.critical_low_factor = t.criticalLowFactor;
-        record._raw.critical_high_factor = t.criticalHighFactor;
-        record.category = t.category;
-      }),
-    );
-
-    const settingRecords = SETTINGS.map((s) =>
-      settingsCollection.prepareCreate((record: any) => {
-        record.key = s.key;
-        record.value = s.value;
-        record._raw.updated_at = NOW;
-      }),
-    );
-
-    await database.batch([...testRecords, ...settingRecords]);
-  });
 }

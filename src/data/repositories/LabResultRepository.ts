@@ -1,6 +1,8 @@
 import { Q } from '@nozbe/watermelondb';
 import { getDatabase } from '../database';
-import LabResultModel from '../models/LabResult';
+import LaboratoryRecord from '../models/LaboratoryRecord';
+
+type LabResultModel = LaboratoryRecord;
 import { ILabResultRepository, LabResultRecord } from '../../domain/repositories/ILabResultRepository';
 
 function toRecord(model: LabResultModel): LabResultRecord {
@@ -10,12 +12,12 @@ function toRecord(model: LabResultModel): LabResultRecord {
     testName: model.testName,
     resultValue: model.resultValue,
     unit: model.unit,
-    referenceRangeLow: model.referenceRangeLow,
-    referenceRangeHigh: model.referenceRangeHigh,
+    referenceRangeLow: model.normalLow,
+    referenceRangeHigh: model.normalHigh,
     interpretation: model.isAbnormal ? 'abnormal' : 'normal',
     overrideReason: model.severity || undefined,
     testDate: model.testDate?.toISOString() || new Date().toISOString(),
-    comments: model.comments || undefined,
+    comments: model.notes || undefined,
     attachedImagePath: undefined,
     createdAt: model.createdAt?.toISOString() || undefined,
     updatedAt: model.updatedAt?.toISOString() || undefined,
@@ -48,7 +50,6 @@ export class LabResultRepository implements ILabResultRepository {
 
   async save(record: LabResultRecord): Promise<string> {
     const db = await getDatabase();
-    const now = new Date();
 
     const result = await db.write(async () => {
       const collection = db.get<LabResultModel>('laboratory_results');
@@ -57,15 +58,13 @@ export class LabResultRepository implements ILabResultRepository {
         r.testName = record.testName;
         r.resultValue = record.resultValue;
         r.unit = record.unit;
-        r.referenceRangeLow = record.referenceRangeLow;
-        r.referenceRangeHigh = record.referenceRangeHigh;
+        r.normalLow = record.referenceRangeLow;
+        r.normalHigh = record.referenceRangeHigh;
         r.isAbnormal = record.interpretation === 'abnormal';
         r.severity = record.overrideReason || null;
         r.source = 'lab_machine';
         r.testDate = new Date(record.testDate);
-        r.comments = record.comments ?? '';
-        r.createdAt = now;
-        r.updatedAt = now;
+        r.notes = record.comments ?? '';
       });
     });
     return result.id;

@@ -43,8 +43,6 @@ export class SocialHistoryRepository implements ISocialHistoryRepository {
       .query(Q.where('patient_id', record.patientId))
       .fetch();
 
-    const now = new Date();
-
     if (existing.length > 0) {
       const existingRecord = existing[0];
       await db.write(async () => {
@@ -65,7 +63,6 @@ export class SocialHistoryRepository implements ISocialHistoryRepository {
           r.foodAllergies = record.foodAllergies ?? '';
           r.specialDietBeforeAdmission = record.specialDietBeforeAdmission;
           r.comments = record.comments ?? '';
-          r.updatedAt = now;
         });
       });
       return existingRecord.id;
@@ -91,8 +88,6 @@ export class SocialHistoryRepository implements ISocialHistoryRepository {
         r.foodAllergies = record.foodAllergies ?? '';
         r.specialDietBeforeAdmission = record.specialDietBeforeAdmission;
         r.comments = record.comments ?? '';
-        r.createdAt = now;
-        r.updatedAt = now;
       });
     });
     return result.id;

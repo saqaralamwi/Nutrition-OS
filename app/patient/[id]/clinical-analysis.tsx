@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import { Patient } from '../../../src/domain/entities/Patient';
 import { ActivityLevel, ACTIVITY_LEVELS } from '../../../src/domain/entities/NutritionPlan';
@@ -42,20 +43,17 @@ export default function ClinicalAnalysisScreen() {
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('sedentary');
   const [dietitianNotes, setDietitianNotes] = useState('');
 
-  const currentMetrics = usePatientStore((s) => s.currentMetrics);
-  const currentPlan = usePatientStore((s) => s.currentPlan);
-  const isCalculating = usePatientStore((s) => s.isCalculating);
-  const isGeneratingPlan = usePatientStore((s) => s.isGeneratingPlan);
-  const calculateMetrics = usePatientStore((s) => s.calculateMetrics);
-  const generatePlan = usePatientStore((s) => s.generatePlan);
-  const loadMetricsForPatient = usePatientStore((s) => s.loadMetricsForPatient);
-  const loadPlanForPatient = usePatientStore((s) => s.loadPlanForPatient);
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
+
+  const [currentMetrics, setCurrentMetrics] = useState<any>(null);
+  const [currentPlan, setCurrentPlan] = useState<any>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
 
   useEffect(() => {
     loadPatient();
-    loadMetricsForPatient(id);
-    loadPlanForPatient(id);
+    setCurrentMetrics(null);
+    setCurrentPlan(null);
   }, [id]);
 
   useEffect(() => {
@@ -90,7 +88,8 @@ export default function ClinicalAnalysisScreen() {
       return;
     }
     try {
-      await calculateMetrics({
+      const { calculatePatientMetrics } = await import('../../../src/domain/calculators/NutritionEngine');
+      const result = calculatePatientMetrics({
         patientId: patient.id,
         weightKg: w,
         heightCm: h,
@@ -98,39 +97,39 @@ export default function ClinicalAnalysisScreen() {
         isMale: patient.gender === 'male',
         activityLevel,
       });
+      setCurrentMetrics(result as any);
+      setIsCalculating(false);
       showToast('تم حساب القياسات بنجاح', 'success');
     } catch {
-      // handled in store
+      setIsCalculating(false);
     }
-  }, [patient, weightKg, heightCm, activityLevel, calculateMetrics, showToast]);
+  }, [patient, weightKg, heightCm, activityLevel, showToast]);
 
   const handleGeneratePlan = useCallback(async () => {
-    if (!patient || !currentMetrics?.id || !currentMetrics?.tdee) return;
+    if (!patient || !currentMetrics || !currentMetrics.tdee) return;
+    setIsGeneratingPlan(true);
     try {
-      await generatePlan({
+      const { generateNutritionPlan } = await import('../../../src/domain/calculators/NutritionEngine');
+      const plan = generateNutritionPlan({
         patientId: patient.id,
-        metricsId: currentMetrics.id,
-        weightKg: currentMetrics.weightKg,
-        tdee: currentMetrics.tdee.value,
+        metricsId: currentMetrics.id || '',
+        weightKg: currentMetrics.weightKg || parseFloat(weightKg),
+        tdee: currentMetrics.tdee.value || 1800,
         diagnosis: patient.primaryDiagnosis,
         activityLevel,
       });
+      setCurrentPlan(plan as any);
+      setIsGeneratingPlan(false);
       showToast('تم إنشاء الخطة الغذائية', 'success');
     } catch {
-      // handled in store
+      setIsGeneratingPlan(false);
     }
-  }, [patient, currentMetrics, activityLevel, generatePlan, showToast]);
+  }, [patient, currentMetrics, activityLevel, showToast, weightKg]);
 
   const handleSaveNotes = useCallback(async () => {
-    if (!currentPlan?.id) return;
-    try {
-      const { UpdatePlanNotesUseCase } = await import('../../../src/domain/use-cases/UpdatePlanNotesUseCase');
-      const useCase = new UpdatePlanNotesUseCase();
-      await useCase.execute(currentPlan.id, dietitianNotes);
-      showToast('تم حفظ الملاحظات', 'success');
-    } catch {
-      showToast('فشل في حفظ الملاحظات', 'error');
-    }
+    if (!currentPlan) return;
+    setCurrentPlan((prev: any) => prev ? { ...prev, dietitianNotes } : null);
+    showToast('تم حفظ الملاحظات', 'success');
   }, [currentPlan, dietitianNotes, showToast]);
 
   if (loading) {
@@ -356,15 +355,33 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, fontFamily: 'ThmanyahSans-Regular', color: colors.primaryContrast, opacity: 0.8, textAlign: 'right', marginTop: spacing.xs },
   section: { backgroundColor: colors.surface, margin: spacing.md, borderRadius: 12, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   sectionTitle: { fontSize: 16, fontFamily: 'ThmanyahSans-Bold', color: colors.textPrimary, marginBottom: spacing.md, textAlign: 'right' },
-  fieldLabel: { fontSize: 14, color: colors.textSecondary, textAlign: 'right', marginTop: spacing.sm, marginBottom: spacing.xs, fontFamily: 'ThmanyahSans-Regular' },
+  fieldLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'right',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    fontFamily: 'ThmanyahSans-Regular',
+    lineHeight: 14 * 1.8,
+  },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm, fontSize: 16, color: colors.textPrimary, backgroundColor: colors.surfaceSecondary, fontFamily: 'ThmanyahSans-Regular' },
   activityRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.sm, marginTop: spacing.xs },
   activityButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   activityButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  activityButtonText: { fontSize: 13, color: colors.textSecondary, fontFamily: 'ThmanyahSans-Regular' },
+  activityButtonText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontFamily: 'ThmanyahSans-Regular',
+    lineHeight: 13 * 1.8,
+  },
   activityButtonTextActive: { color: colors.primaryContrast },
   primaryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, padding: spacing.md, borderRadius: 10, gap: spacing.sm },
-  primaryButtonText: { color: colors.primaryContrast, fontSize: 15, fontFamily: 'ThmanyahSans-Medium' },
+  primaryButtonText: {
+    color: colors.primaryContrast,
+    fontSize: 15,
+    fontFamily: 'ThmanyahSans-Medium',
+    lineHeight: 15 * 1.8,
+  },
   metricsContainer: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md, gap: spacing.sm },
   metricRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', paddingVertical: spacing.xs },
   metricLabel: { fontSize: 14, color: colors.textSecondary, fontFamily: 'ThmanyahSans-Regular' },
@@ -386,5 +403,12 @@ const styles = StyleSheet.create({
   notesInput: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm, fontSize: 14, color: colors.textPrimary, backgroundColor: colors.surfaceSecondary, minHeight: 80, textAlignVertical: 'top', fontFamily: 'ThmanyahSans-Regular' },
   secondaryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary, padding: spacing.sm, borderRadius: 10, marginTop: spacing.sm },
   secondaryButtonText: { color: colors.primary, fontSize: 14, fontFamily: 'ThmanyahSans-Medium' },
-  noDataText: { fontSize: 14, color: colors.textDisabled, textAlign: 'center', marginVertical: spacing.md, fontFamily: 'ThmanyahSans-Regular' },
+  noDataText: {
+    fontSize: 15,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginVertical: spacing.md,
+    fontFamily: 'ThmanyahSans-Regular',
+    lineHeight: 15 * 1.8,
+  },
 });

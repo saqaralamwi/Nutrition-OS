@@ -34,11 +34,12 @@ import ICUPatientRecord from '../../../src/data/models/ICUPatientRecord';
 import { colors, spacing, safeHeaderPaddingTop, fontFamilies } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
 export default function IcuChartsScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   // Core stream states
   const [patient, setPatient] = useState<Patient | null>(null);

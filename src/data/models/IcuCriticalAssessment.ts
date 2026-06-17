@@ -1,6 +1,7 @@
 import { Model } from '@nozbe/watermelondb';
 import { field, date, relation } from '@nozbe/watermelondb/decorators';
 import Patient from './Patient';
+import type { IIcuCriticalAssessment } from '../../data/types/critical_care';
 
 export default class IcuCriticalAssessment extends Model {
   static table = 'icu_critical_assessments';
@@ -19,4 +20,18 @@ export default class IcuCriticalAssessment extends Model {
   @field('crp_level') crpLevel!: number;
   @field('nitrogen_balance_g') nitrogenBalanceG!: number;
   @date('recorded_at') recordedAt!: Date;
+
+  toDomain(): IIcuCriticalAssessment {
+    return {
+      patientId: this.patientId,
+      isMechanicallyVentilated: this.isMechanicallyVentilated,
+      isOnVasopressors: this.isOnVasopressors,
+      propofolInfusionRateMlHr: this.propofolInfusionRateMlHr,
+      dexmedetomidineInfusionRateMlHr: this.dexmedetomidineInfusionRateMlHr,
+      gastricResidualVolumeMl: this.gastricResidualVolumeMl,
+      crpLevel: this.crpLevel,
+      nitrogenBalanceG: this.nitrogenBalanceG,
+      recordedAt: this.recordedAt?.getTime() ?? Date.now(),
+    };
+  }
 }

@@ -18,11 +18,12 @@ import Button from '../../../src/presentation/components/Button';
 import { getDatabase } from '../../../src/data/database';
 import { Q } from '@nozbe/watermelondb';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
 export default function ElectrolyteMonitoringScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -104,7 +105,7 @@ export default function ElectrolyteMonitoringScreen() {
         });
       });
 
-      showToast(isSafe ? 'تم حفظ فحص الإلكتروليتات بنجاح - القراءات آمنة' : '⚠️ تم حفظ الفحص! تنبيه: توجد قراءات حرجة تتطلب تصحيحاً فورياً', isSafe ? 'success' : 'warning');
+      showToast(isSafe ? 'تم حفظ فحص الإلكتروليتات بنجاح - القراءات آمنة' : '⚠️ تم حفظ الفحص! تنبيه: توجد قراءات حرجة تتطلب تصحيحاً فورياً', isSafe ? 'success' : 'error');
       
       // Reset form
       setPhosphorus('');

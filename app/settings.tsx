@@ -13,17 +13,19 @@ import {
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontFamilies } from '../src/presentation/theme';
+import { colors, spacing, fontFamilies, fontSizes, lineHeights } from '../src/presentation/theme';
 import ArabicText from '../src/presentation/components/ArabicText';
 import TextInputField from '../src/presentation/components/TextInputField';
 import DropdownField from '../src/presentation/components/DropdownField';
 import { useSettingsStore } from '../src/presentation/stores/settingsStore';
 import { useSecurityStore } from '../src/presentation/stores/securityStore';
 import { useAuthStore } from '../src/presentation/stores/authStore';
-import { usePatientStore } from '../src/presentation/stores/patientStore';
+import { useToastStore } from '../src/presentation/stores/toastStore';
 import Toast from '../src/presentation/components/Toast';
 import Animated from 'react-native-reanimated';
 import { useAppTheme } from '../src/presentation/hooks/useAppTheme';
+import * as DocumentPicker from 'expo-document-picker';
+import { exportBackup, importBackup } from '../src/data/services/BackupService';
 
 const AnimatedArabicText = Animated.createAnimatedComponent(ArabicText);
 
@@ -68,9 +70,9 @@ export default function SettingsScreen() {
   } = useSecurityStore();
 
   // Toast controls
-  const toast = usePatientStore((s) => s.toast);
-  const showToast = usePatientStore((s) => s.showToast);
-  const hideToast = usePatientStore((s) => s.hideToast);
+  const toast = useToastStore((s) => s.toast);
+  const showToast = useToastStore((s) => s.showToast);
+  const hideToast = useToastStore((s) => s.hideToast);
 
   // Form states (Active Profile Identity)
   const [formUsername, setFormUsername] = useState(username);
@@ -87,6 +89,12 @@ export default function SettingsScreen() {
   // Security states
   const [newPin, setNewPin] = useState('');
   const [showAddProfileModal, setShowAddProfileModal] = useState(false);
+
+  // Backup & Restore states
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [pendingRestoreUri, setPendingRestoreUri] = useState<string | null>(null);
 
   // New Profile Form states
   const [newProfileName, setNewProfileName] = useState('');
@@ -230,6 +238,61 @@ export default function SettingsScreen() {
   const handleSwitch = async (profileId: string) => {
     await switchProfile(profileId);
     showToast('🔄 تم تبديل الحساب وتهيئة النظام الآمن', 'info');
+  };
+
+  const handleBackup = async () => {
+    if (isBackingUp) return;
+    setIsBackingUp(true);
+    try {
+      await exportBackup();
+      showToast('📤 تم تصدير النسخة الاحتياطية بنجاح', 'success');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'فشل تصدير النسخة الاحتياطية';
+      showToast(message, 'error');
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestorePick = async () => {
+    if (isRestoring) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/octet-stream', 'application/x-sqlite3', '*/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets?.[0];
+      if (!file?.uri) {
+        showToast('لم يتم اختيار أي ملف.', 'error');
+        return;
+      }
+
+      setPendingRestoreUri(file.uri);
+      setShowRestoreConfirm(true);
+    } catch {
+      showToast('فشل اختيار الملف. يرجى المحاولة مرة أخرى.', 'error');
+    }
+  };
+
+  const handleRestoreConfirm = async () => {
+    if (!pendingRestoreUri || isRestoring) return;
+    setIsRestoring(true);
+    setShowRestoreConfirm(false);
+    try {
+      await importBackup(pendingRestoreUri);
+      showToast('✅ تم استعادة البيانات بنجاح. يرجى إعادة تشغيل التطبيق.', 'success');
+      setPendingRestoreUri(null);
+      router.replace('/');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'فشل استعادة البيانات';
+      showToast(message, 'error');
+      setPendingRestoreUri(null);
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   const { theme, animatedContainer, animatedCard, animatedText, animatedSubtext } = useAppTheme();
@@ -509,7 +572,90 @@ export default function SettingsScreen() {
 
             <CloudAccountSection />
           </Animated.View>
+
+          {/* Section 5: Backup & Restore card */}
+          <Animated.View style={[styles.card, animatedCard, { borderStartWidth: 4, borderStartColor: colors.accentTeal }]}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="archive-outline" size={22} color={colors.accentTeal} />
+              <AnimatedArabicText bold style={[styles.cardTitle, animatedText]}>النسخ الاحتياطي واستعادة البيانات</AnimatedArabicText>
+            </View>
+            <AnimatedArabicText style={[styles.cardSubtitle, animatedSubtext]}>
+              جميع البيانات مخزنة محلياً على جهازك. قم بتصدير نسخة احتياطية أو استعادة بيانات من نسخة سابقة. لا حاجة للاتصال بالإنترنت.
+            </AnimatedArabicText>
+
+            <TouchableOpacity
+              style={[styles.backupBtn, isBackingUp && { opacity: 0.6 }]}
+              onPress={handleBackup}
+              activeOpacity={0.8}
+              disabled={isBackingUp}
+            >
+              <Ionicons name="cloud-upload-outline" size={20} color={colors.primaryContrast} />
+              <ArabicText bold style={styles.backupBtnText}>
+                {isBackingUp ? 'جاري التصدير...' : '📤 تصدير نسخة احتياطية'}
+              </ArabicText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.restoreBtn, isRestoring && { opacity: 0.6 }]}
+              onPress={handleRestorePick}
+              activeOpacity={0.8}
+              disabled={isRestoring}
+            >
+              <Ionicons name="cloud-download-outline" size={20} color={colors.danger} />
+              <ArabicText bold style={styles.restoreBtnText}>
+                {isRestoring ? 'جاري الاستعادة...' : '📥 استعادة من نسخة احتياطية'}
+              </ArabicText>
+            </TouchableOpacity>
+          </Animated.View>
         </ScrollView>
+
+        {/* Modal: Restore Confirmation */}
+        <Modal
+          visible={showRestoreConfirm}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => {
+            setShowRestoreConfirm(false);
+            setPendingRestoreUri(null);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View style={[styles.modalContent, { maxWidth: 380 }, animatedCard]}>
+              <View style={styles.modalHeader}>
+                <Ionicons name="warning-outline" size={24} color={colors.warning} />
+                <AnimatedArabicText bold style={[styles.modalTitle, animatedText]}>تأكيد استعادة البيانات</AnimatedArabicText>
+              </View>
+              <View style={styles.modalScroll}>
+                <AnimatedArabicText style={[styles.restoreWarningText, animatedSubtext]}>
+                  سيتم استبدال جميع البيانات الحالية في التطبيق بالبيانات الموجودة في النسخة الاحتياطية.
+                </AnimatedArabicText>
+                <AnimatedArabicText style={[styles.restoreWarningText, animatedSubtext]}>
+                  لا يمكن التراجع عن هذه العملية. يرجى التأكد من عمل نسخة احتياطية للبيانات الحالية أولاً.
+                </AnimatedArabicText>
+              </View>
+              <View style={styles.restoreConfirmActions}>
+                <TouchableOpacity
+                  style={styles.restoreCancelBtn}
+                  onPress={() => {
+                    setShowRestoreConfirm(false);
+                    setPendingRestoreUri(null);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <ArabicText bold style={styles.restoreCancelBtnText}>إلغاء</ArabicText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.restoreConfirmBtn}
+                  onPress={handleRestoreConfirm}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primaryContrast} />
+                  <ArabicText bold style={styles.restoreConfirmBtnText}>تأكيد واستعادة البيانات</ArabicText>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </View>
+        </Modal>
 
         {/* Modal: Add Profile Form */}
         <Modal
@@ -1057,6 +1203,84 @@ const styles = StyleSheet.create({
   saveNewProfileBtnText: {
     color: '#F8FAFC',
     fontSize: 15,
+    fontFamily: fontFamilies.bold,
+  },
+  backupBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1B6B4A',
+    borderRadius: 8,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    minHeight: 48,
+  },
+  backupBtnText: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontFamily: fontFamilies.bold,
+  },
+  restoreBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E293B',
+    borderWidth: 1.5,
+    borderColor: colors.danger,
+    borderRadius: 8,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    minHeight: 48,
+  },
+  restoreBtnText: {
+    color: colors.danger,
+    fontSize: 15,
+    fontFamily: fontFamilies.bold,
+  },
+  restoreWarningText: {
+    fontSize: 14,
+    color: '#F8FAFCCC',
+    fontFamily: fontFamilies.medium,
+    lineHeight: fontSizes.sm * lineHeights.relaxed,
+    textAlign: 'right',
+  },
+  restoreConfirmActions: {
+    flexDirection: 'row-reverse',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  restoreCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#334155',
+    borderRadius: 8,
+    paddingVertical: spacing.md,
+    minHeight: 48,
+  },
+  restoreCancelBtnText: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontFamily: fontFamilies.bold,
+  },
+  restoreConfirmBtn: {
+    flex: 2,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.danger,
+    borderRadius: 8,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+    minHeight: 48,
+  },
+  restoreConfirmBtnText: {
+    color: '#F8FAFC',
+    fontSize: 14,
     fontFamily: fontFamilies.bold,
   },
 });

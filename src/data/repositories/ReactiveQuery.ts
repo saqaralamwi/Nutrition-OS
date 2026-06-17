@@ -3,7 +3,6 @@ import { map, debounceTime, catchError } from 'rxjs/operators';
 import { Q } from '@nozbe/watermelondb';
 import PatientModel from '../models/Patient';
 import VitalsRecordModel from '../models/VitalsRecord';
-import LabResultModel from '../models/LabResult';
 import LaboratoryRecordModel from '../models/LaboratoryRecord';
 import MedicationModel from '../models/Medication';
 import ICUAdmissionModel from '../models/ICUAdmission';
@@ -78,8 +77,8 @@ export function observeVitalsHistory(patientId: string, limit: number = 100): Ob
 /**
  * Watch lab results (unified laboratory_results table)
  */
-export function observeLabResults(patientId: string, limit: number = 100): Observable<LabResultModel[]> {
-  return watchQuery<LabResultModel>((db) => {
+export function observeLabResults(patientId: string, limit: number = 100): Observable<LaboratoryRecordModel[]> {
+  return watchQuery<LaboratoryRecordModel>((db) => {
     return db.get('laboratory_results').query(Q.where('patient_id', patientId));
   }).pipe(
     map((records) => {
@@ -90,7 +89,7 @@ export function observeLabResults(patientId: string, limit: number = 100): Obser
       });
       return sorted.slice(0, limit);
     }),
-    handleError([] as LabResultModel[])
+    handleError([] as LaboratoryRecordModel[])
   );
 }
 

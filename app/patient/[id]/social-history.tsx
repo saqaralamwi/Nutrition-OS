@@ -4,7 +4,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
-  Modal,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -14,13 +13,72 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop, fontFamilies } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
-import Button from '../../../src/presentation/components/Button';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
+
+/**
+ * YEMEN ADMINISTRATIVE MATRIX
+ * 22 Governorates with Districts and specialized Uzlah for Ibb.
+ */
+const YEMEN_DATA = {
+  "governorates": [
+    {
+      "id": 1,
+      "name": "إب",
+      "districts": [
+        "إب", "الرضمة", "السبرة", "السدة", "السياني", "الشعر",
+        "الظهار", "العدين", "القفر", "المخادر", "المشنة", "النادرة",
+        "بعدان", "جبلة", "حبيش", "حزم العدين", "ذي السفال", "فرع العدين",
+        "مذيخرة", "يريم"
+      ],
+      "uzlahs": {
+        "إب": ["عزلة ميتم", "عزلة شعب يافع", "عزلة جبل معود", "عزلة ثواب أعلى", "عزلة ثواب أسفل", "عزلة بني محرم", "عزلة بني مدسم", "عزلة بلادشار", "عزلة الحوج القبلي", "عزلة الحوج العدني", "عزلة المقاطن", "عزلة الروس", "عزلة البحريين", "عزلة الموية"],
+        "العدين": ["عزلة السارة", "عزلة بني زهير", "عزلة بلاد المليكي", "عزلة شلف", "عزلة الرضائي", "عزلة الغضيبة", "عزلة قصع حليان", "عزلة بني هات", "عزلة عردن", "عزلة غابر", "عزلة قداس", "عزلة قصل", "عزلة خباز", "عزلة الجبلين", "عزلة العمارنة", "عزلة بني عبد الله", "عزلة بني عمران"],
+        "فرع العدين": ["عزلة الأخماس", "عزلة العاقبة", "عزلة بني أحمد", "عزلة المزاحن", "عزلة الوزيرة"],
+        "حزم العدين": ["عزلة بني عوض", "عزلة يريس", "عزلة المعيظة", "عزلة الأبعون", "عزلة بني وائل"],
+        "بعدان": ["عزلة دلال", "عزلة حيسان", "عزلة ريمان", "عزلة بني عواض", "عزلة المنار", "عزلة الدعيس", "عزلة حرد", "عزلة سير", "عزلة ضابي", "عزلة شرف حاتم"],
+        "جبلة": ["عزلة جبلة", "عزلة وائل", "عزلة الثوابي", "عزلة المكتب", "عزلة انامر اعلى", "عزلة المعشار", "عزلة الوقش"],
+        "حبيش": ["عزلة شباع", "عزلة السلق", "عزلة جبل خضراء", "عزلة بني شبيب", "عزلة الناحية", "عزلة الفراعي"],
+        "ذي السفال": ["عزلة ذي السفال", "عزلة خنوة", "عزلة السيف", "عزلة رعاش", "عزلة ريده ورياد", "عزلة شوائط"],
+        "السياني": ["عزلة الدامغ", "عزلة النقيلين", "عزلة الأزارق", "عزلة الهادس", "عزلة عميد الداخل", "عزلة عميد الخارج"],
+        "السبرة": ["عزلة نجد الجماعي", "عزلة مطاية", "عزلة عروان", "عزلة عينان", "عزلة بلادالجماعي"],
+        "الشعر": ["عزلة العبس", "عزلة مقنع", "عزلة الأملؤك", "عزلة قطن"],
+        "النادرة": ["عزلة شعب المريسي", "عزلة شخب", "عزلة مقنع الأعلى", "عزلة الفجرة", "عزلة العود"],
+        "السدة": ["عزلة وادي عصام", "عزلة الزعلاء", "عزلة التويتي", "عزلة الاعماس", "عزلة جبل حجاج"],
+        "يريم": ["عزلة بني مسلم", "عزلة عراس", "عزلة خبان", "عزلة ارياب", "عزلة رعين"],
+        "الرضمة": ["عزلة كحلان", "عزلة يحصب", "عزلة البكرة", "عزلة أزال", "عزلة بني قيس"],
+        "المخادر": ["عزلة السحول", "عزلة بضعة", "عزلة الشرف", "عزلة جبل عقد", "عزلة الوادي"],
+        "القفر": ["عزلة بني سيف السافل", "عزلة بني سيف العالي", "عزلة بني مبارز", "عزلة الكرابة", "عزلة بني جماعة"],
+        "مذيخرة": ["عزلة مذيخرة", "عزلة خولان", "عزلة الأفيوش", "عزلة الجوالح", "عزلة حليان"],
+      }
+    },
+    { "id": 2, "name": "أمانة العاصمة", "districts": ["صنعاء القديمة", "شعوب", "أزال", "الصافية", "السبعين", "الوحدة", "التحرير", "معين", "الثورة", "بني الحارث"] },
+    { "id": 3, "name": "عدن", "districts": ["دار سعد", "الشيخ عثمان", "المنصورة", "البريقة", "التواهي", "المعلا", "صيرة", "خور مكسر"] },
+    { "id": 4, "name": "حضرموت", "districts": ["المكلا", "ثمود", "القف", "زمخ ومنوخ", "حجر", "العبر", "القطن", "شبام", "ساه", "سيئون", "تريم", "السوم", "الريدة وقصيعر", "الديس", "الشحر", "غيل بن يمين", "غيل باوزير", "دوعن", "حورة ووادي العين", "رخية", "عمد", "الضليعة", "يبعث", "حجر الصيعر", "بروم ميفع", "حريضة", "رماه", "أرياف المكلا"] },
+    { "id": 5, "name": "تعز", "districts": ["ماوية", "شرعب السلام", "شرعب الرونة", "مقبنة", "المخا", "ذو باب", "موزع", "جبل حبشي", "مشرعة وحدنان", "صبر الموادم", "المسراخ", "خدير", "الصلو", "الشمايتين", "الوازعية", "حيفان", "المظفر", "القاهرة", "صالة", "التعزية", "المعافر", "المواسط", "سامع"] },
+    { "id": 6, "name": "لحج", "districts": ["الحد", "الحوطة", "القبيطة", "المسيمير", "المضاربة والعارة", "المفلحي", "المقاطرة", "الملاح", "تبن", "حالمين", "حبيل جبر", "ردفان", "طور الباحة", "يافع", "يهر"] },
+    { "id": 7, "name": "الضالع", "districts": ["الأزارق", "الحشاء", "الحصين", "الشعيب", "الضالع", "جبن", "جحاف", "دمت", "قعطبة"] },
+    { "id": 8, "name": "ريمة", "districts": ["بلاد الطعام", "السلفية", "الجبين", "مزهر", "كسمة", "الجعفرية"] },
+    { "id": 9, "name": "صعدة", "districts": ["الحشوة", "الصفراء", "الظاهر", "باقم", "حيدان", "رازح", "ساقين", "سحار", "شداء", "صعدة", "غمر", "قطابر", "كتاف والبقع", "مجز", "منبة"] },
+    { "id": 10, "name": "شبوة", "districts": ["دهر", "الطلح", "جردان", "عرماء", "عسيلان", "عين", "بيحان", "مرخة العليا", "مرخة السفلى", "نصاب", "حطيب", "الصعيد", "عتق", "حبان", "الروضة", "ميفعة", "رضوم"] },
+    { "id": 11, "name": "البيضاء", "districts": ["نعمان", "ناطع", "مسورة", "الصومعة", "الزاهر", "ذي ناعم", "الطفة", "مكيراس", "مدينة البيضاء", "البيضاء", "السوادية", "ردمان", "رداع", "القريشية", "ولد ربيع", "العرش", "صباح", "الرياشية", "الشرية", "الملاجم"] },
+    { "id": 12, "name": "الحديدة", "districts": ["الزهرة", "اللحية", "كمران", "الصليف", "المنيرة", "القناوص", "الزيدية", "المغلاف", "الضحى", "باجل", "الحجيلة", "برع", "المراوعة", "الدريهمي", "السخنة", "المنصورية", "بيت الفقيه", "جبل راس", "حيس", "الخوخة", "الحوك", "الميناء", "الحالي", "زبيد", "الجراحي", "التحيتا"] },
+    { "id": 13, "name": "الجوف", "districts": ["خب والشعف", "الحميدات", "المطمة", "الزاهر", "الحزم", "المتون", "المصلوب", "الغيل", "الخلق", "برط العنان", "رجوزة", "خراب المراشي"] },
+    { "id": 14, "name": "المهرة", "districts": ["شحن", "حات", "حوف", "الغيظة", "منعر", "المسيلة", "سيحوت", "قشن", "حصوين"] },
+    { "id": 15, "name": "المحويت", "districts": ["شبام كوكبان", "الطويلة", "الرجم", "الخبت", "ملحان", "حفاش", "بني سعد", "مدينة المحويت", "المحويت"] },
+    { "id": 16, "name": "صنعاء", "districts": ["همدان", "أرحب", "نهم", "بني حشيش", "سنحان وبني بهلول", "بلاد الروس", "بني مطر", "الحيمة الداخلية", "الحيمة الخارجية", "مناخة", "صعفان", "خولان", "الطيال", "بني ضبيان", "الحصن", "جحانة"] },
+    { "id": 17, "name": "ذمار", "districts": ["الحداء", "جهران", "جبل الشرق", "مغرب عنس", "عتمـة", "وصاب العالي", "وصاب السافل", "مدينة ذمار", "ميفعة عنس", "عنس", "ضوران أنس", "المنار"] },
+    { "id": 18, "name": "حجة", "districts": ["بكيل المير", "حرض", "ميدي", "عبس", "حيران", "مستباء", "كشر", "الجميمة", "كحلان الشرف", "أفلح الشام", "خيران المحرق", "أسلم", "قفل شمر", "أفلح اليمن", "المحابشة", "المفتاح", "المغربة", "كحلان عفار", "شرس", "مبين", "الشاهل", "كعيدنة", "وضرة", "بني قيس الطور", "الشغادرة", "نجرة", "بني العوام", "مدينة حجة", "حجة", "وشحة", "قارة"] },
+    { "id": 19, "name": "مأرب", "districts": ["الجوبة", "العبدية", "بدبدة", "جبل مراد", "حريب", "حريب القرامش", "رحبة", "رغوان", "صرواح", "مأرب", "ماهلية", "مجزر", "مدغل الجدعان", "مدينة مأرب"] },
+    { "id": 20, "name": "أرخبيل سقطرى", "districts": ["حديبو", "قلنسيه وعبد الكوري"] },
+    { "id": 21, "name": "عمران", "districts": ["حرف سفيان", "حوث", "العشة", "قفلة عذر", "شهارة", "المدان", "صوير", "ظليمة حبور", "ذيبين", "خارف", "ريدة", "جبل عيال يزيد", "السودة", "السود", "عمران", "مسور", "ثلاء", "عيال سريح", "خمر", "بني صريم"] },
+    { "id": 22, "name": "أبين", "districts": ["المحفد", "مودية", "جيشان", "لودر", "سباح", "رصد", "سرار", "الوضيع", "أحور", "زنجبار", "خنفر"] }
+  ]
+};
 
 const MARITAL_OPTIONS = [
   { label: 'أعزب/عزباء', value: 'single' },
@@ -45,12 +103,6 @@ const OCCUPATION_OPTIONS = [
   { label: 'طالب', value: 'student' },
   { label: 'رب/ربة منزل', value: 'housewife' },
   { label: 'عاطل عن العمل', value: 'unemployed' },
-] as const;
-
-const LIVING_AREA_OPTIONS = [
-  { label: 'مدينة', value: 'urban' },
-  { label: 'ريف', value: 'rural' },
-  { label: 'بادية', value: 'desert' },
 ] as const;
 
 const FAMILY_STRUCTURE_OPTIONS = [
@@ -96,7 +148,6 @@ const socialHistorySchema = z.object({
   maritalStatus: z.string(),
   educationLevel: z.string(),
   occupation: z.string(),
-  livingArea: z.string(),
   familyStructure: z.string(),
   incomeLevel: z.string(),
   smoking: z.string().min(1, 'حقل التدخين مطلوب'),
@@ -119,6 +170,11 @@ export default function SocialHistoryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Cascading Region States
+  const [selectedGov, setSelectedGov] = useState('');
+  const [selectedDist, setSelectedDist] = useState('');
+  const [selectedUzlah, setSelectedUzlah] = useState('');
+
   const {
     control,
     handleSubmit,
@@ -133,7 +189,6 @@ export default function SocialHistoryScreen() {
       maritalStatus: '',
       educationLevel: '',
       occupation: '',
-      livingArea: '',
       familyStructure: '',
       incomeLevel: '',
       smoking: '',
@@ -163,11 +218,20 @@ export default function SocialHistoryScreen() {
       const useCase = new GetSocialHistoryUseCase();
       const data = await useCase.execute(patientId);
       if (data) {
+        // Parse livingArea if it follows the combined format
+        if (data.livingArea && data.livingArea.includes(' - ')) {
+          const parts = data.livingArea.split(' - ');
+          setSelectedGov(parts[0] || '');
+          setSelectedDist(parts[1] || '');
+          setSelectedUzlah(parts[2] || '');
+        } else if (data.livingArea) {
+          setSelectedGov(data.livingArea);
+        }
+
         reset({
           maritalStatus: data.maritalStatus || '',
           educationLevel: data.educationLevel || '',
           occupation: data.occupation || '',
-          livingArea: data.livingArea || '',
           familyStructure: data.familyStructure || '',
           incomeLevel: data.incomeLevel || '',
           smoking: data.smoking || '',
@@ -191,6 +255,12 @@ export default function SocialHistoryScreen() {
 
   const handleSave = async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
     let success = false;
+
+    // Construct final living area string
+    let finalLivingArea = selectedGov;
+    if (selectedDist) finalLivingArea += ` - ${selectedDist}`;
+    if (selectedGov === 'إب' && selectedUzlah) finalLivingArea += ` - ${selectedUzlah}`;
+
     await handleSubmit(async (values) => {
       try {
         setIsSaving(true);
@@ -201,7 +271,7 @@ export default function SocialHistoryScreen() {
           maritalStatus: values.maritalStatus || undefined,
           educationLevel: values.educationLevel || undefined,
           occupation: values.occupation || undefined,
-          livingArea: values.livingArea || undefined,
+          livingArea: finalLivingArea || undefined,
           familyStructure: values.familyStructure || undefined,
           incomeLevel: values.incomeLevel || undefined,
           smoking: values.smoking,
@@ -224,6 +294,13 @@ export default function SocialHistoryScreen() {
     })();
     return success ? patientId : undefined;
   };
+
+  const governorateOptions = YEMEN_DATA.governorates.map(gov => ({ label: gov.name, value: gov.name }));
+  const activeGov = YEMEN_DATA.governorates.find(gov => gov.name === selectedGov);
+  const districtOptions = activeGov?.districts.map(d => ({ label: d, value: d })) || [];
+  const uzlahOptions = (selectedGov === 'إب' && activeGov && (activeGov as any).uzlahs[selectedDist])
+    ? (activeGov as any).uzlahs[selectedDist].map((u: string) => ({ label: u, value: u }))
+    : [];
 
   const renderDropdown = (name: keyof SocialHistoryFormValues, label: string, options: readonly { label: string; value: string }[], required = false) => (
     <DropdownField
@@ -289,7 +366,46 @@ export default function SocialHistoryScreen() {
           {renderDropdown('maritalStatus', 'الحالة الاجتماعية', MARITAL_OPTIONS)}
           {renderDropdown('educationLevel', 'المستوى التعليمي', EDUCATION_OPTIONS)}
           {renderDropdown('occupation', 'المهنة', OCCUPATION_OPTIONS)}
-          {renderDropdown('livingArea', 'منطقة السكن', LIVING_AREA_OPTIONS)}
+          
+          <View style={styles.cascadingContainer}>
+            <ArabicText style={styles.fieldLabel}>منطقة السكن (Residence Area)</ArabicText>
+            
+            <DropdownField
+              label="المحافظة"
+              options={governorateOptions}
+              selectedValue={selectedGov}
+              onValueChange={(val) => {
+                setSelectedGov(val);
+                setSelectedDist('');
+                setSelectedUzlah('');
+              }}
+              placeholder="اختر المحافظة..."
+            />
+
+            {selectedGov !== '' && districtOptions.length > 0 && (
+              <DropdownField
+                label="المديرية"
+                options={districtOptions}
+                selectedValue={selectedDist}
+                onValueChange={(val) => {
+                  setSelectedDist(val);
+                  setSelectedUzlah('');
+                }}
+                placeholder="اختر المديرية..."
+              />
+            )}
+
+            {selectedGov === 'إب' && selectedDist !== '' && uzlahOptions.length > 0 && (
+              <DropdownField
+                label="العزلة (Sub-district)"
+                options={uzlahOptions}
+                selectedValue={selectedUzlah}
+                onValueChange={setSelectedUzlah}
+                placeholder="اختر العزلة..."
+              />
+            )}
+          </View>
+
           {renderDropdown('familyStructure', 'التركيبة الأسرية', FAMILY_STRUCTURE_OPTIONS)}
           {renderDropdown('incomeLevel', 'مستوى الدخل', INCOME_LEVEL_OPTIONS)}
         </View>
@@ -397,6 +513,21 @@ const styles = StyleSheet.create({
     borderStartWidth: 2,
     borderStartColor: colors.primaryLight,
     marginBottom: spacing.sm,
+  },
+  cascadingContainer: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: 8,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    textAlign: 'right',
+    fontFamily: fontFamilies.medium,
   },
   actions: {
     padding: spacing.md,

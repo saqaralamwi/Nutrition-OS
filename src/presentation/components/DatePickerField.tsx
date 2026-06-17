@@ -41,24 +41,7 @@ export default function DatePickerField({
   };
 
   const handlePress = () => {
-    if (Platform.OS === 'web') {
-      const input = document.createElement('input');
-      input.type = 'date';
-      if (maximumDate) {
-        input.max = maximumDate.toISOString().split('T')[0];
-      }
-      if (minimumDate) {
-        input.min = minimumDate.toISOString().split('T')[0];
-      }
-      input.value = value ? value.toISOString().split('T')[0] : '';
-      input.addEventListener('change', (e: Event) => {
-        const target = e.target as HTMLInputElement;
-        if (target.value) {
-          onChange(new Date(target.value + 'T00:00:00'));
-        }
-      });
-      input.click();
-    } else {
+    if (Platform.OS !== 'web') {
       const defaultDate = value || new Date();
       setSelectedDay(defaultDate.getDate());
       setSelectedMonth(defaultDate.getMonth() + 1);
@@ -100,21 +83,51 @@ export default function DatePickerField({
         {required && <Text style={styles.required}> *</Text>}
       </Text>
 
-      <TouchableOpacity
-        style={[styles.trigger, error && styles.triggerError]}
-        onPress={handlePress}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={[
-            styles.triggerText,
-            !value && styles.placeholderText,
-          ]}
+      {Platform.OS === 'web' ? (
+        <View style={[styles.trigger, error && styles.triggerError]}>
+          <input
+            type="date"
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              color: value ? colors.textPrimary : colors.textDisabled,
+              fontSize: '16px',
+              fontFamily: 'inherit',
+              textAlign: 'right',
+              outline: 'none',
+              width: '100%',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+            value={value ? value.toISOString().split('T')[0] : ''}
+            onChange={(e) => {
+              if (e.target.value) {
+                onChange(new Date(e.target.value + 'T00:00:00'));
+              }
+            }}
+            max={maximumDate ? maximumDate.toISOString().split('T')[0] : undefined}
+            min={minimumDate ? minimumDate.toISOString().split('T')[0] : undefined}
+          />
+          <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} style={{ marginLeft: spacing.xs }} />
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[styles.trigger, error && styles.triggerError]}
+          onPress={handlePress}
+          activeOpacity={0.7}
         >
-          {value ? formatDate(value) : 'اختر تاريخ...'}
-        </Text>
-        <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-      </TouchableOpacity>
+          <Text
+            style={[
+              styles.triggerText,
+              !value && styles.placeholderText,
+            ]}
+          >
+            {value ? formatDate(value) : 'اختر تاريخ...'}
+          </Text>
+          <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      )}
 
       {error && <Text style={styles.error}>{error}</Text>}
 

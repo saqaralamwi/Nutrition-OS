@@ -21,6 +21,7 @@ import DropdownField from '../../../src/presentation/components/DropdownField';
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { useSettingsStore } from '../../../src/presentation/stores/settingsStore';
 import { Patient } from '../../../src/domain/entities/Patient';
 import { ACTIVITY_LEVELS } from '../../../src/domain/entities/NutritionPlan';
@@ -65,7 +66,7 @@ const overrideSchema = z.object({
 export default function CalculationsScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
   
   // Dynamic default formula
   const { defaultEnergyFormula } = useSettingsStore();

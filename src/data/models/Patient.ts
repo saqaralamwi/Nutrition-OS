@@ -36,7 +36,6 @@ export default class Patient extends Model {
     interventions: { type: 'has_many' as const, foreignKey: 'patient_id' },
     follow_up_visits: { type: 'has_many' as const, foreignKey: 'patient_id' },
     attachments: { type: 'has_many' as const, foreignKey: 'patient_id' },
-    laboratory_records: { type: 'has_many' as const, foreignKey: 'patient_id' },
     discharge_summaries: { type: 'has_many' as const, foreignKey: 'patient_id' },
     meal_plans: { type: 'has_many' as const, foreignKey: 'patient_id' },
     nutritional_plans: { type: 'has_many' as const, foreignKey: 'patient_id' },

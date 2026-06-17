@@ -21,6 +21,7 @@ import DatePickerField from '../../../src/presentation/components/DatePickerFiel
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { formatSafeDate } from '../../../src/utils/date';
 import { getDatabase } from '../../../src/data/database';
 import { Q } from '@nozbe/watermelondb';
@@ -112,7 +113,7 @@ type DischargeFormValues = z.infer<typeof dischargeFormSchema>;
 export default function DischargeScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const showToast = usePatientStore((s) => s.showToast);
+  const showToast = useToastStore((s) => s.showToast);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);

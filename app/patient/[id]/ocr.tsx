@@ -1,52 +1,256 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
   Alert,
+  Dimensions,
+  SafeAreaView,
+  ScrollView,
   TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontFamilies, safeHeaderPaddingTop } from '../../../src/presentation/theme';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as Haptics from 'expo-haptics';
+import { colors, spacing, fontFamilies } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
-import Button from '../../../src/presentation/components/Button';
-import { usePatientStore } from '../../../src/presentation/stores/patientStore';
-import { getDatabase } from '../../../src/data/database';
-import { TestCatalogRepository } from '../../../src/data/repositories/TestCatalogRepository';
-import { InterpretLabResultUseCase } from '../../../src/domain/use-cases/InterpretLabResultUseCase';
 import { recognizeTextFromImage } from '../../../src/services/ocrService';
-import { ParsedLabResult, OcrRawData } from '../../../src/services/ocrTypes';
-import { analyzeOcrConfidence, getConfidenceColor, getConfidenceLabel, OcrConfidenceReport } from '../../../src/services/ocrConfidenceService';
-import * as ImagePicker from 'expo-image-picker';
-import WebCropperModal from './WebCropperModal';
+import { ParsedLabResult } from '../../../src/services/ocrTypes';
+import { getDatabase } from '../../../src/data/database';
+import { InterpretLabResultUseCase } from '../../../src/domain/use-cases/InterpretLabResultUseCase';
+import { TestCatalogRepository } from '../../../src/data/repositories/TestCatalogRepository';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
-// Premium dark theme colors matching screening.tsx
-const darkTheme = {
-  background: '#0F172A',
-  surface: '#1E293B',
-  surfaceSecondary: '#334155',
-  border: '#475569',
-  accent: '#10B981', // Emerald green
-  accentDark: '#059669',
-  textPrimary: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textDisabled: '#64748B',
-  white: '#FFFFFF',
-  success: '#10B981',
-  successBg: '#064E3B',
-  danger: '#F43F5E', // Crimson red
-  dangerBg: '#881337',
-  forestGreen: '#1B6B4A',
-  forestGreenDark: '#145237',
-  slateBlue: '#4775B3',
-};
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Robust medical lab report parser (fuzzy-cleaning regex engine)
-export function parseMedicalLabText(rawText: string): ParsedLabResult[] {
+// Optimized Mobile-First OCR Implementation
+export default function OCRScannerScreen() {
+  const { id: patientId } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const showToast = useToastStore((s) => s.showToast);
+  
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  
+  const [viewState, setViewState] = useState<'camera' | 'processing' | 'review'>('camera');
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [parsedResults, setParsedResults] = useState<ParsedLabResult[]>([]);
+  const [catalog, setCatalog] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load Test Catalog for interpreting results
+  useEffect(() => {
+    const loadCatalog = async () => {
+      const repo = new TestCatalogRepository();
+      const items = await repo.getAll();
+      setCatalog(items);
+    };
+    loadCatalog();
+  }, []);
+
+  const handleCapture = async () => {
+    if (!cameraRef.current) return;
+    
+    try {
+      // 1. Capture High-Resolution Image
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        skipProcessing: false,
+      });
+
+      if (!photo) throw new Error('Capture failed');
+      
+      setViewState('processing');
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      // 2. Mobile Memory Optimization (Critical for OOM prevention)
+      // Resize to a maximum width of 1200px while maintaining aspect ratio
+      const processed = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ resize: { width: 1200 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      setCapturedImage(processed.uri);
+
+      // 3. Native OCR Extraction
+      const ocrData = await recognizeTextFromImage(processed.uri);
+      const results = parseMedicalLabText(ocrData.text);
+      
+      setParsedResults(results);
+      
+      if (results.length > 0) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setViewState('review');
+      } else {
+        Alert.alert('تنبيه', 'لم يتم العثور على نتائج واضحة. يرجى التأكد من جودة الصورة وتوسيط التقرير.', [
+          { text: 'حاول مجدداً', onPress: () => setViewState('camera') }
+        ]);
+      }
+    } catch (error) {
+      console.error('[OCR Capture] Error:', error);
+      showToast('فشل معالجة الصورة', 'error');
+      setViewState('camera');
+    }
+  };
+
+  const handleSave = async () => {
+    if (parsedResults.length === 0) return;
+    
+    setIsSaving(true);
+    try {
+      const db = await getDatabase();
+      const interpreter = new InterpretLabResultUseCase();
+      
+      await db.write(async () => {
+        for (const res of parsedResults) {
+          const catalogItem = catalog.find(c => c.testNameEn.toLowerCase() === res.testName.toLowerCase());
+          const interpretation = interpreter.execute({
+            resultValue: res.resultValue,
+            referenceRangeLow: catalogItem?.defaultRangeLow ?? 0,
+            referenceRangeHigh: catalogItem?.defaultRangeHigh ?? 0,
+          });
+
+          await db.get('laboratory_results').create((record: any) => {
+            record._raw.patient_id = patientId;
+            record._raw.test_name = res.testName;
+            record._raw.value = res.resultValue;
+            record._raw.unit = catalogItem?.defaultUnit || '';
+            record._raw.normal_low = catalogItem?.defaultRangeLow ?? null;
+            record._raw.normal_high = catalogItem?.defaultRangeHigh ?? null;
+            record._raw.is_abnormal = false; // Required boolean
+            record._raw.recorded_by = 'Smart_OCR_Engine';
+            record._raw.created_at = Date.now();
+            record._raw.updated_at = Date.now();
+            record._raw.notes = 'مستخرج آلياً عبر المسح الذكي (Native Mobile OCR)';
+            record._raw.source = 'ocr';
+          });
+        }
+      });
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast('تم حفظ الفحوصات بنجاح 🎉', 'success');
+      router.back();
+    } catch (error) {
+      showToast('فشل حفظ البيانات', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!permission) return <View style={styles.centered}><ActivityIndicator color={colors.primary} /></View>;
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Ionicons name="camera" size={64} color={colors.textSecondary} />
+        <ArabicText bold style={styles.permissionText}>يجب منح صلاحية الكاميرا للمسح الذكي</ArabicText>
+        <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+          <ArabicText style={styles.permissionBtnText}>منح الصلاحية الآن</ArabicText>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {viewState === 'camera' && (
+        <View style={styles.cameraWrapper}>
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+            facing="back"
+            autofocus="on"
+            enableTorch={false}
+          >
+            {/* SCANNING OVERLAY GUIDES */}
+            <View style={styles.overlay}>
+              <View style={styles.topMask} />
+              <View style={styles.middleRow}>
+                <View style={styles.sideMask} />
+                <View style={styles.guideFrame}>
+                  <View style={[styles.corner, styles.topLeft]} />
+                  <View style={[styles.corner, styles.topRight]} />
+                  <View style={[styles.corner, styles.bottomLeft]} />
+                  <View style={[styles.corner, styles.bottomRight]} />
+                </View>
+                <View style={styles.sideMask} />
+              </View>
+              <View style={styles.bottomMask}>
+                <ArabicText style={styles.guideText}>ضع التقرير داخل المربع لتسهيل القراءة</ArabicText>
+                <TouchableOpacity style={styles.captureBtn} onPress={handleCapture}>
+                  <View style={styles.captureBtnInner} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </CameraView>
+          
+          <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+            <Ionicons name="close" size={28} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {viewState === 'processing' && (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <ArabicText style={styles.processingText}>جاري تحليل التقرير بدقة...</ArabicText>
+        </View>
+      )}
+
+      {viewState === 'review' && (
+        <View style={styles.reviewContainer}>
+          <View style={styles.reviewHeader}>
+            <ArabicText bold style={styles.reviewTitle}>مراجعة النتائج المستخرجة</ArabicText>
+            <ArabicText style={styles.reviewSubtitle}>تأكد من دقة الأرقام قبل الحفظ النهائي</ArabicText>
+          </View>
+          
+          <ScrollView style={styles.resultsList}>
+            {parsedResults.map((res, index) => (
+              <View key={index} style={styles.resultCard}>
+                <View style={styles.resultInfo}>
+                  <ArabicText bold style={styles.testName}>{res.testName}</ArabicText>
+                  <Ionicons name="flask" size={16} color={colors.primary} />
+                </View>
+                <TextInput
+                  style={styles.valueInput}
+                  keyboardType="decimal-pad"
+                  defaultValue={String(res.resultValue)}
+                  onChangeText={(val) => {
+                    const newRes = [...parsedResults];
+                    newRes[index].resultValue = parseFloat(val) || 0;
+                    setParsedResults(newRes);
+                  }}
+                />
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.reviewActions}>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.cancelBtn]} 
+              onPress={() => setViewState('camera')}
+            >
+              <ArabicText style={styles.cancelBtnText}>إلغاء</ArabicText>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.saveBtn]} 
+              onPress={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? <ActivityIndicator color="#FFF" /> : <ArabicText style={styles.saveBtnText}>حفظ النتائج</ArabicText>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+// Mobile-Optimized Parser (Robust Bilingual Regex Engine)
+function parseMedicalLabText(rawText: string): ParsedLabResult[] {
   const lines = rawText.split('\n');
   const results: ParsedLabResult[] = [];
   const seenTests = new Set<string>();
@@ -57,6 +261,7 @@ export function parseMedicalLabText(rawText: string): ParsedLabResult[] {
     { name: 'Potassium', regex: /(pot|potas|k\+)/i },
     { name: 'Sodium', regex: /(sod|sodium|na\+)/i },
     { name: 'HbA1c', regex: /(hba1c|hba|تراكمي)/i },
+    { name: 'Glucose', regex: /(gluc|sugar|سكر)/i },
   ];
 
   for (const line of lines) {
@@ -64,23 +269,13 @@ export function parseMedicalLabText(rawText: string): ParsedLabResult[] {
     if (!trimmed) continue;
 
     // 1. Sanitize the line
-    let cleanLine = trimmed;
-
-    // Split stuck letters/symbols and numbers (e.g. Urea88.0 -> Urea 88.0, 88.0mg -> 88.0 mg, K+5.5 -> K+ 5.5)
-    cleanLine = cleanLine
+    let cleanLine = trimmed
       .replace(/([a-zA-Z\u0600-\u06FF\+]+)(\d)/g, '$1 $2')
-      .replace(/(\d)([a-zA-Z\u0600-\u06FF\+]+)/g, '$1 $2');
+      .replace(/(\d)([a-zA-Z\u0600-\u06FF\+]+)/g, '$1 $2')
+      .replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ')
+      .replace(/\b\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\b/g, ' ')
+      .replace(/[^\w\s\.\+\u0600-\u06FF]/g, ' ');
 
-    // Remove parentheses/brackets and their contents (handles (Roch), (15-45), [15-45], etc.)
-    cleanLine = cleanLine.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ');
-
-    // Remove any standalone reference ranges (e.g. 15-45 or 15 - 45 or 3.5-5.1)
-    cleanLine = cleanLine.replace(/\b\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\b/g, ' ');
-
-    // Strip out confusing special characters (keep alphanumeric, space, dot, plus, and Arabic)
-    cleanLine = cleanLine.replace(/[^\w\s\.\+\u0600-\u06FF]/g, ' ');
-
-    // Convert into a clean array of tokens
     const tokens = cleanLine.split(/\s+/).filter(Boolean);
     if (tokens.length === 0) continue;
 
@@ -88,1076 +283,136 @@ export function parseMedicalLabText(rawText: string): ParsedLabResult[] {
     for (const def of testDefinitions) {
       if (seenTests.has(def.name)) continue;
 
-      // Find if any token matches the regex
       const matchIndex = tokens.findIndex((token) => def.regex.test(token));
       if (matchIndex !== -1) {
-        // Grab the first independent floating number in that specific text context after the match
         let detectedValue: number | null = null;
+        
+        // Check tokens after the match
         for (let i = matchIndex + 1; i < tokens.length; i++) {
-          const token = tokens[i];
-          if (/^\d+(?:\.\d+)?$/.test(token)) {
-            const val = parseFloat(token);
-            if (!isNaN(val)) {
-              detectedValue = val;
+          if (/^\d+(?:\.\d+)?$/.test(tokens[i])) {
+            detectedValue = parseFloat(tokens[i]);
+            break;
+          }
+        }
+
+        // Fallback to tokens before
+        if (detectedValue === null) {
+          for (let i = matchIndex - 1; i >= 0; i--) {
+            if (/^\d+(?:\.\d+)?$/.test(tokens[i])) {
+              detectedValue = parseFloat(tokens[i]);
               break;
             }
           }
         }
 
-        // If not found after, also check before, just in case (e.g. "88.0 Urea")
-        if (detectedValue === null) {
-          for (let i = matchIndex - 1; i >= 0; i--) {
-            const token = tokens[i];
-            if (/^\d+(?:\.\d+)?$/.test(token)) {
-              const val = parseFloat(token);
-              if (!isNaN(val)) {
-                detectedValue = val;
-                break;
-              }
-            }
-          }
-        }
-
         if (detectedValue !== null) {
-          results.push({
-            testName: def.name,
-            resultValue: detectedValue,
-          });
+          results.push({ testName: def.name, resultValue: detectedValue });
           seenTests.add(def.name);
-          break; // Match found for this line, proceed to next line
+          break;
         }
       }
     }
   }
-
   return results;
 }
 
-const MOCK_LAB_REPORT = `AL AMWI CLINICAL LABORATORY REPORT
-----------------------------------
-Patient Name: Case Study ID
-Date: ${new Date().toLocaleDateString('en-US')}
-Test Name          Result      Unit       Normal Range
-------------------------------------------------------
-Urea (Roch)l       88.0        mg/dL      15 - 45
-Creatinine         1.50        mg/dL      0.7 - 1.2
-Potassium (K+)     5.50        mmol/L     3.5 - 5.1
-Sodium (Na+)       142.0       mmol/L     136 - 145
-HbA1c (Trakomi)    7.20        %          4.0 - 5.7
-------------------------------------------------------
-End of Report`;
-
-const MANUAL_TESTS = [
-  { key: 'Urea', labelAr: 'اليوريا', labelEn: 'Urea', unit: 'mg/dL' },
-  { key: 'Creatinine', labelAr: 'الكرياتينين', labelEn: 'Creatinine', unit: 'mg/dL' },
-  { key: 'Potassium', labelAr: 'البوتاسيوم', labelEn: 'Potassium', unit: 'mmol/L' },
-  { key: 'Sodium', labelAr: 'الصوديوم', labelEn: 'Sodium', unit: 'mmol/L' },
-  { key: 'HbA1c', labelAr: 'السكري التراكمي', labelEn: 'HbA1c', unit: '%' },
-];
-
-export default function OCRScannerScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
-  const showToast = usePatientStore((s: any) => s.showToast);
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [catalog, setCatalog] = useState<any[]>([]);
-  const [rawText, setRawText] = useState('');
-  const [detectedResults, setDetectedResults] = useState<ParsedLabResult[]>([]);
-  const [confidenceReport, setConfidenceReport] = useState<OcrConfidenceReport | null>(null);
-  const [ocrRawData, setOcrRawData] = useState<OcrRawData | null>(null);
-  const [verifiedFields, setVerifiedFields] = useState<Set<string>>(new Set());
-  const [isSaving, setIsSaving] = useState(false);
-  const [scanAttempted, setScanAttempted] = useState(false);
-  const [manualValues, setManualValues] = useState<Record<string, string>>({
-    Urea: '',
-    Creatinine: '',
-    Potassium: '',
-    Sodium: '',
-    HbA1c: '',
-  });
-  const [activeInput, setActiveInput] = useState<string | null>(null);
-  const [webCropperVisible, setWebCropperVisible] = useState(false);
-  const [webImageSrc, setWebImageSrc] = useState('');
-
-  const fileInputRef = useRef<any>(null);
-  const inputRefs = useRef<Record<string, TextInput | null>>({});
-
-  // Load test catalog details
-  useEffect(() => {
-    async function loadCatalog() {
-      try {
-        const { TestCatalogRepository } = await import('../../../src/data/repositories/TestCatalogRepository');
-        const repo = new TestCatalogRepository();
-        const items = await repo.getAll();
-        setCatalog(items);
-      } catch (err) {
-        console.error('Failed to load test catalog:', err);
-      }
-    }
-    loadCatalog();
-  }, []);
-
-  const handleBack = useCallback(() => {
-    router.navigate(`/patient/${id}/laboratory`);
-  }, [router, id]);
-
-  const processImageSource = async (source: any) => {
-    try {
-      setIsLoading(true);
-      setDetectedResults([]);
-      setConfidenceReport(null);
-      setOcrRawData(null);
-      setVerifiedFields(new Set());
-      setScanAttempted(false);
-      showToast('⏳ جاري مسح وتحليل الفحوصات المخبرية ضوئياً...', 'info');
-
-      const ocrData = await recognizeTextFromImage(source);
-      setOcrRawData(ocrData);
-      setRawText(ocrData.text);
-
-      const parsed = parseMedicalLabText(ocrData.text);
-      const annotated: ParsedLabResult[] = parsed.map((r) => ({
-        ...r,
-        isVerified: false,
-      }));
-      setDetectedResults(annotated);
-
-      const report = analyzeOcrConfidence(ocrData, annotated, ocrData.text);
-      setConfidenceReport(report);
-
-      setScanAttempted(true);
-
-      // Pre-fill manual values
-      const prefilled: Record<string, string> = { Urea: '', Creatinine: '', Potassium: '', Sodium: '', HbA1c: '' };
-      for (const res of parsed) {
-        prefilled[res.testName] = String(res.resultValue);
-      }
-      setManualValues(prefilled);
-
-      if (parsed.length > 0) {
-        if (report.needsReview) {
-          showToast(`تم استخراج ${parsed.length} فحص - بعض النتائج بحاجة مراجعة`, 'warning');
-        } else {
-          showToast(`تم استخراج ${parsed.length} فحص بنجاح 🎉`, 'success');
-        }
-      } else {
-        showToast('لم يتم العثور على فحوصات مطابقة في الصورة', 'info');
-      }
-    } catch (err: any) {
-      console.error('OCR Error:', err);
-      showToast(err.message || 'فشل قراءة الصورة. تأكد من جودتها وحاول مجدداً.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle OCR file parsing (Web Only)
-  const handleFileChange = async (event: any) => {
-    const file = event.target?.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setWebImageSrc(reader.result as string);
-      setWebCropperVisible(true);
-    };
-    reader.readAsDataURL(file);
-
-    if (event.target) {
-      event.target.value = '';
-    }
-  };
-
-  const handleWebCropConfirm = (croppedDataUrl: string) => {
-    setWebCropperVisible(false);
-    processImageSource(croppedDataUrl);
-  };
-
-  // Run the regex parser manually on the entered raw text
-  const handleParseText = useCallback(() => {
-    if (!rawText.trim()) {
-      showToast('يرجى إدخال أو لصق نص التقرير أولاً للمحاكاة.', 'warning');
-      return;
-    }
-    setDetectedResults([]);
-    setConfidenceReport(null);
-    setVerifiedFields(new Set());
-
-    const parsed = parseMedicalLabText(rawText);
-    const annotated: ParsedLabResult[] = parsed.map((r) => ({
-      ...r,
-      isVerified: false,
-    }));
-    setDetectedResults(annotated);
-
-    const report = analyzeOcrConfidence(ocrRawData, annotated, rawText);
-    setConfidenceReport(report);
-    setScanAttempted(true);
-
-    // Pre-fill manual values
-    const prefilled: Record<string, string> = { Urea: '', Creatinine: '', Potassium: '', Sodium: '', HbA1c: '' };
-    for (const res of parsed) {
-      prefilled[res.testName] = String(res.resultValue);
-    }
-    setManualValues(prefilled);
-
-    if (parsed.length > 0) {
-      if (report.needsReview) {
-        showToast(`تم تحليل ${parsed.length} فحص - بعض النتائج بحاجة مراجعة`, 'warning');
-      } else {
-        showToast(`تم تحليل واستخراج ${parsed.length} فحص بنجاح 🎉`, 'success');
-      }
-    } else {
-      showToast('لم يتم العثور على فحوصات مطابقة في النص المدخل', 'info');
-    }
-  }, [rawText, ocrRawData, showToast]);
-
-  // Load Mock Report template
-  const handleLoadMock = useCallback(() => {
-    setDetectedResults([]);
-    setConfidenceReport(null);
-    setVerifiedFields(new Set());
-    setRawText(MOCK_LAB_REPORT);
-
-    const parsed = parseMedicalLabText(MOCK_LAB_REPORT);
-    const annotated: ParsedLabResult[] = parsed.map((r) => ({
-      ...r,
-      isVerified: false,
-    }));
-    setDetectedResults(annotated);
-
-    const report = analyzeOcrConfidence(null, annotated, MOCK_LAB_REPORT);
-    setConfidenceReport(report);
-    setScanAttempted(false);
-
-    // Pre-fill manual values
-    const prefilled: Record<string, string> = { Urea: '', Creatinine: '', Potassium: '', Sodium: '', HbA1c: '' };
-    for (const res of parsed) {
-      prefilled[res.testName] = String(res.resultValue);
-    }
-    setManualValues(prefilled);
-
-    showToast('تم تحميل نص التقرير الافتراضي واستخراج النتائج بنجاح 🧪', 'success');
-  }, [showToast]);
-
-  const toggleFieldVerification = useCallback((testName: string) => {
-    setVerifiedFields((prev) => {
-      const next = new Set(prev);
-      if (next.has(testName)) {
-        next.delete(testName);
-      } else {
-        next.add(testName);
-      }
-      return next;
-    });
-  }, []);
-
-  // Shared save handler executing direct WatermelonDB transactions
-  const saveLabResults = useCallback(async (resultsToSave: ParsedLabResult[], isManual = false) => {
-    if (resultsToSave.length === 0) {
-      showToast('لا توجد نتائج لحفظها.', 'warning');
-      return;
-    }
-
-    // Check if low-confidence fields need verification
-    if (!isManual && confidenceReport?.needsReview) {
-      const unverified = confidenceReport.lowConfidenceFields.filter(
-        (f) => !verifiedFields.has(f)
-      );
-      if (unverified.length > 0) {
-        showToast(
-          `يرجى تأكيد صحة النتائج التالية: ${unverified.join('، ')} قبل الحفظ`,
-          'warning'
-        );
-        return;
-      }
-    }
-
-    try {
-      setIsSaving(true);
-      const database = await getDatabase();
-      const interpreter = new InterpretLabResultUseCase();
-
-      await database.write(async () => {
-        // Loop through matched results and write them directly into WatermelonDB
-        for (const result of resultsToSave) {
-          const detectedTestName = result.testName;
-          const detectedTestValue = result.resultValue;
-
-          // Lookup catalogs to populate units, ranges & calculate interpretations
-          const catalogItem = catalog.find((c) => c.testNameEn === detectedTestName);
-          const unit = catalogItem?.defaultUnit || (
-            detectedTestName === 'Urea' || detectedTestName === 'Creatinine' ? 'mg/dL' :
-            detectedTestName === 'Potassium' || detectedTestName === 'Sodium' ? 'mmol/L' : '%'
-          );
-          const refLow = catalogItem?.defaultRangeLow ?? 0;
-          const refHigh = catalogItem?.defaultRangeHigh ?? 0;
-          const cLow = catalogItem?.criticalLowFactor ?? null;
-          const cHigh = catalogItem?.criticalHighFactor ?? null;
-
-          const interpretation = interpreter.execute({
-            resultValue: detectedTestValue,
-            referenceRangeLow: refLow,
-            referenceRangeHigh: refHigh,
-            criticalLowFactor: cLow,
-            criticalHighFactor: cHigh,
-          });
-
-          await database.get('lab_results').create((record: any) => {
-            record.patientId = id; // Linked to current patient profile
-            record.testName = detectedTestName; // e.g., "Urea"
-            record.resultValue = parseFloat(String(detectedTestValue)); // e.g., 88.0
-            record.recordedAt = new Date().toISOString();
-
-            // Required fields for schema validation:
-            record.unit = unit;
-            record.referenceRangeLow = refLow;
-            record.referenceRangeHigh = refHigh;
-            record.interpretation = interpretation;
-            record.testDate = new Date();
-            record.overrideReason = '';
-            const confidence = confidenceReport?.perFieldConfidence[detectedTestName];
-            const verified = verifiedFields.has(detectedTestName);
-            record.comments = isManual 
-              ? 'مضاف يدوياً عبر شبكة الإدخال السريع الاحتياطية' 
-              : verified
-                ? `مستخرج عبر OCR (مؤكد يدوياً، ثقة: ${confidence ?? '?'}%)`
-                : `مستخرج عبر OCR (ثقة: ${confidence ?? '?'}%)`;
-            record.attachedImagePath = '';
-            record.createdAt = new Date();
-            record.updatedAt = new Date();
-          });
-        }
-      });
-
-      showToast(`تم حفظ ${resultsToSave.length} فحص بنجاح في قاعدة البيانات! 🎉`, 'success');
-      router.navigate(`/patient/${id}/laboratory`);
-    } catch (err) {
-      console.error('Failed to save lab results:', err);
-      showToast('فشل حفظ نتائج الفحوصات في قاعدة البيانات.', 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [catalog, id, router, showToast]);
-
-  const handleSaveResults = useCallback(() => {
-    saveLabResults(detectedResults, false);
-  }, [detectedResults, saveLabResults]);
-
-  const handleSaveManualResults = useCallback(() => {
-    const resultsToSave: ParsedLabResult[] = [];
-    for (const test of MANUAL_TESTS) {
-      const valStr = manualValues[test.key];
-      if (valStr && valStr.trim() !== '') {
-        const val = parseFloat(valStr);
-        if (!isNaN(val)) {
-          resultsToSave.push({
-            testName: test.key,
-            resultValue: val,
-          });
-        }
-      }
-    }
-
-    if (resultsToSave.length === 0) {
-      showToast('يرجى إدخال قيمة فحص واحدة على الأقل للحفظ.', 'warning');
-      return;
-    }
-
-    saveLabResults(resultsToSave, true);
-  }, [manualValues, saveLabResults, showToast]);
-
-  const handleManualValueChange = useCallback((key: string, val: string) => {
-    setManualValues((prev) => ({ ...prev, [key]: val }));
-  }, []);
-
-  const triggerUploadClick = async () => {
-    if (Platform.OS === 'web') {
-      fileInputRef.current?.click();
-      return;
-    }
-
-    Alert.alert(
-      'مسح تقرير التحاليل',
-      'يرجى اختيار مصدر الصورة للتحليل التلقائي:',
-      [
-        {
-          text: 'التقاط صورة بالكاميرا 📸',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              showToast('يجب منح صلاحية الكاميرا لتصوير التقرير الطبي.', 'warning');
-              return;
-            }
-
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: 'images',
-              allowsEditing: true,
-              quality: 0.9,
-            });
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-              const uri = result.assets[0].uri;
-              processImageSource(uri);
-            }
-          },
-        },
-        {
-          text: 'اختيار من الاستوديو 🖼️',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              showToast('يجب منح صلاحية الوصول للاستوديو لاختيار الصورة.', 'warning');
-              return;
-            }
-
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: 'images',
-              allowsEditing: true,
-              quality: 0.9,
-            });
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-              const uri = result.assets[0].uri;
-              processImageSource(uri);
-            }
-          },
-        },
-        {
-          text: 'إلغاء',
-          style: 'cancel',
-        },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  return (
-    <View style={styles.flex}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <Ionicons name="arrow-forward" size={24} color={darkTheme.white} />
-          </TouchableOpacity>
-          <ArabicText bold style={styles.headerTitle}>
-            المسح الذكي والتحليل التلقائي للفحوصات (OCR)
-          </ArabicText>
-        </View>
-      </View>
-
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        {/* Info Box */}
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle-outline" size={24} color={darkTheme.accent} />
-          <View style={styles.infoTextContainer}>
-            <ArabicText bold style={styles.infoTitle}>
-              كيف تعمل ميزة المسح الذكي؟
-            </ArabicText>
-            <ArabicText style={styles.infoText}>
-              قم برفع صورة تقرير التحاليل، أو الصق النص المستخرج من التقرير في المربع بالأسفل. سيقوم المحرك الذكي بقراءة المكونات واستخراج قيم: اليوريا، الكرياتينين، التراكمي، البوتاسيوم، والصوديوم تلقائياً وحفظها دون إدخال يدوي.
-            </ArabicText>
-          </View>
-        </View>
-
-        {/* hidden web input file */}
-        {Platform.OS === 'web' && (
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            accept="image/*"
-            onChange={handleFileChange}
-          />
-        )}
-
-        {/* Action Panel */}
-        <View style={styles.card}>
-          <ArabicText bold style={styles.cardTitle}>
-            الخيار الأول: مسح ملف الصورة (OCR)
-          </ArabicText>
-          <TouchableOpacity
-            style={[styles.uploadBox, isLoading && styles.uploadBoxDisabled]}
-            onPress={triggerUploadClick}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="large" color={darkTheme.accent} />
-            ) : (
-              <Ionicons name="cloud-upload-outline" size={48} color={darkTheme.textSecondary} />
-            )}
-            <ArabicText bold style={styles.uploadText}>
-              {isLoading ? 'جاري تحليل الصورة والتعرف على النصوص...' : 'اضغط لاختيار صورة تقرير التحاليل (الويب)'}
-            </ArabicText>
-            <ArabicText style={styles.uploadSubtext}>
-              يدعم تنسيقات JPG, PNG
-            </ArabicText>
-          </TouchableOpacity>
-        </View>
-
-        {/* Text Parser Simulator */}
-        <View style={styles.card}>
-          <View style={styles.rowBetween}>
-            <ArabicText bold style={styles.cardTitle}>
-              الخيار الثاني: محاكي وقارئ النصوص
-            </ArabicText>
-            <TouchableOpacity style={styles.mockBtn} onPress={handleLoadMock}>
-              <Ionicons name="flask-outline" size={16} color={darkTheme.white} />
-              <ArabicText style={styles.mockBtnText}>تحميل تقرير افتراضي</ArabicText>
-            </TouchableOpacity>
-          </View>
-          
-          <ArabicText style={styles.inputLabel}>
-            أدخل أو الصق نص تقرير المختبر هنا:
-          </ArabicText>
-          <TextInput
-            style={styles.textArea}
-            multiline
-            numberOfLines={6}
-            value={rawText}
-            onChangeText={setRawText}
-            placeholder="مثال:
-Urea: 88.0 mg/dL (15-45)
-Creatinine 1.5 mg/dL"
-            placeholderTextColor={darkTheme.textDisabled}
-          />
-
-          <TouchableOpacity
-            style={styles.parseButton}
-            onPress={handleParseText}
-          >
-            <Ionicons name="thunderstorm-outline" size={20} color={darkTheme.white} />
-            <ArabicText bold style={styles.parseButtonText}>
-              تشغيل المحرك والتحليل الذكي للنصوص
-            </ArabicText>
-          </TouchableOpacity>
-        </View>
-
-        {/* Results Preview */}
-        {detectedResults.length > 0 ? (
-          <View style={[styles.card, styles.resultsCard]}>
-            <View style={styles.resultsHeaderRow}>
-              <ArabicText bold style={styles.resultsTitle}>
-                التحاليل المكتشفة تلقائياً:
-              </ArabicText>
-              {confidenceReport && (
-                <View style={[
-                  styles.confidenceBadge,
-                  { backgroundColor: confidenceReport.needsReview ? `${getConfidenceColor(confidenceReport.overallConfidence)}20` : `${darkTheme.accent}20` }
-                ]}>
-                  <View style={[styles.confidenceDot, { backgroundColor: getConfidenceColor(confidenceReport.overallConfidence) }]} />
-                  <ArabicText style={[
-                    styles.confidenceText,
-                    { color: getConfidenceColor(confidenceReport.overallConfidence) }
-                  ]}>
-                    {getConfidenceLabel(confidenceReport.overallConfidence)} ({confidenceReport.overallConfidence}%)
-                  </ArabicText>
-                </View>
-              )}
-            </View>
-
-            {confidenceReport?.needsReview && (
-              <View style={styles.reviewBanner}>
-                <Ionicons name="warning-outline" size={18} color="#F59E0B" />
-                <ArabicText style={styles.reviewBannerText}>
-                  بعض النتائج بحاجة تأكيد يدوي قبل الحفظ. يرجى مراجعة الحقول ذات الثقة المنخفضة.
-                </ArabicText>
-              </View>
-            )}
-            
-            {detectedResults.map((res, index) => {
-              const catalogItem = catalog.find((c) => c.testNameEn === res.testName);
-              const label = catalogItem ? catalogItem.testNameAr : res.testName;
-              const unit = catalogItem ? catalogItem.defaultUnit : '';
-              const fieldConf = confidenceReport?.perFieldConfidence[res.testName] ?? 100;
-              const isLowConf = fieldConf < 60;
-              const isVerified = verifiedFields.has(res.testName);
-
-              return (
-                <View key={index} style={[
-                  styles.resultItem,
-                  isLowConf && !isVerified && styles.resultItemLowConf,
-                  isVerified && styles.resultItemVerified,
-                ]}>
-                  <TouchableOpacity
-                    style={styles.resultRow}
-                    onPress={() => isLowConf && toggleFieldVerification(res.testName)}
-                    activeOpacity={isLowConf ? 0.7 : 1}
-                  >
-                    {isVerified ? (
-                      <Ionicons name="checkmark-circle" size={20} color={darkTheme.accent} />
-                    ) : isLowConf ? (
-                      <Ionicons name="warning-outline" size={20} color="#F59E0B" />
-                    ) : (
-                      <Ionicons name="checkmark-circle-outline" size={20} color={darkTheme.accent} />
-                    )}
-                    <ArabicText bold style={styles.resultTestName}>
-                      {label} ({res.testName})
-                    </ArabicText>
-                    <View style={[styles.confidenceDotSmall, { backgroundColor: getConfidenceColor(fieldConf) }]} />
-                  </TouchableOpacity>
-
-                  <View style={styles.resultRight}>
-                    <ArabicText bold style={styles.resultValueText}>
-                      {res.resultValue} <ArabicText style={styles.resultUnitText}>{unit}</ArabicText>
-                    </ArabicText>
-                    {isLowConf && !isVerified && (
-                      <TouchableOpacity
-                        style={styles.confirmBtn}
-                        onPress={() => toggleFieldVerification(res.testName)}
-                      >
-                        <ArabicText bold style={styles.confirmBtnText}>تأكيد</ArabicText>
-                      </TouchableOpacity>
-                    )}
-                    {isVerified && (
-                      <ArabicText style={styles.verifiedLabel}>مؤكد</ArabicText>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                confidenceReport?.needsReview && verifiedFields.size < confidenceReport.lowConfidenceFields.length && styles.saveButtonDisabled
-              ]}
-              onPress={handleSaveResults}
-              disabled={isSaving || (confidenceReport?.needsReview ?? false) && verifiedFields.size < (confidenceReport?.lowConfidenceFields.length ?? 0)}
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Ionicons name="save-outline" size={22} color="#FFF" />
-              )}
-              <ArabicText bold style={styles.saveButtonText}>
-                {isSaving ? 'جاري تخزين الفحوصات...' : 'حفظ النتائج المستخرجة تلقائياً في السجل'}
-              </ArabicText>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.gridCard}>
-            <View style={styles.gridHeader}>
-              <Ionicons name="apps-outline" size={20} color={darkTheme.accent} />
-              <ArabicText bold style={styles.gridTitle}>
-                لوحة الإدخال السريع الاحتياطية (Manual Override Grid)
-              </ArabicText>
-            </View>
-            
-            {scanAttempted ? (
-              <View style={styles.scanFailedBox}>
-                <Ionicons name="warning" size={20} color={darkTheme.white} />
-                <ArabicText style={styles.scanFailedText}>
-                  لم يتم استخراج فحوصات تلقائياً بسبب جودة الصورة أو وجود أختام. يمكنك كتابة القيم في الشبكة أدناه لحفظها فوراً.
-                </ArabicText>
-              </View>
-            ) : (
-              <ArabicText style={styles.gridSubText}>
-                يمكنك استخدام لوحة الإدخال السريع هذه لكتابة وتعديل قيم الفحوصات يدوياً وبسرعة:
-              </ArabicText>
-            )}
-
-            <View style={styles.gridContainer}>
-              {MANUAL_TESTS.map((test) => {
-                const catalogItem = catalog.find((c) => c.testNameEn === test.key);
-                const labelAr = catalogItem ? catalogItem.testNameAr : test.labelAr;
-                const unit = catalogItem ? catalogItem.defaultUnit : test.unit;
-                const isFocused = activeInput === test.key;
-
-                return (
-                  <TouchableOpacity
-                    key={test.key}
-                    style={[
-                      styles.manualCard,
-                      isFocused && styles.manualCardFocused
-                    ]}
-                    activeOpacity={0.9}
-                    onPress={() => inputRefs.current[test.key]?.focus()}
-                  >
-                    <View style={styles.manualCardRight}>
-                      <View style={styles.accentIndicator} />
-                      <View style={styles.testMeta}>
-                        <ArabicText bold style={styles.manualTestAr}>
-                          {labelAr}
-                        </ArabicText>
-                        <ArabicText style={styles.manualTestEn}>
-                          {test.labelEn}
-                        </ArabicText>
-                      </View>
-                    </View>
-
-                    <View style={styles.manualCardLeft}>
-                      <TextInput
-                        ref={(el) => {
-                          inputRefs.current[test.key] = el;
-                        }}
-                        style={[
-                          styles.manualInput,
-                          isFocused && styles.manualInputFocused
-                        ]}
-                        value={manualValues[test.key]}
-                        onChangeText={(val) => handleManualValueChange(test.key, val)}
-                        keyboardType="numeric"
-                        placeholder="--"
-                        placeholderTextColor={darkTheme.textDisabled}
-                        onFocus={() => setActiveInput(test.key)}
-                        onBlur={() => setActiveInput(null)}
-                      />
-                      <ArabicText style={styles.manualUnit}>{unit}</ArabicText>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <TouchableOpacity
-              style={styles.saveManualButton}
-              onPress={handleSaveManualResults}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Ionicons name="cloud-done-outline" size={22} color="#FFF" />
-              )}
-              <ArabicText bold style={styles.saveButtonText}>
-                {isSaving ? 'جاري تخزين الفحوصات...' : 'حفظ وتحديث المؤشرات'}
-              </ArabicText>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.spacer} />
-      </ScrollView>
-
-      <WebCropperModal
-        visible={webCropperVisible}
-        imageSrc={webImageSrc}
-        onClose={() => setWebCropperVisible(false)}
-        onCrop={handleWebCropConfirm}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  // --- Confidence & Verification styles ---
-  resultsHeaderRow: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+  container: { flex: 1, backgroundColor: '#000' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+  cameraWrapper: { flex: 1 },
+  camera: { flex: 1 },
+  overlay: { flex: 1 },
+  topMask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  middleRow: { flexDirection: 'row', height: 250 },
+  sideMask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  guideFrame: {
+    width: SCREEN_WIDTH * 0.8,
+    borderWidth: 0,
+    position: 'relative',
   },
-  confidenceBadge: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  confidenceDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  confidenceDotSmall: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginLeft: 4,
-  },
-  confidenceText: {
-    fontSize: 11,
-    fontFamily: fontFamilies.bold,
-  },
-  reviewBanner: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderRadius: 8,
-    padding: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  reviewBannerText: {
-    fontSize: 12,
-    color: '#F59E0B',
-    fontFamily: fontFamilies.medium,
-    flex: 1,
-    textAlign: 'right',
-  },
-  resultItemLowConf: {
-    borderColor: 'rgba(245, 158, 11, 0.5)',
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-  },
-  resultItemVerified: {
-    borderColor: 'rgba(16, 185, 129, 0.5)',
-  },
-  resultRight: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  confirmBtn: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-  },
-  confirmBtnText: {
-    color: '#10B981',
-    fontSize: 12,
-    fontFamily: fontFamilies.bold,
-  },
-  verifiedLabel: {
-    color: '#10B981',
-    fontSize: 11,
-    fontFamily: fontFamilies.bold,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  flex: { flex: 1, backgroundColor: darkTheme.background },
-  container: { flex: 1 },
-  scrollContent: { padding: spacing.md, gap: spacing.md },
-  header: {
-    backgroundColor: colors.primary,
-    paddingTop: safeHeaderPaddingTop,
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: darkTheme.border,
-  },
-  headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
-  backButton: { padding: spacing.xs },
-  headerTitle: { fontSize: 18, color: darkTheme.white, flex: 1, textAlign: 'right' },
-  infoCard: {
-    flexDirection: 'row-reverse',
-    backgroundColor: darkTheme.surface,
-    padding: spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: darkTheme.border,
-    gap: spacing.sm,
-  },
-  infoTextContainer: { flex: 1 },
-  infoTitle: { fontSize: 15, color: darkTheme.white, textAlign: 'right', marginBottom: 4 },
-  infoText: { fontSize: 13, color: darkTheme.textSecondary, textAlign: 'right', lineHeight: 18 },
-  card: {
-    backgroundColor: darkTheme.surface,
-    padding: spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: darkTheme.border,
-    gap: spacing.sm,
-  },
-  cardTitle: { fontSize: 16, color: darkTheme.white, textAlign: 'right' },
-  rowBetween: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  mockBtn: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: darkTheme.slateBlue,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 4,
-  },
-  mockBtnText: { color: darkTheme.white, fontSize: 12 },
-  inputLabel: { fontSize: 13, color: darkTheme.textSecondary, textAlign: 'right' },
-  textArea: {
-    backgroundColor: darkTheme.surfaceSecondary,
-    color: darkTheme.textPrimary,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: darkTheme.border,
-    padding: spacing.sm,
-    fontSize: 14,
-    textAlign: 'left',
-    minHeight: 120,
-    fontFamily: 'System',
-  },
-  parseButton: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: darkTheme.slateBlue,
-    padding: spacing.md,
-    borderRadius: 8,
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  parseButtonText: { color: darkTheme.white, fontSize: 14 },
-  uploadBox: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: darkTheme.border,
-    borderRadius: 8,
-    padding: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: darkTheme.surfaceSecondary,
-    minHeight: 140,
-    gap: spacing.sm,
-  },
-  uploadBoxDisabled: { opacity: 0.6 },
-  uploadText: { fontSize: 14, color: darkTheme.textPrimary, textAlign: 'center' },
-  uploadSubtext: { fontSize: 12, color: darkTheme.textDisabled },
-  resultsCard: { borderColor: darkTheme.accent, borderWidth: 1.5 },
-  resultsTitle: { fontSize: 15, color: darkTheme.white, textAlign: 'right', marginBottom: spacing.xs },
-  resultItem: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: darkTheme.surfaceSecondary,
-    padding: spacing.sm,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: darkTheme.border,
-    marginBottom: spacing.xs,
-  },
-  resultRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
-  resultTestName: { fontSize: 14, color: darkTheme.textPrimary },
-  resultValueText: { fontSize: 16, color: darkTheme.white },
-  resultUnitText: { fontSize: 12, color: darkTheme.textSecondary },
-  saveButton: {
-    flexDirection: 'row-reverse',
-    backgroundColor: darkTheme.forestGreen,
-    padding: spacing.md,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  saveButtonText: { color: darkTheme.white, fontSize: 14 },
-  spacer: { height: 60 },
-  gridCard: {
-    backgroundColor: darkTheme.surface,
-    padding: spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: darkTheme.border,
-    gap: spacing.sm,
-  },
-  gridHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  gridTitle: {
-    fontSize: 16,
-    color: darkTheme.white,
-    textAlign: 'right',
-  },
-  gridSubText: {
-    fontSize: 13,
-    color: darkTheme.textSecondary,
-    textAlign: 'right',
-    lineHeight: 18,
-    marginBottom: spacing.xs,
-  },
-  scanFailedBox: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: darkTheme.dangerBg,
-    padding: spacing.sm,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: darkTheme.danger,
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  scanFailedText: {
-    fontSize: 12,
-    color: darkTheme.white,
-    textAlign: 'right',
-    flex: 1,
-  },
-  gridContainer: {
-    gap: spacing.sm,
-  },
-  manualCard: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    minHeight: 64,
-  },
-  manualCardFocused: {
+  corner: {
+    position: 'absolute',
+    width: 25,
+    height: 25,
     borderColor: '#10B981',
+    borderWidth: 4,
   },
-  manualCardRight: {
-    flexDirection: 'row-reverse',
+  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
+  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
+  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
+  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
+  bottomMask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', paddingTop: 20 },
+  guideText: { color: '#FFF', fontSize: 13, marginBottom: 30 },
+  captureBtn: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 4,
+    borderColor: '#FFF',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.sm,
   },
-  accentIndicator: {
-    width: 4,
-    height: 36,
-    backgroundColor: '#1B6B4A',
-    borderRadius: 2,
+  captureBtnInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF',
   },
-  testMeta: {
-    alignItems: 'flex-end',
-  },
-  manualTestAr: {
-    fontSize: 15,
-    color: darkTheme.white,
-  },
-  manualTestEn: {
-    fontSize: 12,
-    color: darkTheme.textSecondary,
-  },
-  manualCardLeft: {
-    flexDirection: 'row-reverse',
+  closeBtn: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xs,
   },
-  manualInput: {
-    backgroundColor: '#0F172A',
-    color: darkTheme.white,
-    borderRadius: 6,
+  processingText: { color: '#FFF', marginTop: 20, fontSize: 14 },
+  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: '#FFF' },
+  permissionText: { textAlign: 'center', marginTop: 20, color: colors.textPrimary },
+  permissionBtn: { marginTop: 30, backgroundColor: colors.primary, paddingHorizontal: 30, paddingVertical: 12, borderRadius: 25 },
+  permissionBtnText: { color: '#FFF', fontWeight: 'bold' },
+  reviewContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  reviewHeader: { padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  reviewTitle: { fontSize: 18, color: '#1E293B', textAlign: 'right' },
+  reviewSubtitle: { fontSize: 13, color: '#64748B', textAlign: 'right', marginTop: 4 },
+  resultsList: { flex: 1, padding: 15 },
+  resultCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 10,
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E8F0',
+  },
+  resultInfo: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  testName: { fontSize: 15, color: '#1E293B' },
+  valueInput: {
     width: 80,
-    height: 36,
-    textAlign: 'center',
-    fontSize: 15,
-    fontFamily: 'System',
-    paddingHorizontal: spacing.xs,
-  },
-  manualInputFocused: {
-    borderColor: '#10B981',
-    backgroundColor: '#1E293B',
-  },
-  manualUnit: {
-    fontSize: 12,
-    color: darkTheme.textSecondary,
-    width: 50,
-    textAlign: 'left',
-  },
-  saveManualButton: {
-    flexDirection: 'row-reverse',
-    backgroundColor: '#1B6B4A',
-    padding: spacing.md,
+    height: 40,
+    backgroundColor: '#F1F5F9',
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.primary,
   },
+  reviewActions: {
+    padding: 20,
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#FFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  actionBtn: { flex: 1, height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  cancelBtn: { backgroundColor: '#F1F5F9' },
+  cancelBtnText: { color: '#64748B', fontWeight: 'bold' },
+  saveBtn: { backgroundColor: colors.primary },
+  saveBtnText: { color: '#FFF', fontWeight: 'bold' },
 });

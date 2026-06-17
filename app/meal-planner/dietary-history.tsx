@@ -1,11 +1,28 @@
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { useState, useEffect } from 'react';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import DietaryHistoryAssessment from '../../src/presentation/components/assessment/DietaryHistoryAssessment';
+import { FoodRepository } from '../../src/data/repositories/FoodRepository';
+import { IFoodExchange } from '../../src/data/types/meal_planner';
 import { colors } from '../../src/presentation/theme';
 
 export default function DietaryHistoryRoute() {
   const { patientId } = useLocalSearchParams<{ patientId?: string }>();
+  const [masterFoods, setMasterFoods] = useState<IFoodExchange[]>([]);
   const router = useRouter();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const results = await FoodRepository.getAllExchanges();
+        const mapped = results.map(FoodRepository.mapExchangeToInterface);
+        setMasterFoods(mapped);
+      } catch (err) {
+        console.error('Failed to load master foods:', err);
+      }
+    };
+    load();
+  }, []);
 
   if (!patientId) {
     return (
@@ -42,7 +59,7 @@ export default function DietaryHistoryRoute() {
       />
       <DietaryHistoryAssessment
         patientId={patientId}
-        masterFoods={[]}
+        masterFoods={masterFoods}
         targets={{ calories: 0, protein: 0, carbs: 0, fat: 0, fluidMl: 0 }}
         onSaveSession={async () => {
           // DB commit handled externally
@@ -53,10 +70,10 @@ export default function DietaryHistoryRoute() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.surfaceSecondary },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, color: colors.text, fontFamily: 'ThmanyahSans-Bold', textAlign: 'center' },
+  emptyTitle: { fontSize: 20, color: colors.textPrimary, fontFamily: 'ThmanyahSans-Bold', textAlign: 'center' },
   headerNavLink: {
     color: colors.primaryContrast,
     fontFamily: 'ThmanyahSans-Bold',
