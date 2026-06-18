@@ -1,6 +1,27 @@
 import { Observable } from 'rxjs';
 import { Model, Query, Q } from '@nozbe/watermelondb';
 import { getDatabase } from './index';
+import PatientModel from '../models/Patient';
+
+/**
+ * Watch all patients reactively, sorted by creation date (newest first).
+ * Automatically emits new results on any insert/update/delete in the patients table.
+ */
+export function observePatients(whereClause?: Record<string, any>): Observable<PatientModel[]> {
+  return watchQuery<PatientModel>((db) => {
+    let q = db.get('patients').query(Q.sortBy('created_at', Q.desc));
+    if (whereClause) {
+      const conditions: any[] = [Q.sortBy('created_at', Q.desc)];
+      Object.keys(whereClause).forEach((key) => {
+        conditions.push(Q.where(key, whereClause[key]));
+      });
+      if (conditions.length > 1) {
+        q = db.get('patients').query(...conditions);
+      }
+    }
+    return q;
+  });
+}
 
 /**
  * Watch a WatermelonDB query reactively.

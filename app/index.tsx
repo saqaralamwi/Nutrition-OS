@@ -10,10 +10,10 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { usePatientStore } from '../src/presentation/stores/patientStore';
+import { usePatients } from '../src/presentation/stores/patientStore';
 import { useToastStore } from '../src/presentation/stores/toastStore';
 import { useSettingsStore } from '../src/presentation/stores/settingsStore';
 import PatientCard from '../src/presentation/components/PatientCard';
@@ -27,16 +27,7 @@ const LIST_ITEM_HEIGHT = 110;
 
 export default function PatientListScreen() {
   const router = useRouter();
-  const patients = usePatientStore((s) => s.patients);
-  const isLoading = usePatientStore((s) => s.isLoading);
-  const error = usePatientStore((s) => s.error);
-  const totalCount = usePatientStore((s) => s.totalCount);
-  const activeCount = usePatientStore((s) => s.activeCount);
-  const sortOrder = usePatientStore((s) => s.sortOrder);
-  const searchQuery = usePatientStore((s) => s.searchQuery);
-  const loadPatients = usePatientStore((s) => s.loadPatients);
-  const searchPatients = usePatientStore((s) => s.searchPatients);
-  const setSortOrder = usePatientStore((s) => s.setSortOrder);
+  const { patients, isLoading, error, deletePatient: deletePatientReactive } = usePatients();
   const showToast = useToastStore((s) => s.showToast);
 
   const settingsUsername = useSettingsStore((s) => s.username);
@@ -44,53 +35,32 @@ export default function PatientListScreen() {
   const settingsHospital = useSettingsStore((s) => s.hospitalName);
 
   const [isDragging, setIsDragging] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
-  const [icuCount, setIcuCount] = useState(0);
-  const [malnutritionRiskCount, setMalnutritionRiskCount] = useState(0);
-  const [stableCount, setStableCount] = useState(0);
-
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const { getDatabase } = await import('../src/data/database');
-        const { Q } = await import('@nozbe/watermelondb');
-        let db;
-        try {
-          db = await getDatabase();
-        } catch {
-          console.warn('fetchStats: database not available');
-          return;
-        }
-        if (!db) return;
-
-        // 1. ICU Admissions
-        const icu = patients.filter((p) => p.department === 'ICU' || p.department === 'عناية مركزة').length;
-        setIcuCount(icu);
-
-        // 2. Malnutrition Risk (NRS Score >= 3)
-        const calcCollection = db.get('calculations');
-        if (calcCollection) {
-          const malnutritionCalcs = (await calcCollection.query(
-            Q.where('calculation_type', 'nrs_2002'),
-            Q.where('result_value', Q.gte(3))
-          ).fetch()) as any[];
-          const uniqueAtRiskIds = new Set(malnutritionCalcs.map((c) => c.patientId));
-          const atRiskCount = patients.filter((p) => uniqueAtRiskIds.has(p.id)).length;
-          setMalnutritionRiskCount(atRiskCount);
-
-          const stableCalcs = (await calcCollection.query(
-            Q.where('calculation_type', 'nrs_2002'),
-            Q.where('result_value', Q.lt(3))
-          ).fetch()) as any[];
-          const uniqueStableIds = new Set(stableCalcs.map((c) => c.patientId));
-          const stable = patients.filter((p) => p.status !== 'active' || (uniqueStableIds.has(p.id) && !uniqueAtRiskIds.has(p.id))).length;
-          setStableCount(stable);
-        }
-      } catch (err) {
-        console.error('Error fetching stats:', err);
-      }
+  const filteredPatients = useMemo(() => {
+    let result = [...patients];
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.fullName.toLowerCase().includes(q) ||
+          p.fileNumber.toLowerCase().includes(q) ||
+          p.primaryDiagnosis?.toLowerCase().includes(q),
+      );
     }
-    fetchStats();
+    result.sort((a, b) => {
+      const dateA = new Date(a.admissionDate || a.createdAt).getTime();
+      const dateB = new Date(b.admissionDate || b.createdAt).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    return result;
+  }, [patients, searchQuery, sortOrder]);
+
+  const stats = useMemo(() => {
+    const icu = patients.filter((p) => p.department === 'ICU' || p.department === 'عناية مركزة').length;
+    const active = patients.filter((p) => p.status === 'active').length;
+    return { total: patients.length, active, icu };
   }, [patients]);
 
   const handleDragOver = useCallback((e: any) => {
@@ -348,7 +318,6 @@ export default function PatientListScreen() {
         }
       });
 
-      await loadPatients();
       showToast('تم استيراد ملف الحالة بنجاح 🎉', 'success');
       Alert.alert('تم الاستيراد', `تم استيراد ملف حالة المريض "${patientProfile.fullName}" بنجاح!`);
     } catch (err) {
@@ -356,7 +325,7 @@ export default function PatientListScreen() {
       showToast('فشل في استيراد ملف الحالة', 'error');
       Alert.alert('خطأ', 'فشل في استيراد ملف الحالة، تأكد من صحة الملف وبنيته.');
     }
-  }, [loadPatients, showToast]);
+  }, [showToast]);
 
   const processFile = useCallback((file: any) => {
     try {
@@ -566,12 +535,6 @@ export default function PatientListScreen() {
     }
   }, [showToast]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadPatients();
-    }, [])
-  );
-
   const handlePatientPress = useCallback(
     (patient: Patient) => {
       router.push(`/patient/${patient.id}`);
@@ -588,10 +551,7 @@ export default function PatientListScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { PatientRepository } = await import('../src/data/repositories/PatientRepository');
-              const repo = new PatientRepository();
-              await repo.delete(id);
-              loadPatients();
+              await deletePatientReactive(id);
             } catch (e) {
               showToast('فشل حذف المريض', 'error');
             }
@@ -599,18 +559,14 @@ export default function PatientListScreen() {
         },
       ]);
     },
-    [loadPatients, showToast]
+    [deletePatientReactive, showToast]
   );
 
   const handleSearch = useCallback(
     (text: string) => {
-      if (text.trim().length === 0) {
-        loadPatients();
-        return;
-      }
-      searchPatients(text);
+      setSearchQuery(text);
     },
-    [loadPatients, searchPatients]
+    []
   );
 
   const toggleSort = useCallback(() => {
@@ -642,7 +598,7 @@ export default function PatientListScreen() {
   if (error && patients.length === 0) {
     return (
       <View style={styles.container}>
-        <ErrorView message={error} onRetry={loadPatients} />
+        <ErrorView message={error} onRetry={() => {}} />
       </View>
     );
   }
@@ -701,20 +657,16 @@ export default function PatientListScreen() {
         style={styles.statsScrollView}
       >
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{patients.length}</Text>
+          <Text style={styles.statNumber}>{stats.total}</Text>
           <Text style={styles.statLabel}>إجمالي المرضى</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{icuCount}</Text>
+          <Text style={styles.statNumber}>{stats.active}</Text>
+          <Text style={styles.statLabel}>الحالات النشطة</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{stats.icu}</Text>
           <Text style={styles.statLabel}>العناية المركزة</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{malnutritionRiskCount}</Text>
-          <Text style={styles.statLabel}>خطر سوء التغذية</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{stableCount}</Text>
-          <Text style={styles.statLabel}>الحالات المستقرة</Text>
         </View>
       </ScrollView>
 
@@ -740,11 +692,11 @@ export default function PatientListScreen() {
             {sortOrder === 'newest' ? 'الأحدث أولاً' : 'الأقدم أولاً'}
           </Text>
         </TouchableOpacity>
-        <Text style={styles.resultCount}>{patients.length} مريض</Text>
+        <Text style={styles.resultCount}>{filteredPatients.length} مريض</Text>
       </View>
 
       <FlatList
-        data={patients}
+        data={filteredPatients}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         getItemLayout={getItemLayout}
@@ -753,7 +705,7 @@ export default function PatientListScreen() {
         windowSize={7}
         removeClippedSubviews={true}
         contentContainerStyle={
-          patients.length === 0 ? styles.emptyContainer : styles.list
+          filteredPatients.length === 0 ? styles.emptyContainer : styles.list
         }
         ListEmptyComponent={
           isLoading ? (
@@ -772,8 +724,6 @@ export default function PatientListScreen() {
             />
           )
         }
-        onRefresh={loadPatients}
-        refreshing={isLoading}
       />
 
       <TouchableOpacity
@@ -825,7 +775,11 @@ const styles = StyleSheet.create({
     fontFamily: 'ThmanyahSans-Bold',
   },
   headerIconBtn: {
-    padding: spacing.xs,
+    padding: spacing.sm + 4,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 24,
@@ -892,6 +846,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     padding: spacing.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   sortLabel: {
     fontSize: 13,

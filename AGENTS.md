@@ -30,6 +30,10 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
   - Added `computeZScoreFromReference()` fallback to `src/domain/data/whoGrowthReference.ts` — interpolates Z-scores from embedded WHO LMS reference data (handles empty `who_growth_standards` table)
   - Built `PediatricMeasurementForm.tsx` at `src/presentation/components/PediatricMeasurementForm.tsx`: weight/height/head-circumference inputs, dual-path Z-score (PediatricZScoreEngine → fallback), persists to `pediatric_growth_charts`, color-coded Z-score badges
   - Rebuilt `app/patient/[id]/growth-charts.tsx` with recharts `LineChart` — WFA/LHFA/BMIFA charts with ±3SD, ±2SD, Median reference lines + patient overlay, custom tooltip, data table, measurement form panel, and clinical directives card
+- **Reactive Shift (patientStore → RxJS)**:
+  - Refactored `patientStore.ts`: removed imperative `loadPatients`/`searchPatients`/`addPatient`/`setSortOrder`, now exposes `patients$` Observable + `usePatients()` reactive hook using `observePatients()` + `useObservableArray()`
+  - Added `observePatients()` to `src/data/database/observe.ts` with `query().observe()` for automatic UI updates on any DB mutation
+  - Refactored `app/index.tsx`: replaced `usePatientStore` with reactive `usePatients()` hook, local filtering/sorting, removed `useFocusEffect`/imperative fetches — list updates reactively on insert/delete/update
 
 ### In Progress
 - (none)
