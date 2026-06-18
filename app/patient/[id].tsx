@@ -104,6 +104,7 @@ function PatientDetailScreen() {
     { id: 'dietary-history', title: 'تقييم التاريخ التغذوي (24h Recall)', icon: 'clipboard' as const, route: `/meal-planner/dietary-history?patientId=${patient?.id}`, color: colors.accentIndigo },
     { id: 'medications', title: 'الأدوية والمكملات', icon: 'medical' as const, route: `/patient/${patient?.id}/medications`, color: colors.accentIndigo },
     { id: 'supplements', title: 'المكملات الغذائية (منفصل)', icon: 'nutrition' as const, route: `/patient/${patient?.id}/supplements`, color: colors.accentTeal },
+    { id: 'cardio-assessment', title: 'تقييم القلب والأوعية الدموية', icon: 'heart' as const, route: `/patient/${patient?.id}/cardio-assessment`, color: colors.accentRose, isWide: true },
     { id: 'iv-medications', title: 'المحاليل والأدوية المسببة للسعرات', icon: 'flask-outline' as const, route: `/patient/${patient?.id}/iv-medications`, color: colors.accentAmber, highlightFor: ['ICU'] },
     { id: 'nutrition-calculator', title: 'حاسبة التغذية الأنبوبية والوريدية', icon: 'flask' as const, route: `/patient/${patient?.id}/nutrition-calculator`, color: colors.accentTeal, highlightFor: ['ICU'] },
     { id: 'clinical-analysis', title: 'التحليل السريري المتقدم', icon: 'analytics' as const, route: `/patient/${patient?.id}/clinical-analysis`, color: colors.accentSky },
