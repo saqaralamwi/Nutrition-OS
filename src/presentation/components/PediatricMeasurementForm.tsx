@@ -55,43 +55,61 @@ export default function PediatricMeasurementForm({
   async function computeZScore(
     value: number,
     indicator: 'wfa' | 'lhfa' | 'bmifa',
-  ): Promise<IZScoreDisplay> {
+  ): Promise<IZScoreDisplay | null> {
     const labels: Record<string, { indicator: string; indicatorAr: string }> = {
       wfa: { indicator: 'wfa', indicatorAr: 'الوزن حسب العمر' },
       lhfa: { indicator: 'lhfa', indicatorAr: 'الطول حسب العمر' },
       bmifa: { indicator: 'bmifa', indicatorAr: 'مؤشر كتلة الجسم' },
     };
 
-    const engine = await PediatricZScoreEngine.calculateZScore({
-      gender,
-      indicatorType: indicator,
-      measurementValue: value,
-      ageMonths,
-      lengthHeightCm: heightCm ? parseFloat(heightCm) : undefined,
-    });
+    try {
+      const engine = await PediatricZScoreEngine.calculateZScore({
+        gender,
+        indicatorType: indicator,
+        measurementValue: value,
+        ageMonths,
+        lengthHeightCm: heightCm ? parseFloat(heightCm) : undefined,
+      });
 
-    let zScore: number;
-    let classification: string;
+      if (!engine || typeof engine.zScore !== 'number') {
+        throw new Error('Engine returned invalid result');
+      }
 
-    if (engine.isSafe) {
-      zScore = engine.zScore;
-      classification = engine.classification;
-    } else {
+      let zScore: number;
+      let classification: string;
+
+      if (engine.isSafe) {
+        zScore = engine.zScore;
+        classification = engine.classification;
+      } else {
+        const fallback = computeZScoreFromReference(value, ageMonths, gender, indicator);
+        zScore = fallback.zScore;
+        classification = fallback.classification;
+      }
+
+      const abs = Math.abs(zScore);
+      const color = abs >= 3 ? '#EF4444' : abs >= 2 ? '#F59E0B' : '#34D399';
+
+      return {
+        ...labels[indicator],
+        zScore,
+        classification,
+        label: zScoreLabelAr(zScore),
+        color,
+      };
+    } catch (err) {
+      console.error(`computeZScore error for ${indicator}:`, err);
       const fallback = computeZScoreFromReference(value, ageMonths, gender, indicator);
-      zScore = fallback.zScore;
-      classification = fallback.classification;
+      const abs = Math.abs(fallback.zScore);
+      const color = abs >= 3 ? '#EF4444' : abs >= 2 ? '#F59E0B' : '#34D399';
+      return {
+        ...labels[indicator],
+        zScore: fallback.zScore,
+        classification: fallback.classification,
+        label: zScoreLabelAr(fallback.zScore),
+        color,
+      };
     }
-
-    const abs = Math.abs(zScore);
-    const color = abs >= 3 ? '#EF4444' : abs >= 2 ? '#F59E0B' : '#34D399';
-
-    return {
-      ...labels[indicator],
-      zScore,
-      classification,
-      label: zScoreLabelAr(zScore),
-      color,
-    };
   }
 
   const handleSubmit = useCallback(async () => {
@@ -113,20 +131,32 @@ export default function PediatricMeasurementForm({
       const results: IZScoreDisplay[] = [];
 
       const wfaResult = await computeZScore(w, 'wfa');
-      results.push(wfaResult);
+      if (wfaResult) results.push(wfaResult);
 
       if (h > 0) {
         const lhfaResult = await computeZScore(h, 'lhfa');
-        results.push(lhfaResult);
+        if (lhfaResult) results.push(lhfaResult);
 
         const bmi = w / ((h / 100) * (h / 100));
         const bmifaResult = await computeZScore(bmi, 'bmifa');
-        results.push(bmifaResult);
+        if (bmifaResult) results.push(bmifaResult);
       }
 
       setZResults(results);
 
+      if (!results || results.length === 0) {
+        showToast('تعذر حساب نتائج النمو — جميع الحسابات فشلت', 'error');
+        setIsSaving(false);
+        return;
+      }
+
       const db = await getDatabase();
+      if (!db) {
+        showToast('خطأ في قاعدة البيانات', 'error');
+        setIsSaving(false);
+        return;
+      }
+
       await db.write(async () => {
         const collection = db.get('pediatric_growth_charts');
         await collection.create((record: any) => {
@@ -140,15 +170,17 @@ export default function PediatricMeasurementForm({
           record.chartType = 'who';
           record.source = 'manual_entry';
 
-          const wfa = results.find((r) => r.indicator === 'wfa');
+          const safeFind = (indicator: string) =>
+            Array.isArray(results) ? results.find((r) => r.indicator === indicator) : undefined;
+
+          const wfa = safeFind('wfa');
           if (wfa) record.weightZScore = wfa.zScore;
 
-          const lhfa = results.find((r) => r.indicator === 'lhfa');
+          const lhfa = safeFind('lhfa');
           if (lhfa) record.heightZScore = lhfa.zScore;
 
           if (h > 0 && w > 0) {
-            const bmi = w / ((h / 100) * (h / 100));
-            const bmifa = results.find((r) => r.indicator === 'bmifa');
+            const bmifa = safeFind('bmifa');
             if (bmifa) record.bmiZScore = bmifa.zScore;
           }
         });
