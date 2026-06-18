@@ -44,6 +44,7 @@ export default class PediatricGrowthChart extends Model {
   @field('bmi_z_score') bmiZScore?: number;
   @field('head_circumference_z') headCircumferenceZ?: number;
   @field('who_percentile') whoPercentile?: number;
+  @field('standard_used') standardUsed?: string;
 
   get ageYears(): number {
     return this.ageMonths / 12;

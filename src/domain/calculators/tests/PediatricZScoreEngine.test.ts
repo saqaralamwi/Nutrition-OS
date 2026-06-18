@@ -98,4 +98,46 @@ describe('PediatricZScoreEngine', () => {
     expect(result.zScore).toBe(0);
     expect(result.errorMessage).toBeDefined();
   });
+
+  test('CDC standard returns valid Z-score for median weight', async () => {
+    const result = await PediatricZScoreEngine.calculateZScore({
+      gender: 'male',
+      indicatorType: 'wfa',
+      measurementValue: 13.68,
+      ageMonths: 36,
+      standard: 'CDC',
+    });
+
+    expect(result.isSafe).toBe(true);
+    expect(Math.abs(result.zScore)).toBeLessThan(2);
+    expect(result.classification).toBe('normal');
+  });
+
+  test('CDC standard returns severely_low for very low weight', async () => {
+    const result = await PediatricZScoreEngine.calculateZScore({
+      gender: 'female',
+      indicatorType: 'wfa',
+      measurementValue: 4.0,
+      ageMonths: 12,
+      standard: 'CDC',
+    });
+
+    expect(result.isSafe).toBe(true);
+    expect(result.zScore).toBeLessThan(-3);
+    expect(result.classification).toBe('severely_low');
+  });
+
+  test('CDC standard returns severely_high for severely elevated BMI', async () => {
+    const result = await PediatricZScoreEngine.calculateZScore({
+      gender: 'male',
+      indicatorType: 'bmifa',
+      measurementValue: 20,
+      ageMonths: 48,
+      standard: 'CDC',
+    });
+
+    expect(result.isSafe).toBe(true);
+    expect(result.zScore).toBeGreaterThan(3);
+    expect(result.classification).toBe('severely_high');
+  });
 });

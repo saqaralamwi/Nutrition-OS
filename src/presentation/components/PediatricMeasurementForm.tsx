@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,12 +8,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getDatabase } from '../../data/database';
 import { PediatricZScoreEngine } from '../../domain/calculators/PediatricZScoreEngine';
+import type { GrowthStandard } from '../../domain/calculators/PediatricZScoreEngine';
 import { computeZScoreFromReference, zScoreLabelAr } from '../../domain/data/whoGrowthReference';
 import { colors, spacing, fontFamilies } from '../theme';
 import ArabicText from './ArabicText';
 import TextInputField from './TextInputField';
+import DropdownField from './DropdownField';
 import Button from './Button';
 import { useToastStore } from '../stores/toastStore';
+
+const STANDARD_OPTIONS: { label: string; value: GrowthStandard }[] = [
+  { label: 'WHO (منظمة الصحة العالمية)', value: 'WHO' },
+  { label: 'CDC (مراكز السيطرة على الأمراض)', value: 'CDC' },
+];
 
 interface IZScoreDisplay {
   indicator: string;
@@ -44,6 +51,7 @@ export default function PediatricMeasurementForm({
   const [headCircumference, setHeadCircumference] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [zResults, setZResults] = useState<IZScoreDisplay[]>([]);
+  const [standard, setStandard] = useState<GrowthStandard>(ageMonths < 24 ? 'WHO' : 'CDC');
 
   const resetForm = useCallback(() => {
     setWeightKg('');
@@ -69,6 +77,7 @@ export default function PediatricMeasurementForm({
         measurementValue: value,
         ageMonths,
         lengthHeightCm: heightCm ? parseFloat(heightCm) : undefined,
+        standard,
       });
 
       if (!engine || typeof engine.zScore !== 'number') {
@@ -167,7 +176,8 @@ export default function PediatricMeasurementForm({
           if (h > 0) record.heightCm = h;
           if (hc > 0) record.headCircumferenceCm = hc;
           record.gender = gender;
-          record.chartType = 'who';
+          record.chartType = standard === 'CDC' ? 'cdc' : 'who';
+          record.standardUsed = standard;
           record.source = 'manual_entry';
 
           const safeFind = (indicator: string) =>
@@ -195,11 +205,33 @@ export default function PediatricMeasurementForm({
     } finally {
       setIsSaving(false);
     }
-  }, [weightKg, heightCm, headCircumference, ageMonths, gender, patientId, onSave, resetForm, showToast]);
+  }, [weightKg, heightCm, headCircumference, ageMonths, gender, patientId, onSave, resetForm, showToast, standard]);
 
   return (
     <View style={styles.container}>
       <ArabicText bold style={styles.title}>➕ إضافة قياسات نمو جديدة</ArabicText>
+
+      <DropdownField
+        label="مرجع النمو المعتمد"
+        options={STANDARD_OPTIONS}
+        selectedValue={standard}
+        onValueChange={(val: string) => setStandard(val as GrowthStandard)}
+        placeholder="اختر مرجع النمو..."
+        required
+      />
+
+      <View style={styles.standardHint}>
+        <Ionicons
+          name="information-circle"
+          size={14}
+          color={colors.textDisabled}
+        />
+        <ArabicText style={styles.standardHintText}>
+          {standard === 'WHO'
+            ? 'موصى به للأطفال أقل من 24 شهراً — WHO 2006'
+            : 'موصى به للأطفال 24 شهراً فأكثر — CDC 2022'}
+        </ArabicText>
+      </View>
 
       <TextInputField
         label="الوزن (كجم)"
@@ -324,5 +356,18 @@ const styles = StyleSheet.create({
     color: colors.textDisabled,
     fontFamily: fontFamilies.regular,
     marginTop: 1,
+  },
+  standardHint: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  standardHintText: {
+    fontSize: 10,
+    color: colors.textDisabled,
+    fontFamily: fontFamilies.regular,
+    flex: 1,
   },
 });

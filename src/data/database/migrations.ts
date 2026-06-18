@@ -3,6 +3,64 @@ import { schemaMigrations, addColumns, createTable } from '@nozbe/watermelondb/S
 export const migrations = schemaMigrations({
   migrations: [
     {
+      toVersion: 40,
+      steps: [
+        addColumns({
+          table: 'pediatric_growth_charts',
+          columns: [
+            { name: 'standard_used', type: 'string', isOptional: true },
+          ],
+        }),
+      ],
+    },
+    {
+      toVersion: 39,
+      steps: [
+        addColumns({
+          table: 'food_exchanges',
+          columns: [
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+          ],
+        }),
+        addColumns({
+          table: 'patient_dietary_history_sessions',
+          columns: [
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+          ],
+        }),
+        addColumns({
+          table: 'patient_dietary_history_items',
+          columns: [
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+          ],
+        }),
+        addColumns({
+          table: 'patient_aversion_records',
+          columns: [
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+          ],
+        }),
+      ],
+    },
+    {
+      toVersion: 38,
+      steps: [
+        addColumns({
+          table: 'drug_nutrient_interactions',
+          columns: [
+            { name: 'mechanism_ar', type: 'string', isOptional: true },
+            { name: 'mechanism_en', type: 'string', isOptional: true },
+            { name: 'dietary_action_ar', type: 'string', isOptional: true },
+            { name: 'dietary_action_en', type: 'string', isOptional: true },
+          ],
+        }),
+      ],
+    },
+    {
       toVersion: 37,
       steps: [
         createTable({
