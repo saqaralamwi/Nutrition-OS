@@ -3,7 +3,7 @@
 Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any code.
 
 ## Goal
-- Execute Phases 4–7 across nephrology, ICU critical care, gastro-oncology, and security/audit domains: build 14 domain engines/monitors, 4 database tables, 4 type definition files, 1 WatermelonDB model, 1 gateway screen, fix migration ordering, and schema-bump to v30.
+- Activate the Pediatric Growth Module — install recharts, rebuild the growth charts screen, build the measurement form with Z-score computation, and integrate into patient dashboard.
 
 ## Constraints & Preferences
 - Dark-slate theme, RTL Arabic layout, WatermelonDB ORM, RxJS combineLatest, Q.sortBy/Q.take WatermelonDB queries
@@ -19,9 +19,16 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
 - **Phase 5 — ICU Critical Care**: Schema v27 (icu_critical_assessments table + migration), `PennStateEngine` (2003b/2010, 3/3 tests), `IcuLipidCalorieEngine` (propofol/clevedipine, 3/3 tests), `EnteralNutritionEngine` (GRV triage + osmolality, 3/3 tests), `ParenteralNutritionEngine` (70/30 macro split + osmolarity, 3/3 tests), `RefeedingSyndromeMonitor` (NICE 3-tier + 10 kcal/kg cap, 3/3 tests), `critical_care.ts` types
 - **Phase 6 — Gastro-Oncology**: Schema v28 (gastro_surgery_assessments table + migration), `OncologyCachexiaEngine` (Fearon+ESPEN, 3/3 tests), `BariatricProgressiveDietEngine` (ASMBS 5-phase + anti-dumping, 3/3 tests), `GastroHighLossEngine` (4 loss-type thresholds + critical dehydration, 3/3 tests), `GastroSurgeryAssessment` WatermelonDB model (registered in both index.native.ts + index.web.ts), `ncp-gastro-oncology-gateway.tsx` screen (RxJS combineLatest + 3 engine modules + override form with db.write), `gastro_oncology.ts` types
 - **Phase 7 — Security & Audit**: Schema v29 (clinical_audit_logs table + migration), `RoleAuthorizationGuard` (3×3 permission matrix + 15-char justification + escalation flag, 4/4 tests), `CertifiedReportEngine` (deterministic 64-bit hash + certification stamp, 3/3 tests), `security_audit.ts` types
-- **Phase 7.5 — Migration Fix**: Schema v30, reversed v11–v19 migration ordering (now strictly monotonically descending), added `created_at`/`updated_at` timestamps to 11 tables (`test_catalog`, `test_reference_ranges`, `calculation_overrides`, `attachments`, `settings`, `audit_logs`, `clinical_audit_logs`, `gastro_surgery_assessments`, `icu_critical_assessments`, `renal_assessments`, `who_growth_standards`), added deprecation comments to patient table duplicate columns (`name`, `birth_date`, `phone_ar`)
-- **Full codebase audit**: 61 tables in schema, 26 migration steps (v5–v30), 31 test files with 154/154 tests passing; migration ordering defect corrected
-- **Backup & Restore Service**: `src/data/services/BackupService.ts` (SQLite file export/import via expo-file-system SDK 56 API, SQLite magic-header validation, expo-sharing for export), integrated into `app/settings.tsx` as Section 5 (Backup & Restore card with Teal accent border, restore confirmation modal with danger-styled confirm gate, toast feedback, `resetDatabase()` + `router.replace('/')` on restore)
+- **Phase 7.5 — Migration Fix**: Schema v30, reversed v11–v19 migration ordering (now strictly monotonically descending), added `created_at`/`updated_at` timestamps to 11 tables, added deprecation comments to patient table duplicate columns
+- **Backup & Restore Service**: `src/data/services/BackupService.ts` (SQLite file export/import via expo-file-system SDK 56 API, SQLite magic-header validation, expo-sharing for export), integrated into `app/settings.tsx` as Section 5
+- **Full 4-Vector Audit (Disconnection & Dead Code)**: Scored overall D+. Findings: 27 dark tables (37.5%), 2 ghost UIs (`clinical-analysis.tsx` full data loss, `dietary-history.tsx` broken callback), 20+ dead engine files (8 pediatric/SAM engines), `syncStore` 100% dead code (5 orphaned actions)
+- **Supplements UI (Dark Matter Phase)**: Built `app/patient/[id]/supplements.tsx` — full CRUD with RxJS reactive list via `watchQuery`, `SupplementRepository.create()`/`delete()`, DropdownField for 7 supplement types, Alert confirmation delete. Added `supplements` entry to `MODULES_CONFIG` at `app/patient/[id].tsx:106`
+- **Database Discrepancy Investigation**: Confirmed NO 13-table database in this codebase. Schema has 72 tables (v39). HeidiSQL connected to external/legacy DB. Web uses LokiJS + IndexedDB — cannot connect with HeidiSQL. Identified dead alternate bootstrap at `src/data/db.ts`
+- **Pediatric Growth Module Activation**:
+  - Installed `recharts` for web-optimized charting
+  - Added `computeZScoreFromReference()` fallback to `src/domain/data/whoGrowthReference.ts` — interpolates Z-scores from embedded WHO LMS reference data (handles empty `who_growth_standards` table)
+  - Built `PediatricMeasurementForm.tsx` at `src/presentation/components/PediatricMeasurementForm.tsx`: weight/height/head-circumference inputs, dual-path Z-score (PediatricZScoreEngine → fallback), persists to `pediatric_growth_charts`, color-coded Z-score badges
+  - Rebuilt `app/patient/[id]/growth-charts.tsx` with recharts `LineChart` — WFA/LHFA/BMIFA charts with ±3SD, ±2SD, Median reference lines + patient overlay, custom tooltip, data table, measurement form panel, and clinical directives card
 
 ### In Progress
 - (none)
@@ -30,41 +37,44 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
 - (none)
 
 ## Key Decisions
-- Schema versions 24 (therapeutic_foods/DNI), 25 (WHO growth), 26 (renal), 27 (ICU), 28 (gastro-oncology), 29 (audit), 30 (timestamps) were sequentially consumed
-- Migration array ordering was incorrect: v11→v19 blocks were ascending, WatermelonDB requires descending order; corrected for v30
-- Eleven tables lacked `created_at`/`updated_at` columns; added via v30 `addColumns` migration rather than full table recreation to preserve existing data
-- Patient table duplicates (`name`/`full_name`, `birth_date`/`date_of_birth`, `phone_ar`/`phone_number`) kept in schema (legacy data safety), marked with `// @deprecated` comments
+- Z-score fallback (`computeZScoreFromReference`) interpolates from embedded WHO 2006 LMS data instead of relying on empty `who_growth_standards` table — clinically valid approximation that works offline
+- Two charting strategies coexist: recharts for web (LineChart, ResponsiveContainer, Tooltip), existing `GrowthChartComponent` (react-native-svg) for native fallback
+- Supplements get a standalone screen NOT merged into medications screen — aligns with `medications.tsx:117` comment "Supplements should be handled in a separate module"
+- The 13-table database in HeidiSQL is external to this project; no migration or schema sync needed
+- Schema versions 24–30 were sequentially consumed; current schema is v39 with 72 tables (stale docs count of 61 is incorrect)
+- Migration ordering defect (v11→v19 ascending instead of descending) was corrected in v30
+- Eleven tables lacked `created_at`/`updated_at` columns; added via v30 `addColumns` migration
+- Patient table duplicates kept in schema with `// @deprecated` comments for legacy data safety
 - Pre-existing tsc error at `app/admin/hidden-calories-dashboard.tsx:197` (HTML entity `>` rendered literally) is unrelated to all work
 
 ## Next Steps
-- Future: Phases 8–11 (not yet scoped)
+- (pending user direction — potential: build remaining 4 orphaned model UIs, convert `patientStore` to reactive, add `patientId` runtime guards to remaining screens, or start Phase 8 work once scoped)
 
 ## Critical Context
-- `Q.desc` and `Q.take` are valid WatermelonDB exports used in `CalculationRepository.ts` and consistent with codebase patterns
-- `watchQuery<T>` in `observe.ts` infers typed model arrays from `db.get(table).query(...)` — the `GastroSurgeryAssessment` model was required for the gateway screen
+- `Q.desc` and `Q.take` are valid WatermelonDB exports used in `CalculationRepository.ts`
+- `watchQuery<T>` in `observe.ts` infers typed model arrays from `db.get(table).query(...)`
 - All engine tests are isolated (no DB dependencies) and pass 154/154 total
-- The `patients` table has 34+ columns due to cumulative `v11` migration additions (name, name_ar, birth_date, phone_ar, etc.) alongside original base columns (full_name, date_of_birth, phone_number)
-- `src/data/database/db.ts` does not exist; database bootstrap is in `src/data/database/index.ts` → `index.native.ts` / `index.web.ts`
+- The `patients` table has 34+ columns due to cumulative v11 migration additions
+- Database bootstrap is in `src/data/database/index.ts` → `index.native.ts` / `index.web.ts`
+- Schema v39 has 72 tables (not 61 as documented in AGENTS.md)
+- `PediatricZScoreEngine` queries `who_growth_standards` table which has NO seed data — engine returns zScore:0 fallback. The `computeZScoreFromReference` utility bypasses this using embedded WHO LMS data
+- `pediatric_growth_charts` table exists (34 columns) — there is NO table named `pediatric_measurements`
+- `recharts` v2.x installed — for web rendering only; native uses `react-native-svg` via existing `GrowthChartComponent`
+- The existing `GrowthChartComponent.tsx` at `src/presentation/components/pediatrics/GrowthChartComponent.tsx` is fully built but was never imported by any screen until the growth-charts screen
 
 ## Relevant Files
-- `src/data/database/schema.ts`: v30, 61 tables including clinical_audit_logs, gastro_surgery_assessments, icu_critical_assessments, renal_assessments, who_growth_standards
-- `src/data/database/migrations.ts`: 26 migration blocks (v5→v30), v30 with 11 addColumns steps
-- `src/domain/calculators/EgfrCalculatorEngine.ts`: CKD-EPI 2021, NKF staging, Arabic fallback
-- `src/domain/calculators/RenalMineralRestrictionEngine.ts`: KDOQI HD/PD/pre-dialysis, 0-weight guard
-- `src/domain/calculators/PennStateEngine.ts`: 2003b/2010, 35–43°C temperature guard
-- `src/domain/calculators/IcuLipidCalorieEngine.ts`: propofol 1.1 kcal/mL, 30% overfeeding guard, negative-energy zero clamp
-- `src/domain/calculators/EnteralNutritionEngine.ts`: continuous/bolus, GRV>500 hold, >400 mOsm flag
-- `src/domain/calculators/ParenteralNutritionEngine.ts`: 70/30 split, peripheral >900 mOsm violation brake
-- `src/domain/monitors/RefeedingSyndromeMonitor.ts`: NICE critical/moderate/low, 10 kcal/kg ceiling
-- `src/domain/calculators/OncologyCachexiaEngine.ts`: Fearon 4-tier, ESPEN 20–35 kcal/kg, GIT/head_neck boost
-- `src/domain/calculators/BariatricProgressiveDietEngine.ts`: ASMBS 5-phase, anti-dumping for bypass
-- `src/domain/calculators/GastroHighLossEngine.ts`: 4 loss types, excess-based replacement, >2000 critical dehydration
-- `src/domain/security/RoleAuthorizationGuard.ts`: 3×3 matrix, 15-char justification minimum
-- `src/domain/reports/CertifiedReportEngine.ts`: deterministic 64-bit hash, Arabic certification stamp
-- `app/patient/[id]/ncp-gastro-oncology-gateway.tsx`: RxJS combineLatest + 3 engine modules + override form
-- `src/data/models/GastroSurgeryAssessment.ts`: 9 decorated fields, registered in index.native.ts + index.web.ts
-- `src/data/database/index.native.ts` / `index.web.ts`: modelClasses registration arrays
-- `src/data/types/nephrology.ts`, `critical_care.ts`, `gastro_oncology.ts`, `security_audit.ts`: typed interfaces
-- `src/presentation/theme/colors`, `fonts`, `spacing`: design system tokens
-- `src/presentation/hooks/useObservable.ts`: `useObservable`/`useObservableArray` hooks
-- `src/data/database/observe.ts`: `watchQuery` / `watchRecord` RxJS helpers
+- `src/data/database/schema.ts`: v39, 72 tables
+- `src/data/database/migrations.ts`: 35 migration blocks (v5→v39)
+- `src/domain/data/whoGrowthReference.ts`: `computeZScoreFromReference()` — interpolated Z-score fallback from embedded WHO 2006 LMS data (21 age points × 3 indicators × 2 genders), `ReferenceDataPoint` interface
+- `src/presentation/components/PediatricMeasurementForm.tsx`: Reusable form with dual-path Z-score calc + DB persistence (296 lines)
+- `app/patient/[id]/growth-charts.tsx`: Rebuilt with recharts — WFA/LHFA/BMIFA LineChart (±3SD, ±2SD, Median, patient overlay), ZScoreTooltip, data table, measurement form integration, clinical directives card
+- `app/patient/[id]/supplements.tsx`: Full CRUD supplements screen (RxJS reactive, DropdownField, Alert delete confirmation)
+- `app/patient/[id].tsx`: Line 106 — `supplements` module entry in `MODULES_CONFIG`
+- `src/data/database/index.ts`: Shared platform-dispatcher (72-table schema, v39)
+- `src/data/database/index.web.ts`: LokiJSAdapter for web (IndexedDB, not SQLite)
+- `src/data/db.ts`: DEAD — alternate bootstrap, never imported
+- `src/data/database/migrate/migrateSchema.ts`: Legacy raw-SQLite script for 33 tables — standalone tool, not part of active schema
+- `src/domain/calculators/PediatricZScoreEngine.ts`: Engine querying `who_growth_standards` (empty DB → zScore:0 fallback)
+- `src/presentation/components/pediatrics/GrowthChartComponent.tsx`: Existing SVG-based chart (native fallback alongside recharts)
+- `src/presentation/stores/syncStore.ts`: 100% dead code — 5 orphaned exported actions, never imported
+- All Phase 4–7 engine/monitor files (unchanged)

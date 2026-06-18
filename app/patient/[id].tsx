@@ -21,6 +21,7 @@ import { ActivityLevel, ACTIVITY_LEVELS } from '../../src/domain/entities/Nutrit
 import DropdownField from '../../src/presentation/components/DropdownField';
 import ClinicalAlertsBanner from '../../src/presentation/components/ClinicalAlertsBanner';
 import useClinicalAlerts from '../../src/presentation/hooks/useClinicalAlerts';
+import { withAuth } from '../../src/presentation/components/withAuth';
 
 const DEPARTMENT_LABELS: Record<string, string> = {
   ICU: 'عناية مركزة',
@@ -62,7 +63,7 @@ const SUPPLEMENT_TYPE_LABELS: Record<string, string> = {
   other: 'أخرى',
 };
 
-export default function PatientDetailScreen() {
+function PatientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -102,6 +103,7 @@ export default function PatientDetailScreen() {
     { id: 'icu-admission', title: 'قبول العناية المركزة (ICU)', icon: 'fitness' as const, route: `/patient/${patient?.id}/icu-admission`, color: colors.danger, highlightFor: ['ICU'] },
     { id: 'dietary-history', title: 'تقييم التاريخ التغذوي (24h Recall)', icon: 'clipboard' as const, route: `/meal-planner/dietary-history?patientId=${patient?.id}`, color: colors.accentIndigo },
     { id: 'medications', title: 'الأدوية والمكملات', icon: 'medical' as const, route: `/patient/${patient?.id}/medications`, color: colors.accentIndigo },
+    { id: 'supplements', title: 'المكملات الغذائية (منفصل)', icon: 'nutrition' as const, route: `/patient/${patient?.id}/supplements`, color: colors.accentTeal },
     { id: 'iv-medications', title: 'المحاليل والأدوية المسببة للسعرات', icon: 'flask-outline' as const, route: `/patient/${patient?.id}/iv-medications`, color: colors.accentAmber, highlightFor: ['ICU'] },
     { id: 'nutrition-calculator', title: 'حاسبة التغذية الأنبوبية والوريدية', icon: 'flask' as const, route: `/patient/${patient?.id}/nutrition-calculator`, color: colors.accentTeal, highlightFor: ['ICU'] },
     { id: 'clinical-analysis', title: 'التحليل السريري المتقدم', icon: 'analytics' as const, route: `/patient/${patient?.id}/clinical-analysis`, color: colors.accentSky },
@@ -113,6 +115,7 @@ export default function PatientDetailScreen() {
     { id: 'burn-assessment', title: 'إنعاش وتقييم الحروق البليغة', icon: 'flame' as const, route: `/patient/${patient?.id}/burn-assessment`, color: colors.accentAmber, isWide: true, secondary: true },
     { id: 'respiratory-deck', title: 'لوحة التحكم التنفسي وكبح الكربوهيدرات', icon: 'options' as const, route: `/patient/${patient?.id}/respiratory-deck`, color: colors.accentSky, isWide: true, highlightFor: ['ICU'] },
     { id: 'certified-audit', title: 'بوابة التصديق والتدقيق السريري', icon: 'lock-closed' as const, route: `/patient/${patient?.id}/certified-audit-gateway`, color: colors.accentAmber, isWide: true, secondary: true },
+    { id: 'growth-charts', title: 'منحنيات النمو للأطفال (WHO)', icon: 'trending-up' as const, route: `/patient/${patient?.id}/growth-charts`, color: colors.accentTeal, isWide: true, secondary: true, maxAge: 17 },
     { id: 'cardio-charts', title: 'منحنيات القلب والسوائل', icon: 'pulse' as const, route: `/patient/${patient?.id}/cardio-charts`, color: colors.danger, isWide: true, secondary: true },
   ], [patient]);
 
@@ -648,3 +651,5 @@ const styles = StyleSheet.create({
     lineHeight: fontSizes.md * 1.8,
   },
 });
+
+export default withAuth(PatientDetailScreen);
