@@ -1,10 +1,7 @@
-name: Android Build (Local)
-
+name: Build Android APK
 on:
   push:
     branches: [ master, main, develop ]
-  pull_request:
-    branches: [ master, main ]
   workflow_dispatch:
 
 jobs:
@@ -15,7 +12,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # تحديث لتجنب التحذير
           cache: 'npm'
 
       - uses: actions/setup-java@v4
@@ -26,17 +23,7 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
-
-      - name: Build Android APK (local)
-        run: npx eas-cli build --platform android --profile preview --local --output android-app.apk --non-interactive
+      - name: Build Android
+        run: npx eas-cli build --platform android --profile preview --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: adcn-android-apk
-          path: android-app.apk
-          retention-days: 30
