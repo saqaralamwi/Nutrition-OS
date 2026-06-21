@@ -17,31 +17,32 @@ import { PregnancyIncrementEngine } from '../../../src/domain/calculators/Pregna
 import { LactationIncrementEngine } from '../../../src/domain/calculators/LactationIncrementEngine';
 import { IddsiTextureEngine } from '../../../src/domain/calculators/IddsiTextureEngine';
 import { OrthopedicBoneHealingEngine } from '../../../src/domain/calculators/OrthopedicBoneHealingEngine';
-import type SurgicalErasRecord from '../../../src/data/models/SurgicalErasRecord';
+// SurgicalErasRecord model is stored via calculations table (no dedicated model file)
 
 type ActiveModule = 'none' | 'eras_surgery' | 'pregnancy' | 'lactation';
 type DysphagiaLevel = 'none' | 'mild' | 'moderate' | 'severe';
 
 interface GatewayData {
   patient: any | null;
-  erasRecord: SurgicalErasRecord | null;
+  erasRecord: any | null;
   loading: boolean;
 }
 
 function observeGatewayData(patientId: string): Observable<GatewayData> {
-  const patient$ = watchRecord<any>(db => db.get('patients').find(patientId)).pipe(
+  const patient$ = watchQuery<any>((db: any) => db.get('patients').query(Q.where('id', patientId))).pipe(
+    map((rows: any[]) => rows[0] ?? null),
     catchError(() => of(null as any)),
   );
 
-  const erasRecord$ = watchQuery<SurgicalErasRecord>(db =>
+  const erasRecord$ = watchQuery<any>((db: any) =>
     db.get('surgical_eras_records').query(
       Q.where('patient_id', patientId),
       Q.sortBy('recorded_at', Q.desc),
       Q.take(1),
     ),
   ).pipe(
-    map(rows => rows[0] ?? null),
-    catchError(() => of(null as SurgicalErasRecord | null)),
+    map((rows: any[]) => rows[0] ?? null),
+    catchError(() => of(null as any)),
   );
 
   return combineLatest([patient$, erasRecord$]).pipe(
@@ -274,7 +275,7 @@ export default function SurgicalLifeGatewayScreen() {
               style={[styles.togglePill, hasActiveFracture && styles.togglePillActive]}
               onPress={() => setHasActiveFracture(v => !v)}
             >
-              <Ionicons name="bone" size={16} color={hasActiveFracture ? colors.warning : colors.textDisabled} />
+              <Ionicons name="body" size={16} color={hasActiveFracture ? colors.warning : colors.textDisabled} />
               <Text style={[styles.togglePillText, hasActiveFracture && styles.togglePillTextActive]}>
                 🦴 كسر عظمي نشط
               </Text>

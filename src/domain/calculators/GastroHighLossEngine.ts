@@ -27,7 +27,7 @@ export class GastroHighLossEngine {
   public static calculateHighLossCompensation(input: IGastroHighLossInput): IGastroHighLossOutput {
     const { baselineFluidRequirementMl, stomaOrFistulaOutputMl24h, lossType } = input;
 
-    if (baselineFluidRequirementMl <= 0 || stomaOrFistulaOutputMl24h < 0) {
+    if (isNaN(baselineFluidRequirementMl) || isNaN(stomaOrFistulaOutputMl24h) || baselineFluidRequirementMl <= 0 || stomaOrFistulaOutputMl24h < 0) {
       return {
         excessLossMl: 0,
         totalFluidPrescriptionMl: 0,
@@ -40,6 +40,17 @@ export class GastroHighLossEngine {
     }
 
     const params = GastroHighLossEngine.LOSS_PARAMS[lossType];
+    if (!params) {
+      return {
+        excessLossMl: 0,
+        totalFluidPrescriptionMl: 0,
+        isHighOutput: false,
+        electrolyteRiskTier: 'low',
+        isCriticalDehydrationRisk: false,
+        isSafe: false,
+        arabicClinicalAlerts: ['الرجاء التحقق من المدخلات؛ نوع الفغر غير معروف'],
+      };
+    }
     const excessLoss = GastroHighLossEngine.round2(
       Math.max(0, stomaOrFistulaOutputMl24h - params.normalDailyLoss),
     );
@@ -124,6 +135,16 @@ export class GastroHighLossEngine {
     }
 
     const coeff = GastroHighLossEngine.ANATOMICAL_ELECTROLYTES[anatomicalSource];
+    if (!coeff) {
+      return {
+        severityTier: 'normal_low',
+        fluidReplacementMl: 0,
+        totalNaRequiredMeq: 0,
+        totalKRequiredMeq: 0,
+        isSafe: false,
+        arabicClinicalAlerts: ['الرجاء التحقق من المدخلات؛ المصدر التشريحي غير معروف'],
+      };
+    }
     const volumeLiters = fluidReplacementMl / 1000;
     const totalNaRequiredMeq = GastroHighLossEngine.round2(volumeLiters * coeff.naPerLiter);
     const totalKRequiredMeq = GastroHighLossEngine.round2(volumeLiters * coeff.kPerLiter);

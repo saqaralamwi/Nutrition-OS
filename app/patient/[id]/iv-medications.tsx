@@ -63,9 +63,7 @@ export default function IVMedicationsScreen() {
   const [notes, setNotes] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
-  // Dropdown open states
-  const [openMed, setOpenMed] = useState(false);
-  const [openConc, setOpenConc] = useState(false);
+  // Note: DropdownField manages its own open state internally
 
   useEffect(() => {
     loadData();
@@ -176,8 +174,7 @@ export default function IVMedicationsScreen() {
           r.percent = pct;
           r.isActive = true;
           r.notes = notes;
-          r.createdAt = now;
-          r.updatedAt = now;
+          r.recordedAt = new Date(now);
         });
       });
 
@@ -259,12 +256,9 @@ export default function IVMedicationsScreen() {
 
           <DropdownField
             label="نوع الدواء / المحلول"
-            value={medName}
+            selectedValue={medName}
             options={MED_OPTIONS}
-            onSelect={handleMedChange}
-            open={openMed}
-            setOpen={setOpenMed}
-            zIndex={2000}
+            onValueChange={handleMedChange}
           />
 
           {(medName === 'Propofol' || medName === 'Midazolam') && (
@@ -289,12 +283,9 @@ export default function IVMedicationsScreen() {
 
               <DropdownField
                 label="التركيز (%)"
-                value={concentration}
+                selectedValue={concentration}
                 options={medName === 'Dextrose' ? DEXTROSE_CONCENTRATIONS : LIPID_CONCENTRATIONS}
-                onSelect={setConcentration}
-                open={openConc}
-                setOpen={setOpenConc}
-                zIndex={1000}
+                onValueChange={setConcentration}
               />
             </View>
           )}

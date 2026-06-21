@@ -1,8 +1,5 @@
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
-import { schema } from './schema';
-import { migrations } from './migrations';
-import { seedDatabase } from './seed';
 import Patient from '../models/Patient';
 import SocialHistory from '../models/SocialHistory';
 import MedicalHistory from '../models/MedicalHistory';
@@ -60,6 +57,7 @@ import IcuCriticalAssessment from '../models/IcuCriticalAssessment';
 import GastroSurgeryAssessment from '../models/GastroSurgeryAssessment';
 import ClinicalAuditLog from '../models/ClinicalAuditLog';
 import CardiovascularAssessment from '../models/CardiovascularAssessment';
+import WhoGrowthStandard from '../models/WhoGrowthStandard';
 import NutritionRequirements from '../models/NutritionRequirements';
 import TherapeuticFood from '../models/TherapeuticFood';
 import DrugNutrientInteraction from '../models/DrugNutrientInteraction';
@@ -71,7 +69,16 @@ import FoodExchange from '../models/FoodExchange';
 import PatientMealPlan from '../models/PatientMealPlan';
 import DietaryHistorySession from '../models/DietaryHistorySession';
 import DietaryHistoryItem from '../models/DietaryHistoryItem';
-import { setupAuditTriggers } from './auditTrigger';
+import AnemiaAssessment from '../models/AnemiaAssessment';
+import AnemiaNutritionPlan from '../models/AnemiaNutritionPlan';
+import AnemiaMonitoring from '../models/AnemiaMonitoring';
+import OsteoporosisAssessment from '../models/OsteoporosisAssessment';
+import OsteoporosisNutritionPlan from '../models/OsteoporosisNutritionPlan';
+import OsteoporosisMonitoring from '../models/OsteoporosisMonitoring';
+import GoutAssessment from '../models/GoutAssessment';
+import GoutNutritionPlan from '../models/GoutNutritionPlan';
+import GoutMonitoring from '../models/GoutMonitoring';
+import Report from '../models/Report';
 
 const modelClasses = [
   Patient,
@@ -131,6 +138,7 @@ const modelClasses = [
   GastroSurgeryAssessment,
   ClinicalAuditLog,
   CardiovascularAssessment,
+  WhoGrowthStandard,
   NutritionRequirements,
   TherapeuticFood,
   DrugNutrientInteraction,
@@ -142,6 +150,16 @@ const modelClasses = [
   PatientMealPlan,
   DietaryHistorySession,
   DietaryHistoryItem,
+  AnemiaAssessment,
+  AnemiaNutritionPlan,
+  AnemiaMonitoring,
+  OsteoporosisAssessment,
+  OsteoporosisNutritionPlan,
+  OsteoporosisMonitoring,
+  GoutAssessment,
+  GoutNutritionPlan,
+  GoutMonitoring,
+  Report,
 ];
 
 const DB_KEY = '__WATERMELONDB_NATIVE__';
@@ -158,6 +176,19 @@ export async function getDatabase(): Promise<Database> {
   }
 
   initPromise = (async () => {
+    // Lazy load heavy dependencies to keep the initial boot path lean
+    const [
+      { schema },
+      { migrations },
+      { seedDatabase },
+      { setupAuditTriggers }
+    ] = await Promise.all([
+      import('./schema'),
+      import('./migrations'),
+      import('./seed'),
+      import('./auditTrigger')
+    ]);
+
     const adapter = new SQLiteAdapter({
       dbName: 'clinical_nutrition',
       schema,
@@ -177,7 +208,8 @@ export async function getDatabase(): Promise<Database> {
 
     setupAuditTriggers(db);
 
-    await seedDatabase(db);
+    // Run seeding in background to avoid blocking the main UI thread during splash
+    seedDatabase(db).catch(err => console.error('[WatermelonDB] Background seeding failed:', err));
 
     (globalThis as any)[DB_KEY] = db;
     return db;

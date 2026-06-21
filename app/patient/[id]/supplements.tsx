@@ -21,6 +21,8 @@ import Patient from '../../../src/data/models/Patient';
 import SupplementModel from '../../../src/data/models/Supplement';
 import { SupplementRepository } from '../../../src/data/repositories/SupplementRepository';
 import { colors, spacing, safeHeaderPaddingTop, fontFamilies } from '../../../src/presentation/theme';
+import { useAppTheme } from '../../../src/presentation/hooks/useAppTheme';
+import SearchableDropdownField from '../../../src/presentation/components/SearchableDropdownField';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
@@ -37,17 +39,36 @@ const SUPPLEMENT_TYPE_OPTIONS = [
   { label: 'أخرى', value: 'other' },
 ];
 
+const COMMON_SUPPLEMENTS = [
+  { label: 'فيتامين د3 (Vitamin D3)', value: 'Vitamin D3' },
+  { label: 'كالسيوم (Calcium)', value: 'Calcium' },
+  { label: 'حديد (Iron)', value: 'Iron' },
+  { label: 'زنك (Zinc)', value: 'Zinc' },
+  { label: 'أوميغا 3 (Omega-3)', value: 'Omega-3' },
+  { label: 'فيتامين ب12 (Vitamin B12)', value: 'Vitamin B12' },
+  { label: 'مجموعة فيتامينات ب (B-Complex)', value: 'B-Complex' },
+  { label: 'فيتامينات متعددة (Multivitamin)', value: 'Multivitamin' },
+  { label: 'حمض الفوليك (Folic Acid)', value: 'Folic Acid' },
+  { label: 'بروتين (Protein)', value: 'Protein' },
+  { label: 'بوتاسيوم (Potassium)', value: 'Potassium' },
+  { label: 'مغنيسيوم (Magnesium)', value: 'Magnesium' },
+  { label: 'فيتامين ج (Vitamin C)', value: 'Vitamin C' },
+  { label: 'أخرى / مكمل مخصص (Other)', value: 'other' },
+];
+
 export default function SupplementsScreen() {
   const patientId = useSafePatientId();
   const router = useRouter();
   const showToast = useToastStore((s) => s.showToast);
+  const { theme } = useAppTheme();
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [supplements, setSupplements] = useState<SupplementModel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [supplementName, setSupplementName] = useState('');
+  const [selectedSupplement, setSelectedSupplement] = useState('');
+  const [customSupplementName, setCustomSupplementName] = useState('');
   const [dosage, setDosage] = useState('');
   const [supplementType, setSupplementType] = useState('');
 
@@ -82,13 +103,16 @@ export default function SupplementsScreen() {
   }, [patientId]);
 
   const resetForm = useCallback(() => {
-    setSupplementName('');
+    setSelectedSupplement('');
+    setCustomSupplementName('');
     setDosage('');
     setSupplementType('');
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!supplementName.trim()) {
+    const nameToSave = selectedSupplement === 'other' ? customSupplementName : selectedSupplement;
+
+    if (!nameToSave.trim()) {
       showToast('الرجاء إدخال اسم المكمل الغذائي', 'error');
       return;
     }
@@ -102,7 +126,7 @@ export default function SupplementsScreen() {
       const repo = new SupplementRepository();
       await repo.save({
         patientId,
-        supplementName: supplementName.trim(),
+        supplementName: nameToSave.trim(),
         dosage: dosage.trim() || undefined,
         supplementType,
       });
@@ -115,7 +139,7 @@ export default function SupplementsScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [supplementName, dosage, supplementType, patientId, resetForm, showToast]);
+  }, [selectedSupplement, customSupplementName, dosage, supplementType, patientId, resetForm, showToast]);
 
   const handleDelete = useCallback(async (id: string, name: string) => {
     Alert.alert(
@@ -143,15 +167,15 @@ export default function SupplementsScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <ArabicText style={styles.loadingText}>جاري تحميل بيانات المكملات الغذائية...</ArabicText>
+        <ArabicText style={[styles.loadingText, { color: theme.subtext }]}>جاري تحميل بيانات المكملات الغذائية...</ArabicText>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.flex}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -167,17 +191,41 @@ export default function SupplementsScreen() {
           </View>
         </View>
 
-        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.card}>
-            <ArabicText bold style={styles.cardTitle}>➕ إضافة مكمل غذائي</ArabicText>
+        <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.scrollContent}>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ArabicText bold style={[styles.cardTitle, { color: theme.text }]}>➕ إضافة مكمل غذائي</ArabicText>
 
-            <TextInputField
+            <SearchableDropdownField
               label="اسم المكمل"
-              value={supplementName}
-              onChangeText={setSupplementName}
-              placeholder="مثال: Vitamin D3, حديد, أوميغا 3"
+              options={COMMON_SUPPLEMENTS}
+              selectedValue={selectedSupplement}
+              onValueChange={(val) => {
+                setSelectedSupplement(val);
+                // Auto-detect type based on selected supplement
+                if (val === 'Vitamin D3' || val === 'Vitamin B12' || val === 'Vitamin C' || val === 'B-Complex') {
+                  setSupplementType('vitamin');
+                } else if (val === 'Calcium' || val === 'Iron' || val === 'Zinc' || val === 'Potassium' || val === 'Magnesium') {
+                  setSupplementType('mineral');
+                } else if (val === 'Protein') {
+                  setSupplementType('protein');
+                } else if (val === 'Omega-3') {
+                  setSupplementType('oil');
+                }
+              }}
+              placeholder="اختر اسم المكمل..."
+              searchPlaceholder="ابحث عن المكمل..."
               required
             />
+
+            {selectedSupplement === 'other' && (
+              <TextInputField
+                label="اسم المكمل المخصص"
+                value={customSupplementName}
+                onChangeText={setCustomSupplementName}
+                placeholder="أدخل اسم المكمل..."
+                required
+              />
+            )}
 
             <DropdownField
               label="نوع المكمل"
@@ -204,14 +252,14 @@ export default function SupplementsScreen() {
             />
           </View>
 
-          <View style={styles.card}>
-            <ArabicText bold style={styles.cardTitle}>📋 المكملات الحالية</ArabicText>
-            <ArabicText style={styles.cardSubtitle}>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ArabicText bold style={[styles.cardTitle, { color: theme.text }]}>📋 المكملات الحالية</ArabicText>
+            <ArabicText style={[styles.cardSubtitle, { color: theme.subtext }]}>
               إجمالي المكملات المسجلة: {supplements.length}
             </ArabicText>
 
             {supplements.length === 0 ? (
-              <ArabicText style={styles.emptyText}>
+              <ArabicText style={[styles.emptyText, { color: theme.subtext }]}>
                 لا توجد مكملات غذائية مسجلة لهذا المريض. استخدم النموذج أعلاه لإضافة المكملات.
               </ArabicText>
             ) : (
@@ -222,7 +270,7 @@ export default function SupplementsScreen() {
                   )?.label || item.supplementType;
 
                   return (
-                    <View key={item.id} style={styles.supplementItem}>
+                    <View key={item.id} style={[styles.supplementItem, { backgroundColor: theme.background, borderColor: theme.border }]}>
                       <View style={styles.supplementHeader}>
                         <View style={styles.typeBadge}>
                           <ArabicText style={styles.typeBadgeText}>{typeLabel}</ArabicText>
@@ -235,15 +283,15 @@ export default function SupplementsScreen() {
                         </TouchableOpacity>
                       </View>
 
-                      <ArabicText bold style={styles.supplementName}>
+                      <ArabicText bold style={[styles.supplementName, { color: theme.text }]}>
                         {item.supplementName}
                       </ArabicText>
 
                       {item.dosage ? (
-                        <ArabicText style={styles.supplementDosage}>{item.dosage}</ArabicText>
+                        <ArabicText style={[styles.supplementDosage, { color: theme.subtext }]}>{item.dosage}</ArabicText>
                       ) : null}
 
-                      <ArabicText style={styles.supplementDate}>
+                      <ArabicText style={[styles.supplementDate, { color: theme.subtext }]}>
                         أضيف في: {new Date(item.createdAt).toLocaleDateString('ar-SA', {
                           year: 'numeric',
                           month: 'short',
@@ -263,7 +311,7 @@ export default function SupplementsScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.surfaceSecondary },
+  flex: { flex: 1 },
   centered: { justifyContent: 'center', alignItems: 'center' },
   container: { flex: 1 },
   scrollContent: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
@@ -292,41 +340,33 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: spacing.md,
-    color: colors.textSecondary,
     fontFamily: fontFamilies.regular,
   },
   card: {
-    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   cardTitle: {
     fontSize: 15,
-    color: colors.textPrimary,
     marginBottom: spacing.md,
     textAlign: 'right',
     fontFamily: fontFamilies.bold,
   },
   cardSubtitle: {
     fontSize: 12,
-    color: colors.textSecondary,
     textAlign: 'right',
     marginBottom: spacing.md,
     fontFamily: fontFamilies.regular,
   },
   emptyText: {
     textAlign: 'center',
-    color: colors.textDisabled,
     fontSize: 13,
     paddingVertical: spacing.lg,
     fontFamily: fontFamilies.regular,
   },
   supplementItem: {
-    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 10,
     padding: spacing.md,
     gap: spacing.xs,
@@ -353,19 +393,16 @@ const styles = StyleSheet.create({
   },
   supplementName: {
     fontSize: 15,
-    color: colors.textPrimary,
     textAlign: 'right',
     fontFamily: fontFamilies.bold,
   },
   supplementDosage: {
     fontSize: 13,
-    color: colors.textSecondary,
     textAlign: 'right',
     fontFamily: fontFamilies.regular,
   },
   supplementDate: {
     fontSize: 11,
-    color: colors.textDisabled,
     textAlign: 'right',
     fontFamily: fontFamilies.regular,
     marginTop: 2,

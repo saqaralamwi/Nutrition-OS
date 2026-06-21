@@ -47,7 +47,7 @@ describe('useObservable Hook', () => {
 
     mockUseState.mockReturnValue([undefined, setValue]);
     
-    let effectCleanup: (() => void) | null = null;
+    let effectCleanup: any = null;
     mockUseEffect.mockImplementation((effect) => {
       effectCleanup = effect();
     });

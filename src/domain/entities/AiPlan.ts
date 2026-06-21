@@ -1,9 +1,18 @@
-import { NutritionPlan, MacroBreakdown } from './NutritionPlan';
+import { NutritionPlan } from './NutritionPlan';
 
 export interface AiMealSuggestion {
   meal: string;
   foods: string[];
   calories?: number;
+}
+
+export interface AiMacros {
+  proteinGrams: number;
+  proteinCalories: number;
+  carbsGrams: number;
+  carbsCalories: number;
+  fatGrams: number;
+  fatCalories: number;
 }
 
 export interface AiPlan extends NutritionPlan {
@@ -12,6 +21,13 @@ export interface AiPlan extends NutritionPlan {
   model: string;
   disclaimer: string;
   clinicalNotes?: string;
+  patientMetricsId?: string;
+  // AI parser output fields
+  totalCalories?: number;
+  calorieAdjustment?: number;
+  macros?: AiMacros;
+  recommendations?: string[];
+  restrictions?: string[];
 }
 
 export const AI_DISCLAIMER =

@@ -200,8 +200,8 @@ describe('DNIEngine', () => {
         id: 'rec-1',
         activeIngredient: 'Warfarin',
         clinicalSeverity: 'high',
-        mechanismDescription: 'Vitamin K antagonist',
-        dietaryActionRequired: 'Maintain consistent vitamin K intake',
+        mechanismEn: 'Vitamin K antagonist',
+        dietaryActionEn: 'Maintain consistent vitamin K intake',
       };
 
       const mapped = DNIEngine.mapFromRepository([record]);
@@ -235,8 +235,8 @@ describe('DNIEngine', () => {
       const record: DrugNutrientInteractionRecord = {
         activeIngredient: 'SomeNewDrug',
         clinicalSeverity: 'moderate',
-        mechanismDescription: 'This drug affects potassium levels significantly',
-        dietaryActionRequired: 'Limit potassium-rich foods for the patient',
+        mechanismEn: 'This drug affects potassium levels significantly',
+        dietaryActionEn: 'Limit potassium-rich foods for the patient',
       };
 
       const mapped = DNIEngine.mapFromRepository([record]);

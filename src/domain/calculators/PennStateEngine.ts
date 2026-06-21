@@ -17,6 +17,9 @@ export class PennStateEngine {
     const { mifflinRee, minuteVentilationLMin, maxTemperatureCelsius, isObese } = input;
 
     if (
+      isNaN(mifflinRee) ||
+      isNaN(minuteVentilationLMin) ||
+      isNaN(maxTemperatureCelsius) ||
       mifflinRee <= 0 ||
       minuteVentilationLMin <= 0 ||
       maxTemperatureCelsius < 35 ||

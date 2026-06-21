@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 0.5,
-    borderTopColor: colors.borderSubtle,
+    borderTopColor: colors.borderLight,
   },
   actionText: {
     fontSize: 12,

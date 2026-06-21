@@ -1,18 +1,81 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, TextInput, KeyboardAvoidingView } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, TextInput, KeyboardAvoidingView, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import TripleActionFooter from '../../src/presentation/components/TripleActionFooter';
 import { Ionicons } from '@expo/vector-icons';
 import FormField from '../../src/presentation/components/FormField';
-import PickerField from '../../src/presentation/components/PickerField';
+import DropdownField from '../../src/presentation/components/DropdownField';
 import DatePickerField from '../../src/presentation/components/DatePickerField';
-import { usePatientStore } from '../../src/presentation/stores/patientStore';
+import { PatientRepository } from '../../src/data/repositories/PatientRepository';
 import { CreatePatientInput } from '../../src/domain/entities/Patient';
-import { ValidationError } from '../../src/domain/use-cases/AddPatientUseCase';
+import { useToastStore } from '../../src/presentation/stores/toastStore';
+import { getBmiCategory, getBmiColor } from '../../src/domain/utils/bmiClassification';
+import { useAppTheme } from '../../src/presentation/hooks/useAppTheme';
 import {
   GENDER_OPTIONS,
   PATIENT_TYPE_OPTIONS,
 } from '../../src/core/constants/dropdownValues';
+
+const DISEASE_CATEGORIES = [
+  { label: 'أمراض القلب والأوعية الدموية (Cardiovascular)', value: 'cardio' },
+  { label: 'الغدد الصماء والسكري (Endocrinology & Diabetes)', value: 'endocrine' },
+  { label: 'الجهاز الهضمي والكبد (Gastrointestinal & Hepatic)', value: 'gastro' },
+  { label: 'أمراض الكلى (Renal Diseases)', value: 'renal' },
+  { label: 'العناية المركزة والجراحة (Critical Care & Surgery)', value: 'critical' },
+  { label: 'الأورام وأمراض الدم (Oncology & Hematology)', value: 'oncology' },
+  { label: 'الجهاز التنفسي (Pulmonology)', value: 'respiratory' },
+  { label: 'أمراض أخرى (Other Diseases)', value: 'other' },
+];
+
+const SUB_DISEASES: Record<string, { label: string; value: string }[]> = {
+  cardio: [
+    { label: 'فشل القلب (Heart Failure)', value: 'Heart Failure' },
+    { label: 'ارتفاع ضغط الدم (Hypertension)', value: 'Hypertension' },
+    { label: 'مرض الشريان التاجي (Coronary Artery Disease)', value: 'Coronary Artery Disease' },
+    { label: 'احتشاء عضلة القلب (Myocardial Infarction)', value: 'Myocardial Infarction' },
+  ],
+  endocrine: [
+    { label: 'سكري النوع الأول (Type 1 Diabetes)', value: 'Type 1 Diabetes' },
+    { label: 'سكري النوع الثاني (Type 2 Diabetes)', value: 'Type 2 Diabetes' },
+    { label: 'الحماض الكيتوني السكري (Diabetic Ketoacidosis)', value: 'Diabetic Ketoacidosis' },
+    { label: 'سكري الحمل (Gestational Diabetes)', value: 'Gestational Diabetes' },
+    { label: 'السمنة (Obesity)', value: 'Obesity' },
+  ],
+  gastro: [
+    { label: 'تليف الكبد (Liver Cirrhosis)', value: 'Liver Cirrhosis' },
+    { label: 'داء كرون (Crohn\'s Disease)', value: 'Crohn\'s Disease' },
+    { label: 'التهاب القولون التقرحي (Ulcerative Colitis)', value: 'Ulcerative Colitis' },
+    { label: 'التهاب البنكرياس الحاد (Acute Pancreatitis)', value: 'Acute Pancreatitis' },
+    { label: 'متلازمة الأمعاء القصيرة (Short Bowel Syndrome)', value: 'Short Bowel Syndrome' },
+  ],
+  renal: [
+    { label: 'الفشل الكلوي الحاد (Acute Kidney Injury - AKI)', value: 'Acute Kidney Injury - AKI' },
+    { label: 'الفشل الكلوي المزمن (Chronic Kidney Disease - CKD)', value: 'Chronic Kidney Disease - CKD' },
+    { label: 'الفشل الكلوي النهائي (End-Stage Renal Disease - ESRD)', value: 'End-Stage Renal Disease - ESRD' },
+    { label: 'المتلازمة الكلوية (Nephrotic Syndrome)', value: 'Nephrotic Syndrome' },
+  ],
+  critical: [
+    { label: 'الحروق البالغة (Major Burns)', value: 'Major Burns' },
+    { label: 'الإصابات المتعددة (Polytrauma)', value: 'Polytrauma' },
+    { label: 'تسمم الدم / الصدمة الإنتانية (Sepsis / Septic Shock)', value: 'Sepsis / Septic Shock' },
+    { label: 'جراحة كبرى بعد العملية (Post-op Major Surgery)', value: 'Post-op Major Surgery' },
+  ],
+  oncology: [
+    { label: 'سرطان الجهاز الهضمي (Gastrointestinal Cancer)', value: 'Gastrointestinal Cancer' },
+    { label: 'أورام الدم (Hematological Malignancy)', value: 'Hematological Malignancy' },
+    { label: 'فقر الدم الشديد (Severe Anemia)', value: 'Severe Anemia' },
+  ],
+  respiratory: [
+    { label: 'الانسداد الرئوي المزمن (COPD)', value: 'COPD' },
+    { label: 'متلازمة الضائقة التنفسية الحادة (ARDS)', value: 'ARDS' },
+    { label: 'الالتهاب الرئوي الشديد (Severe Pneumonia)', value: 'Severe Pneumonia' },
+  ],
+  other: [
+    { label: 'سوء التغذية الحاد الوخيم (Severe Acute Malnutrition - SAM)', value: 'Severe Acute Malnutrition - SAM' },
+    { label: 'سوء التغذية الحاد المتوسط (Moderate Acute Malnutrition - MAM)', value: 'Moderate Acute Malnutrition - MAM' },
+    { label: 'تشخيص مخصص (Custom / Other)', value: 'custom' },
+  ],
+};
 
 const hospitalDepartments = [
   // الأجنحة الباطنية التخصصية (Specialized Internal Medicine Wards)
@@ -55,6 +118,8 @@ interface FormState {
   fullName: string;
   age: string;
   gender: string;
+  weight: string;
+  height: string;
   phoneNumber: string;
   department: string;
   primaryDiagnosis: string;
@@ -70,6 +135,8 @@ const INITIAL_STATE: FormState = {
   fullName: '',
   age: '',
   gender: '',
+  weight: '',
+  height: '',
   phoneNumber: '',
   department: '',
   primaryDiagnosis: '',
@@ -101,6 +168,20 @@ function validateField(field: keyof FormState, value: string): string | null {
       return null;
     }
 
+    case 'weight': {
+      const w = parseFloat(value);
+      if (!value || isNaN(w) || w <= 0) return 'الوزن يجب أن يكون أكبر من صفر';
+      if (w > 500) return 'الوزن غير منطقي (أكبر من 500 كجم)';
+      return null;
+    }
+
+    case 'height': {
+      const h = parseFloat(value);
+      if (!value || isNaN(h) || h <= 0) return 'الطول يجب أن يكون أكبر من صفر';
+      if (h > 250) return 'الطول غير منطقي (أكبر من 250 سم)';
+      return null;
+    }
+
     case 'gender':
       if (!value) return 'يرجى اختيار الجنس';
       return null;
@@ -124,13 +205,19 @@ function validateField(field: keyof FormState, value: string): string | null {
 
 export default function AddPatientScreen() {
   const router = useRouter();
-  const { addPatient } = usePatientStore();
+  const showToast = useToastStore((s) => s.showToast);
+  const { theme } = useAppTheme();
+  const [repository] = useState(() => new PatientRepository());
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [serverErrors, setServerErrors] = useState<ValidationError[]>([]);
+  const [serverErrors, setServerErrors] = useState<{ field: string; message: string }[]>([]);
   const [customFields, setCustomFields] = useState<{ id: number; value: string }[]>([{ id: 1, value: '' }]);
+
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSubDisease, setSelectedSubDisease] = useState('');
+  const [customDiagnosis, setCustomDiagnosis] = useState('');
 
   const errors = useMemo(() => {
     const result: Record<string, string | undefined> = {};
@@ -151,6 +238,7 @@ export default function AddPatientScreen() {
   const isFormValid = useMemo(() => {
     const requiredFields: (keyof FormState)[] = [
       'fullName', 'age', 'gender', 'department', 'primaryDiagnosis', 'patientType',
+      'weight', 'height',
     ];
     for (const field of requiredFields) {
       const err = validateField(field, form[field]);
@@ -162,6 +250,31 @@ export default function AddPatientScreen() {
     }
     return dateOfBirth !== null;
   }, [form, dateOfBirth, customFields]);
+
+  interface BmiDisplay {
+    value: number;
+    category: string;
+    color: string;
+  }
+
+  const bmiResult = useMemo<BmiDisplay | null>(() => {
+    const w = parseFloat(form.weight);
+    const h = parseFloat(form.height);
+    if (!form.weight || !form.height || isNaN(w) || isNaN(h) || w <= 0 || h <= 0) return null;
+    const heightM = h / 100;
+    const bmi = Math.round((w / (heightM * heightM)) * 100) / 100;
+    return { value: bmi, category: getBmiCategory(bmi), color: getBmiColor(bmi) };
+  }, [form.weight, form.height]);
+
+  const bmiOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(bmiOpacity, {
+      toValue: bmiResult ? 1 : 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, [bmiResult, bmiOpacity]);
 
   const updateField = useCallback(
     (field: keyof FormState, value: string) => {
@@ -193,9 +306,19 @@ export default function AddPatientScreen() {
     setTouched(allTouched);
     setServerErrors([]);
 
-    if (!isFormValid || !dateOfBirth) return undefined;
+    if (!isFormValid || !dateOfBirth) {
+      const weightErr = validateField('weight', form.weight);
+      const heightErr = validateField('height', form.height);
+      if (weightErr) showToast(weightErr, 'error');
+      else if (heightErr) showToast(heightErr, 'error');
+      else showToast('يرجى إكمال جميع الحقول المطلوبة', 'error');
+      return undefined;
+    }
 
     setIsSaving(true);
+
+    const weightKg = parseFloat(form.weight);
+    const heightCm = parseFloat(form.height);
 
     const input: CreatePatientInput = {
       fullName: form.fullName.trim(),
@@ -211,23 +334,29 @@ export default function AddPatientScreen() {
       patientType: form.patientType as 'inpatient' | 'outpatient' | 'consultation',
       notes: form.notes || null,
       status: status,
-      incompleteSections: ['medical-history', 'social-history', 'physical-exam', 'laboratory', 'medications', 'calculations', 'intervention']
+      incompleteSections: ['medical-history', 'social-history', 'physical-exam', 'laboratory', 'medications', 'calculations', 'intervention'],
+      weightKg: !isNaN(weightKg) && weightKg > 0 ? weightKg : undefined,
+      heightCm: !isNaN(heightCm) && heightCm > 0 ? heightCm : undefined,
     };
 
-    const result = await addPatient(input);
-    setIsSaving(false);
-
-    if (result.success && result.patient) {
-      const newPatientId = result.patient.id;
+    try {
+      const patient = await repository.create(input);
+      setIsSaving(false);
+      const newPatientId = patient.id;
       setForm(INITIAL_STATE);
       setDateOfBirth(null);
       setTouched({});
       setCustomFields([{ id: 1, value: '' }]);
+      setSelectedCategory('');
+      setSelectedSubDisease('');
+      setCustomDiagnosis('');
       return newPatientId;
-    } else if (result.errors) {
-      setServerErrors(result.errors);
+    } catch (err: any) {
+      setIsSaving(false);
+      const msg = err?.message || 'حدث خطأ في حفظ المريض';
+      setServerErrors([{ field: 'general', message: msg }]);
+      return undefined;
     }
-    return undefined;
   };
 
   const renderField = (
@@ -246,7 +375,7 @@ export default function AddPatientScreen() {
     if (options?.type === 'picker' && options.pickerOptions) {
       return (
         <View onStartShouldSetResponder={() => true}>
-          <PickerField
+          <DropdownField
             label={label}
             options={options.pickerOptions}
             selectedValue={form[field]}
@@ -283,7 +412,7 @@ export default function AddPatientScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1 }}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 16 }}
@@ -303,8 +432,8 @@ export default function AddPatientScreen() {
             </View>
           )}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>معلومات المريض</Text>
+          <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>معلومات المريض</Text>
 
           {renderField('fullName', 'الاسم الكامل', {
             placeholder: 'أدخل اسم المريض',
@@ -313,34 +442,33 @@ export default function AddPatientScreen() {
 
           {Platform.OS === 'web' ? (
             <View style={styles.webDatePickerContainer}>
-              <Text style={styles.webDatePickerLabel}>
+              <Text style={[styles.webDatePickerLabel, { color: theme.subtext }]}>
                 تاريخ الميلاد <Text style={{ color: colors.danger }}>*</Text>
               </Text>
-              <input
-                type="date"
-                max={new Date().toISOString().split('T')[0]}
-                value={dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : ''}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    handleBirthDateChange(new Date(e.target.value + 'T00:00:00'));
-                  }
-                }}
+              <TextInput
+                {...(Platform.OS === 'web' ? { type: 'date' } : {})}
                 style={{
                   width: '100%',
                   height: 48,
                   borderRadius: 8,
                   borderWidth: 1,
-                  borderStyle: 'solid',
-                  borderColor: colors.border,
-                  padding: '10px 14px',
-                  backgroundColor: colors.surface,
-                  color: dateOfBirth ? colors.textPrimary : colors.textDisabled,
+                  borderColor: theme.border,
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  backgroundColor: theme.background,
+                  color: dateOfBirth ? theme.text : theme.subtext,
                   fontSize: 16,
-                  fontFamily: 'inherit',
                   textAlign: 'right',
-                  outline: 'none',
-                  boxSizing: 'border-box',
                 }}
+                value={dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : ''}
+                onChangeText={(text) => {
+                  if (text) {
+                    handleBirthDateChange(new Date(text + 'T00:00:00'));
+                  }
+                }}
+                {...(Platform.OS === 'web' ? {
+                  max: new Date().toISOString().split('T')[0]
+                } : {})}
               />
             </View>
           ) : (
@@ -370,10 +498,41 @@ export default function AddPatientScreen() {
             placeholder: 'مثال: 05xxxxxxxx',
             keyboardType: 'phone-pad',
           })}
+
+          {renderField('weight', 'الوزن (كجم)', {
+            placeholder: 'مثال: 70',
+            keyboardType: 'numeric',
+            required: true,
+          })}
+
+          {renderField('height', 'الطول (سم)', {
+            placeholder: 'مثال: 170',
+            keyboardType: 'numeric',
+            required: true,
+          })}
+
+          {bmiResult && (
+            <Animated.View style={[styles.bmiBadge, { opacity: bmiOpacity, backgroundColor: theme.background, borderColor: bmiResult.color }]}>
+              <View style={styles.bmiBadgeHeader}>
+                <Ionicons name="fitness-outline" size={18} color={bmiResult.color} />
+                <Text style={[styles.bmiBadgeTitle, { color: theme.subtext }]}>مؤشر كتلة الجسم (BMI)</Text>
+              </View>
+              <View style={styles.bmiBadgeBody}>
+                <Text style={[styles.bmiNumber, { color: bmiResult.color }]}>
+                  {bmiResult.value.toFixed(1)}
+                </Text>
+                <View style={[styles.bmiPill, { backgroundColor: bmiResult.color + '20' }]}>
+                  <Text style={[styles.bmiPillText, { color: bmiResult.color }]}>
+                    {bmiResult.category}
+                  </Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>معلومات القبول</Text>
+        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>معلومات القبول</Text>
 
           {renderField('department', 'القسم', {
             type: 'picker',
@@ -386,9 +545,9 @@ export default function AddPatientScreen() {
               {customFields.map((field) => (
                 <View key={field.id} style={styles.customFieldRow}>
                   <TextInput
-                    style={styles.customTextInput}
+                    style={[styles.customTextInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                     placeholder="يرجى تحديد القسم/التشخيص المخصص..."
-                    placeholderTextColor={colors.textDisabled}
+                    placeholderTextColor={theme.subtext}
                     value={field.value}
                     onChangeText={(text) => {
                       setCustomFields(prev => prev.map(f => f.id === field.id ? { ...f, value: text } : f));
@@ -420,10 +579,53 @@ export default function AddPatientScreen() {
             </View>
           )}
 
-          {renderField('primaryDiagnosis', 'التشخيص الرئيسي', {
-            placeholder: 'أدخل التشخيص الرئيسي',
-            required: true,
-          })}
+          <DropdownField
+            label="فئة التشخيص الرئيسي"
+            options={DISEASE_CATEGORIES}
+            selectedValue={selectedCategory}
+            onValueChange={(val) => {
+              setSelectedCategory(val);
+              setSelectedSubDisease('');
+              updateField('primaryDiagnosis', '');
+            }}
+            required
+            placeholder="اختر فئة المرض..."
+          />
+
+          {selectedCategory !== '' && (
+            <DropdownField
+              label="التشخيص الفرعي"
+              options={SUB_DISEASES[selectedCategory] || []}
+              selectedValue={selectedSubDisease}
+              onValueChange={(val) => {
+                setSelectedSubDisease(val);
+                if (val !== 'custom') {
+                  const label = (SUB_DISEASES[selectedCategory] || []).find(o => o.value === val)?.label || val;
+                  updateField('primaryDiagnosis', label);
+                } else {
+                  updateField('primaryDiagnosis', customDiagnosis);
+                }
+              }}
+              error={errors.primaryDiagnosis}
+              required
+              placeholder="اختر التشخيص الفرعي..."
+            />
+          )}
+
+          {selectedSubDisease === 'custom' && (
+            <FormField
+              label="التشخيص الرئيسي المخصص"
+              value={customDiagnosis}
+              onChangeText={(text) => {
+                setCustomDiagnosis(text);
+                updateField('primaryDiagnosis', text);
+              }}
+              onBlur={() => handleBlur('primaryDiagnosis')}
+              placeholder="أدخل التشخيص المخصص..."
+              error={errors.primaryDiagnosis}
+              required
+            />
+          )}
 
           {renderField('patientType', 'نوع المريض', {
             type: 'picker',
@@ -592,5 +794,47 @@ const styles = StyleSheet.create({
     color: '#9B1C1C',
     fontFamily: fontFamilies?.regular || 'System',
     textAlign: 'right',
+  },
+  bmiBadge: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: colors.surfaceCard,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bmiBadgeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  bmiBadgeTitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontFamily: fontFamilies?.medium || 'System',
+  },
+  bmiBadgeBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  bmiNumber: {
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: fontFamilies?.bold || 'System',
+    letterSpacing: 0.5,
+  },
+  bmiPill: {
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  bmiPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fontFamilies?.medium || 'System',
   },
 });

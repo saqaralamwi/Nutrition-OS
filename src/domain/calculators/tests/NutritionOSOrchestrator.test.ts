@@ -38,24 +38,24 @@ const SPIRONOLACTONE_RECORD: DrugNutrientInteractionRecord = {
   id: 'dni-spiro',
   activeIngredient: 'Spironolactone (K-sparing Diuretic)',
   clinicalSeverity: 'high',
-  mechanismDescription: 'Aldosterone antagonist leads to potassium retention',
-  dietaryActionRequired: 'Limit high-potassium foods. Monitor serum potassium.',
+  mechanismEn: 'Aldosterone antagonist leads to potassium retention',
+  dietaryActionEn: 'Limit high-potassium foods. Monitor serum potassium.',
 };
 
 const WARFARIN_RECORD: DrugNutrientInteractionRecord = {
   id: 'dni-warf',
   activeIngredient: 'Warfarin',
   clinicalSeverity: 'high',
-  mechanismDescription: 'Vitamin K antagonist',
-  dietaryActionRequired: 'Maintain consistent vitamin K intake. Monitor INR.',
+  mechanismEn: 'Vitamin K antagonist',
+  dietaryActionEn: 'Maintain consistent vitamin K intake. Monitor INR.',
 };
 
 const METFORMIN_RECORD: DrugNutrientInteractionRecord = {
   id: 'dni-met',
   activeIngredient: 'Metformin',
   clinicalSeverity: 'moderate',
-  mechanismDescription: 'Impairs vitamin B12 absorption',
-  dietaryActionRequired: 'Monitor B12 levels annually. Supplement if deficient.',
+  mechanismEn: 'Impairs vitamin B12 absorption',
+  dietaryActionEn: 'Monitor B12 levels annually. Supplement if deficient.',
 };
 
 describe('NutritionOSOrchestrator', () => {

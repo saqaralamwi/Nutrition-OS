@@ -15,7 +15,7 @@ export class InsulinSensitivityEngine {
   private static readonly RULE_OF_1800 = 1800;
 
   public static calculateCorrection(input: IISFInput): IISFCalculationResult {
-    if (input.totalDailyDose <= 0 || !isFinite(input.totalDailyDose)) {
+    if (isNaN(input.totalDailyDose) || input.totalDailyDose <= 0 || !isFinite(input.totalDailyDose)) {
       return {
         isfValue: 0,
         correctionDose: 0,

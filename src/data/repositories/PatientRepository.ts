@@ -33,6 +33,17 @@ function toDomain(model: PatientModel): Patient {
     status: model.status as PatientStatus,
     notes: model.notes || null,
     incompleteSections: incompleteArr,
+    nameAr: model.nameAr || null,
+    mrn: model.mrn || null,
+    isPediatric: model.isPediatric ?? (model.age < 19),
+    bloodType: model.bloodType || null,
+    clinicalTags: model.clinicalTags || null,
+    clinicalTagsAr: model.clinicalTagsAr || null,
+    address: model.address || null,
+    addressAr: model.addressAr || null,
+    occupation: model.occupation || null,
+    education: model.education || null,
+    religion: model.religion || null,
     createdAt: model.createdAt?.toISOString() || new Date().toISOString(),
     updatedAt: model.updatedAt?.toISOString() || new Date().toISOString(),
   };
@@ -116,7 +127,7 @@ export class PatientRepository implements IPatientRepository {
       }
 
       const collection = db.get<PatientModel>('patients');
-      return collection.create((record) => {
+      const patient = await collection.create((record) => {
         record.fileNumber = fileNumber;
         record.fullName = input.fullName;
         record.age = input.age;
@@ -136,44 +147,113 @@ export class PatientRepository implements IPatientRepository {
         if (input.incompleteSections !== undefined) {
           record.incompleteSections = input.incompleteSections ? JSON.stringify(input.incompleteSections) : '';
         }
+        if (input.nameAr !== undefined) record.nameAr = input.nameAr ?? '';
+        if (input.mrn !== undefined) record.mrn = input.mrn ?? '';
+        if (input.bloodType !== undefined) record.bloodType = input.bloodType ?? '';
+        if (input.clinicalTags !== undefined) record.clinicalTags = input.clinicalTags ?? '';
+        if (input.clinicalTagsAr !== undefined) record.clinicalTagsAr = input.clinicalTagsAr ?? '';
+        if (input.address !== undefined) record.address = input.address ?? '';
+        if (input.addressAr !== undefined) record.addressAr = input.addressAr ?? '';
+        if (input.occupation !== undefined) record.occupation = input.occupation ?? '';
+        if (input.education !== undefined) record.education = input.education ?? '';
+        if (input.religion !== undefined) record.religion = input.religion ?? '';
+        record.isPediatric = input.isPediatric ?? (input.age < 19);
       });
+
+      if (input.weightKg != null && input.heightCm != null) {
+        const vitals = db.get('vitals_records');
+        await vitals.create((r: any) => {
+          r.patient_id = patient.id;
+          r.record_date = Date.now();
+          r.weight_kg = input.weightKg!;
+          r.height_cm = input.heightCm!;
+          const heightM = input.heightCm! / 100;
+          r.bmi = Math.round((input.weightKg! / (heightM * heightM)) * 100) / 100;
+        });
+      }
+
+      return patient;
     });
     return toDomain(result);
   }
 
-  async update(patient: Patient): Promise<void> {
+  async update(patient: Patient): Promise<{ success: boolean; patient?: Patient }> {
     const db = await getDatabase();
-    await db.write(async () => {
-      const existing = await db.get<PatientModel>('patients').find(patient.id);
-      await existing.update((record) => {
-        record.fullName = patient.fullName;
-        record.age = patient.age;
-        if (patient.dateOfBirth !== undefined) record.dateOfBirth = patient.dateOfBirth ?? '';
-        record.gender = patient.gender;
-        if (patient.nationalId !== undefined) record.nationalId = patient.nationalId ?? '';
-        if (patient.nationality !== undefined) record.nationality = patient.nationality ?? '';
-        if (patient.phoneNumber !== undefined) record.phoneNumber = patient.phoneNumber ?? '';
-        record.department = patient.department;
-        if (patient.bedNumber !== undefined) record.bedNumber = patient.bedNumber ?? '';
-        if (patient.admissionDate !== undefined) record.admissionDate = new Date(patient.admissionDate);
-        if (patient.referringPhysician !== undefined) record.referringPhysician = patient.referringPhysician ?? '';
-        record.primaryDiagnosis = patient.primaryDiagnosis;
-        record.patientType = patient.patientType;
-        record.status = patient.status;
-        if (patient.notes !== undefined) record.notes = patient.notes ?? '';
-        if (patient.incompleteSections !== undefined) {
-          record.incompleteSections = patient.incompleteSections ? JSON.stringify(patient.incompleteSections) : '';
-        }
+    try {
+      const updated = await db.write(async () => {
+        const existing = await db.get<PatientModel>('patients').find(patient.id);
+        await existing.update((record) => {
+          record.fullName = patient.fullName;
+          record.age = patient.age;
+          if (patient.dateOfBirth !== undefined) record.dateOfBirth = patient.dateOfBirth ?? '';
+          record.gender = patient.gender;
+          if (patient.nationalId !== undefined) record.nationalId = patient.nationalId ?? '';
+          if (patient.nationality !== undefined) record.nationality = patient.nationality ?? '';
+          if (patient.phoneNumber !== undefined) record.phoneNumber = patient.phoneNumber ?? '';
+          record.department = patient.department;
+          if (patient.bedNumber !== undefined) record.bedNumber = patient.bedNumber ?? '';
+          if (patient.admissionDate !== undefined) record.admissionDate = new Date(patient.admissionDate);
+          if (patient.referringPhysician !== undefined) record.referringPhysician = patient.referringPhysician ?? '';
+          record.primaryDiagnosis = patient.primaryDiagnosis;
+          record.patientType = patient.patientType;
+          record.status = patient.status;
+          if (patient.notes !== undefined) record.notes = patient.notes ?? '';
+          if (patient.incompleteSections !== undefined) {
+            record.incompleteSections = patient.incompleteSections ? JSON.stringify(patient.incompleteSections) : '';
+          }
+          if (patient.nameAr !== undefined) record.nameAr = patient.nameAr ?? '';
+          if (patient.mrn !== undefined) record.mrn = patient.mrn ?? '';
+          if (patient.bloodType !== undefined) record.bloodType = patient.bloodType ?? '';
+          if (patient.clinicalTags !== undefined) record.clinicalTags = patient.clinicalTags ?? '';
+          if (patient.clinicalTagsAr !== undefined) record.clinicalTagsAr = patient.clinicalTagsAr ?? '';
+          if (patient.address !== undefined) record.address = patient.address ?? '';
+          if (patient.addressAr !== undefined) record.addressAr = patient.addressAr ?? '';
+          if (patient.occupation !== undefined) record.occupation = patient.occupation ?? '';
+          if (patient.education !== undefined) record.education = patient.education ?? '';
+          if (patient.religion !== undefined) record.religion = patient.religion ?? '';
+        });
+        return existing;
       });
-    });
+      return { success: true, patient: toDomain(updated) };
+    } catch {
+      return { success: false };
+    }
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<{ success: boolean }> {
     const db = await getDatabase();
-    await db.write(async () => {
-      const patient = await db.get<PatientModel>('patients').find(id);
-      await patient.markAsDeleted();
-    });
+    try {
+      await db.write(async () => {
+        const patient = await db.get<PatientModel>('patients').find(id);
+        
+        // Prepare cascading soft-delete batch
+        const batchRecords: any[] = [];
+        
+        const childTables = [
+          'vitals_records', 'laboratory_results', 'interventions', 
+          'nutritional_plans', 'medications', 'supplements', 
+          'social_histories', 'medical_histories', 'calculations',
+          'follow_up_visits', 'attachments', 'discharge_summaries',
+          'meal_plans', 'icu_admissions', 'pediatric_growth_charts',
+          'pediatric_malnutrition_criteria', 'stamp_pediatric_screenings'
+        ];
+
+        for (const tableName of childTables) {
+          const children = await db.get(tableName).query(Q.where('patient_id', id)).fetch();
+          children.forEach(child => {
+            batchRecords.push(child.prepareMarkAsDeleted());
+          });
+        }
+
+        batchRecords.push(patient.prepareMarkAsDeleted());
+        
+        await db.batch(...batchRecords);
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('[PatientRepository] Delete failed:', error);
+      return { success: false };
+    }
   }
 
   async count(): Promise<number> {
@@ -189,6 +269,39 @@ export class PatientRepository implements IPatientRepository {
     return results.length > 0;
   }
 
+  async sync(id: string): Promise<{ success: boolean; error?: string }> {
+    const db = await getDatabase();
+    try {
+      const patient = await db.get<PatientModel>('patients').find(id);
+      if (!patient) {
+        return { success: false, error: 'Patient not found' };
+      }
+      // Sync via sync engine — currently stubbed, will push/pull when backend is connected
+      const { syncEngine } = await import('../../data/sync');
+      const result = await syncEngine.fullSync();
+      return { success: result.pushedErrors === 0 && result.pulledErrors === 0 };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Sync failed' };
+    }
+  }
+
+  async syncAll(): Promise<{ success: boolean; syncedCount: number; failedCount: number }> {
+    const db = await getDatabase();
+    try {
+      const all = await db.get<PatientModel>('patients').query().fetch();
+      let syncedCount = 0;
+      let failedCount = 0;
+      for (const patient of all) {
+        const result = await this.sync(patient.id);
+        if (result.success) syncedCount++;
+        else failedCount++;
+      }
+      return { success: failedCount === 0, syncedCount, failedCount };
+    } catch (error: any) {
+      return { success: false, syncedCount: 0, failedCount: 0 };
+    }
+  }
+
   async generateFileNumber(): Promise<string> {
     const db = await getDatabase();
     return db.write(async () => {
@@ -198,7 +311,7 @@ export class PatientRepository implements IPatientRepository {
 
   private async generateFileNumberInternal(db: any): Promise<string> {
     const year = new Date().getFullYear();
-    const countersCollection = db.get<FileNumberCounterModel>('file_number_counters');
+    const countersCollection = db.get('file_number_counters') as any;
     
     // Find counter for current year
     const existingCounters = await countersCollection.query(
@@ -208,19 +321,17 @@ export class PatientRepository implements IPatientRepository {
     let count = 0;
     if (existingCounters.length > 0) {
       const counter = existingCounters[0];
-      await counter.update((record) => {
-        const currentCount = Number(record._raw.count || 0);
-        record._raw.count = currentCount + 1;
-        record._raw.last_incremented_at = new Date().getTime();
-      });
-      count = Number(counter._raw.count);
+      const currentCount = Number(counter._raw.count || 0);
+      count = currentCount + 1;
+      counter._raw.count = count;
+      counter._raw.last_incremented_at = Date.now();
     } else {
-      const counter = await countersCollection.create((record) => {
+      count = 1;
+      const counter = await countersCollection.create((record: any) => {
         record._raw.year = year;
-        record._raw.count = 1;
-        record._raw.last_incremented_at = new Date().getTime();
+        record._raw.count = count;
+        record._raw.last_incremented_at = Date.now();
       });
-      count = Number(counter._raw.count);
     }
     
     const padded = String(count).padStart(5, '0');

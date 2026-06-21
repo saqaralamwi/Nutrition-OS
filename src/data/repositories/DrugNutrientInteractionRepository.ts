@@ -8,8 +8,10 @@ function toRecord(model: DrugNutrientInteractionModel): DrugNutrientInteractionR
     id: model.id,
     activeIngredient: model.activeIngredient,
     clinicalSeverity: model.clinicalSeverity,
-    mechanismDescription: model.mechanismDescription ?? undefined,
-    dietaryActionRequired: model.dietaryActionRequired ?? undefined,
+    mechanismAr: model.mechanismAr ?? undefined,
+    mechanismEn: model.mechanismEn ?? undefined,
+    dietaryActionAr: model.dietaryActionAr ?? undefined,
+    dietaryActionEn: model.dietaryActionEn ?? undefined,
     createdAt: model.createdAt?.toISOString() || undefined,
     updatedAt: model.updatedAt?.toISOString() || undefined,
   };

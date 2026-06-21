@@ -29,6 +29,7 @@ function toRecord(model: MedicationModel): MedicationRecord {
     notesAr: model.notesAr || undefined,
     hiddenCalories: model.hiddenCalories ?? 0,
 
+    recordedAt: model.recordedAt?.toISOString() || undefined,
     createdAt: model.createdAt?.toISOString() || undefined,
     updatedAt: model.updatedAt?.toISOString() || undefined,
   };
@@ -70,6 +71,7 @@ export class MedicationRepository implements IMedicationRepository {
         r.isActive = record.isActive ?? true;
         r.notes = record.notes ?? '';
         r.notesAr = record.notesAr ?? '';
+        r.recordedAt = record.recordedAt ? new Date(record.recordedAt) : new Date();
       });
     });
     return result.id;

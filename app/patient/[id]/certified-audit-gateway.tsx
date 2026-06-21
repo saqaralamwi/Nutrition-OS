@@ -30,7 +30,7 @@ import ClinicalAuditLog from '../../../src/data/models/ClinicalAuditLog';
 
 // Domain security & engines
 import { RoleAuthorizationGuard } from '../../../src/domain/security/RoleAuthorizationGuard';
-import { CertifiedReportEngine } from '../../../src/domain/reports/CertifiedReportEngine';
+import { CertifiedReportEngine, ICertifiedReportOutput } from '../../../src/domain/reports/CertifiedReportEngine';
 import { EgfrCalculatorEngine } from '../../../src/domain/calculators/EgfrCalculatorEngine';
 
 // Presentation & UI
@@ -156,19 +156,30 @@ export default function CertifiedAuditGatewayScreen() {
   }, [actorRole, clinicalJustification]);
 
   // Generate cryptographic certified payload via CertifiedReportEngine
-  const certifiedPayload = useMemo(() => {
-    if (!patient) return null;
+  const [certifiedPayload, setCertifiedPayload] = useState<ICertifiedReportOutput | null>(null);
 
-    return CertifiedReportEngine.generateCertifiedPayload({
-      patientId,
-      patientName: patient.fullName,
-      clinicalMetrics: calculatedMetrics,
-      securityContext: {
-        actorName,
-        actorRole,
-        justificationText: clinicalJustification,
-      },
-    });
+  useEffect(() => {
+    if (!patient) {
+      setCertifiedPayload(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const payload = await CertifiedReportEngine.generateCertifiedPayload({
+        patientId,
+        patientName: patient.fullName,
+        clinicalMetrics: calculatedMetrics,
+        securityContext: {
+          actorName,
+          actorRole,
+          justificationText: clinicalJustification,
+        },
+      });
+      if (!cancelled) setCertifiedPayload(payload);
+    })();
+
+    return () => { cancelled = true; };
   }, [patient, patientId, calculatedMetrics, actorName, actorRole, clinicalJustification]);
 
   // Handle Certified Verification Save

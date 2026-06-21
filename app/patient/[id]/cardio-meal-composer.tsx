@@ -38,9 +38,7 @@ interface SelectedFood extends FoodItem {
 }
 
 function observeMealComposerData(patientId: string): Observable<MealComposerData> {
-  const patient$ = watchRecord<any>(db =>
-    db.get('patients').find(patientId),
-  ).pipe(catchError(() => of(null)));
+  const patient$ = watchRecord<any>('patients', patientId).pipe(catchError(() => of(null)));
 
   const assessment$ = watchQuery<any>(db =>
     db.get('cardiovascular_assessments').query(
@@ -53,7 +51,7 @@ function observeMealComposerData(patientId: string): Observable<MealComposerData
     catchError(() => of(null)),
   );
 
-  const foods$ = watchQuery<FoodItem>(db =>
+  const foods$ = watchQuery<any>(db =>
     db.get('therapeutic_foods').query(),
   ).pipe(catchError(() => of([])));
 

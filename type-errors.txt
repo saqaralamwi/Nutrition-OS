@@ -1,0 +1,124 @@
+﻿
+> clinical-nutrition-app@1.0.0 type-check
+> tsc --noEmit
+
+app/patient/[id].tsx(491,27): error TS2820: Type '"file-document-outline"' is not assignable to type '"push" | "map" | "filter" | "at" | "build" | "search" | "repeat" | "link" | "text" | "scale" | "body" | "image" | "alert" | "checkbox" | "menu" | "radio" | "timer" | "list" | "document" | ... 1338 more ... | undefined'. Did you mean '"document-outline"'?
+app/patient/[id]/cardio-assessment.tsx(322,22): error TS2339: Property 'create' does not exist on type 'WriterInterface'.
+app/patient/[id]/cardio-assessment.tsx(574,21): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+app/patient/[id]/cardio-assessment.tsx(574,22): error TS2786: 'Text' cannot be used as a JSX component.
+  Its type '{ new (data?: string | undefined): Text; prototype: Text; }' is not a valid JSX element type.
+    Type '{ new (data?: string | undefined): Text; prototype: Text; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'Text' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+app/patient/[id]/cardio-assessment.tsx(577,21): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+app/patient/[id]/cardio-assessment.tsx(577,22): error TS2786: 'Text' cannot be used as a JSX component.
+  Its type '{ new (data?: string | undefined): Text; prototype: Text; }' is not a valid JSX element type.
+    Type '{ new (data?: string | undefined): Text; prototype: Text; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'Text' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+app/patient/[id]/cardio-assessment.tsx(580,21): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+app/patient/[id]/cardio-assessment.tsx(580,22): error TS2786: 'Text' cannot be used as a JSX component.
+  Its type '{ new (data?: string | undefined): Text; prototype: Text; }' is not a valid JSX element type.
+    Type '{ new (data?: string | undefined): Text; prototype: Text; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'Text' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+app/patient/[id]/cardio-assessment.tsx(583,21): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+app/patient/[id]/cardio-assessment.tsx(583,22): error TS2786: 'Text' cannot be used as a JSX component.
+  Its type '{ new (data?: string | undefined): Text; prototype: Text; }' is not a valid JSX element type.
+    Type '{ new (data?: string | undefined): Text; prototype: Text; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'Text' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+app/patient/[id]/cirrhosis-gateway.tsx(101,23): error TS2339: Property 'weight' does not exist on type 'Patient'.
+app/patient/[id]/cirrhosis-gateway.tsx(102,23): error TS2339: Property 'height' does not exist on type 'Patient'.
+app/patient/[id]/cirrhosis-gateway.tsx(104,21): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SetStateAction<"female" | "male">'.
+app/patient/[id]/cirrhosis-gateway.tsx(187,22): error TS2339: Property 'create' does not exist on type 'WriterInterface'.
+app/patient/[id]/cirrhosis-gateway.tsx(620,21): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+app/patient/[id]/cirrhosis-gateway.tsx(620,22): error TS2786: 'Text' cannot be used as a JSX component.
+  Its type '{ new (data?: string | undefined): Text; prototype: Text; }' is not a valid JSX element type.
+    Type '{ new (data?: string | undefined): Text; prototype: Text; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'Text' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+app/patient/[id]/cirrhosis-gateway.tsx(621,21): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+app/patient/[id]/cirrhosis-gateway.tsx(621,22): error TS2786: 'Text' cannot be used as a JSX component.
+  Its type '{ new (data?: string | undefined): Text; prototype: Text; }' is not a valid JSX element type.
+    Type '{ new (data?: string | undefined): Text; prototype: Text; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'Text' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+app/patient/[id]/cirrhosis-gateway.tsx(622,21): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+app/patient/[id]/cirrhosis-gateway.tsx(622,22): error TS2786: 'Text' cannot be used as a JSX component.
+  Its type '{ new (data?: string | undefined): Text; prototype: Text; }' is not a valid JSX element type.
+    Type '{ new (data?: string | undefined): Text; prototype: Text; }' is not assignable to type 'new (props: any, context: any) => Component<any, any, any>'.
+      Type 'Text' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 2 more.
+app/patient/[id]/icu-charts.tsx(78,49): error TS2339: Property 'recordDate' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(78,84): error TS2339: Property 'recordDate' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(120,40): error TS2339: Property 'notes' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(131,40): error TS2339: Property 'labValuesJson' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(157,60): error TS2339: Property 'fluidIntakeMl' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(158,60): error TS2339: Property 'urineOutputMl' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(337,46): error TS2339: Property 'recordDate' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(345,18): error TS2304: Cannot find name 'Polyline'.
+app/patient/[id]/icu-charts.tsx(353,18): error TS2304: Cannot find name 'Polyline'.
+app/patient/[id]/icu-charts.tsx(396,80): error TS2339: Property 'recordDate' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(402,51): error TS2339: Property 'fluidIntakeMl' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(408,51): error TS2339: Property 'urineOutputMl' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(415,49): error TS2339: Property 'fluidBalanceMl' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(502,46): error TS2339: Property 'recordDate' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-charts.tsx(510,18): error TS2304: Cannot find name 'Polyline'.
+app/patient/[id]/icu-charts.tsx(556,82): error TS2339: Property 'recordDate' does not exist on type 'ICUPatientRecord'.
+app/patient/[id]/icu-critical-care.tsx(771,21): error TS2322: Type '"shield-checkmark" | "shield-alert"' is not assignable to type '"push" | "map" | "filter" | "at" | "build" | "search" | "repeat" | "link" | "text" | "scale" | "body" | "image" | "alert" | "checkbox" | "menu" | "radio" | "timer" | "list" | "document" | ... 1338 more ... | undefined'.
+  Type '"shield-alert"' is not assignable to type '"push" | "map" | "filter" | "at" | "build" | "search" | "repeat" | "link" | "text" | "scale" | "body" | "image" | "alert" | "checkbox" | "menu" | "radio" | "timer" | "list" | "document" | ... 1338 more ... | undefined'.
+app/patient/[id]/iv-medications.tsx(261,13): error TS2322: Type '{ label: string; value: string; options: { label: string; value: string; }[]; onSelect: (val: string) => void; open: boolean; setOpen: Dispatch<SetStateAction<boolean>>; zIndex: number; }' is not assignable to type 'IntrinsicAttributes & DropdownFieldProps'.
+  Property 'value' does not exist on type 'IntrinsicAttributes & DropdownFieldProps'.
+app/patient/[id]/iv-medications.tsx(291,17): error TS2322: Type '{ label: string; value: string; options: { label: string; value: string; }[]; onSelect: Dispatch<SetStateAction<string>>; open: boolean; setOpen: Dispatch<SetStateAction<boolean>>; zIndex: number; }' is not assignable to type 'IntrinsicAttributes & DropdownFieldProps'.
+  Property 'value' does not exist on type 'IntrinsicAttributes & DropdownFieldProps'.
+app/patient/[id]/medication-safety.tsx(53,17): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+app/patient/[id]/medication-safety.tsx(54,17): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+app/patient/[id]/medications.tsx(202,5): error TS2322: Type '{ id: string; drugName: string | undefined; dosage: string; frequency: string; route: string | undefined; unit: string; dniRisk: string | undefined; startDate: string | undefined; endDate: string | undefined; }[]' is not assignable to type 'MedicationItemData[]'.
+  Type '{ id: string; drugName: string | undefined; dosage: string; frequency: string; route: string | undefined; unit: string; dniRisk: string | undefined; startDate: string | undefined; endDate: string | undefined; }' is not assignable to type 'MedicationItemData'.
+    Types of property 'drugName' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+app/patient/[id]/ncp-diabetes-gateway.tsx(366,45): error TS2345: Argument of type '{ age: number; weight: number; mealFrequency: number; bingeFrequency: number; purgingFrequency: number; }' is not assignable to parameter of type 'BulimiaPlanInput'.
+  Type '{ age: number; weight: number; mealFrequency: number; bingeFrequency: number; purgingFrequency: number; }' is missing the following properties from type 'BulimiaPlanInput': height, gender, electrolytes
+app/patient/[id]/ncp-icu-gateway.tsx(364,41): error TS2339: Property 'nutricScore' does not exist on type 'IcuCriticalAssessment'.
+app/patient/[id]/nutrition-calculator.tsx(189,13): error TS7034: Variable 'phos' implicitly has type 'any' in some locations where its type cannot be determined.
+app/patient/[id]/nutrition-calculator.tsx(190,13): error TS7034: Variable 'pot' implicitly has type 'any' in some locations where its type cannot be determined.
+app/patient/[id]/nutrition-calculator.tsx(191,13): error TS7034: Variable 'mag' implicitly has type 'any' in some locations where its type cannot be determined.
+app/patient/[id]/nutrition-calculator.tsx(199,43): error TS2339: Property 'toLowerCase' does not exist on type '{}'.
+app/patient/[id]/nutrition-calculator.tsx(203,17): error TS7005: Variable 'phos' implicitly has an 'any' type.
+app/patient/[id]/nutrition-calculator.tsx(205,17): error TS7005: Variable 'pot' implicitly has an 'any' type.
+app/patient/[id]/nutrition-calculator.tsx(207,17): error TS7005: Variable 'mag' implicitly has an 'any' type.
+app/patient/[id]/osteoporosis-assessment.tsx(237,169): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SetStateAction<"regular" | "vegetarian" | "vegan" | "restricted">'.
+app/patient/[id]/osteoporosis-nutrition-plan.tsx(217,65): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SetStateAction<"calcium_carbonate" | "calcium_citrate" | "calcium_lactate">'.
+app/patient/[id]/stroke-assessment.tsx(69,36): error TS2339: Property 'nihss' does not exist on type 'StrokeAssessment'.
+app/patient/[id]/stroke-nutrition-plan.tsx(71,25): error TS2339: Property 'nihss' does not exist on type 'StrokeAssessment'.
+app/patient/[id]/stroke-nutrition-plan.tsx(85,47): error TS2339: Property 'aspirationRisk' does not exist on type 'StrokeAssessment'.
+app/patient/[id]/surgical-life-gateway.tsx(20,37): error TS2307: Cannot find module '../../../src/data/models/SurgicalErasRecord' or its corresponding type declarations.
+app/patient/[id]/surgical-life-gateway.tsx(32,20): error TS2554: Expected 2 arguments, but got 1.
+app/patient/[id]/surgical-life-gateway.tsx(32,37): error TS7006: Parameter 'db' implicitly has an 'any' type.
+app/patient/[id]/surgical-life-gateway.tsx(277,25): error TS2322: Type '"bone"' is not assignable to type '"push" | "map" | "filter" | "at" | "build" | "search" | "repeat" | "link" | "text" | "scale" | "body" | "image" | "alert" | "checkbox" | "menu" | "radio" | "timer" | "list" | "document" | ... 1338 more ... | undefined'.
+src/data/ai/AiService.ts(109,16): error TS2339: Property 'patientMetricsId' does not exist on type 'AiPlan'.
+src/data/ai/ResponseParser.ts(133,5): error TS2353: Object literal may only specify known properties, and 'patientMetricsId' does not exist in type 'AiPlan'.
+src/data/database/seeds/seedFoodExchanges.ts(243,40): error TS2314: Generic type 'Collection<Record>' requires 1 type argument(s).
+src/data/repositories/PatientRepository.ts(170,27): error TS18048: 'input.heightCm' is possibly 'undefined'.
+src/data/repositories/PatientRepository.ts(171,31): error TS18048: 'input.weightKg' is possibly 'undefined'.
+src/data/repositories/PatientRepository.ts(314,32): error TS2347: Untyped function calls may not accept type arguments.
+src/data/repositories/tests/CalculationRepository.test.ts(92,30): error TS2307: Cannot find module '../models/Calculation' or its corresponding type declarations.
+src/data/repositories/tests/PatientRepository.test.ts(113,11): error TS2739: Type '{ fullName: string; age: number; dateOfBirth: string; gender: "male"; department: string; primaryDiagnosis: string; patientType: "inpatient"; status: "active"; }' is missing the following properties from type 'CreatePatientInput': nationalId, phoneNumber
+src/data/repositories/tests/PatientRepository.test.ts(124,11): error TS2739: Type '{ fullName: string; age: number; dateOfBirth: string; gender: "female"; department: string; primaryDiagnosis: string; patientType: "outpatient"; status: "active"; }' is missing the following properties from type 'CreatePatientInput': nationalId, phoneNumber
+src/data/repositories/tests/PatientRepository.test.ts(145,11): error TS2739: Type '{ fullName: string; age: number; dateOfBirth: string; gender: "male"; department: string; primaryDiagnosis: string; patientType: "inpatient"; status: "active"; }' is missing the following properties from type 'CreatePatientInput': nationalId, phoneNumber
+src/data/repositories/TherapeuticFoodRepository.ts(21,5): error TS2322: Type 'string[]' is not assignable to type 'string'.
+src/data/repositories/TherapeuticFoodRepository.ts(22,5): error TS2322: Type 'Record<string, string>' is not assignable to type 'string'.
+src/data/services/BackupService.ts(81,23): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: Iterable<...>): Promise<...>', gave the following error.
+    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+        Types of property 'buffer' are incompatible.
+          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+            Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
+  Overload 2 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: KeyUsage[]): Promise<...>', gave the following error.
+    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+        Types of property 'buffer' are incompatible.
+          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+            Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
+src/domain/ai/LocalAIModelManager.ts(2,10): error TS2305: Module '"@tensorflow/tfjs-react-native"' has no exported member 'TensorFlowBackend'.
+src/domain/analytics/StatisticalAnalysisEngine.ts(18,20): error TS2352: Conversion of type 'MathNumericType[]' to type 'number' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/domain/analytics/StatisticalAnalysisEngine.ts(19,22): error TS2352: Conversion of type 'MathNumericType[]' to type 'number' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/domain/analytics/StatisticalAnalysisEngine.ts(189,20): error TS2352: Conversion of type 'MathNumericType[]' to type 'number' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.

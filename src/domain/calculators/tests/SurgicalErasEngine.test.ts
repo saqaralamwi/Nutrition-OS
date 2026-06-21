@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SurgicalErasEngine } from '../SurgicalErasEngine';
 
 const HOUR = 3600000;
+const MOCK_NOW = 1700000000000; // Fixed reference timestamp
 
 describe('SurgicalErasEngine', () => {
+  beforeEach(() => {
+    vi.setSystemTime(MOCK_NOW);
+  });
+
   it('compliant fasting: 8h solids, 3h fluids, ERAS active → pre-op safe + carb loading', () => {
     const now = Date.now();
     const surgeryAt = now + HOUR * 8;

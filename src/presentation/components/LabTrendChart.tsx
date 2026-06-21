@@ -5,25 +5,7 @@ import { LabTestParameter, LAB_TEST_PARAMETERS } from '../../domain/constants/la
 import { LabResultRecord } from '../../domain/repositories/ILabResultRepository';
 import { InterpretationResult } from '../../domain/entities/LabResult';
 import { formatSafeDate } from '../../utils/date';
-
-const COLORS = {
-  bg: '#0F172A',
-  surface: '#1E293B',
-  surfaceSecondary: '#334155',
-  border: '#475569',
-  textPrimary: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textDisabled: '#64748B',
-  green: '#10B981',
-  greenBg: '#064E3B',
-  yellow: '#F59E0B',
-  yellowBg: '#78350F',
-  red: '#F43F5E',
-  redBg: '#881337',
-  blue: '#3B82F6',
-  blueBg: '#1E3A5F',
-  rangeBand: '#1E293B',
-};
+import { colors } from '../theme/colors';
 
 function getInterpretation(
   value: number,
@@ -41,21 +23,21 @@ function getInterpretation(
 
 function getPointColor(interp: InterpretationResult): string {
   switch (interp) {
-    case 'normal': return COLORS.green;
-    case 'low': return COLORS.blue;
-    case 'high': return COLORS.yellow;
-    case 'critically_low': return COLORS.red;
-    case 'critically_high': return COLORS.red;
+    case 'normal': return colors.success;
+    case 'low': return colors.info;
+    case 'high': return colors.warning;
+    case 'critically_low': return colors.danger;
+    case 'critically_high': return colors.danger;
   }
 }
 
 function getPointBg(interp: InterpretationResult): string {
   switch (interp) {
-    case 'normal': return COLORS.greenBg;
-    case 'low': return COLORS.blueBg;
-    case 'high': return COLORS.yellowBg;
-    case 'critically_low': return COLORS.redBg;
-    case 'critically_high': return COLORS.redBg;
+    case 'normal': return colors.surfaceElevated;
+    case 'low': return colors.surfaceSecondary;
+    case 'high': return colors.surfaceElevated;
+    case 'critically_low': return colors.surfaceSecondary;
+    case 'critically_high': return colors.surfaceSecondary;
   }
 }
 
@@ -151,9 +133,9 @@ function SingleChart({ series }: { series: ChartSeries }) {
           <ArabicText style={styles.chartSubtitle}>{param.name} ({param.unit})</ArabicText>
         </View>
         <View style={styles.legendRow}>
-          <View style={[styles.legendDot, { backgroundColor: COLORS.green }]} />
+          <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
           <ArabicText style={styles.legendText}>طبيعي</ArabicText>
-          <View style={[styles.legendDot, { backgroundColor: COLORS.red }]} />
+          <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
           <ArabicText style={styles.legendText}>حرج</ArabicText>
         </View>
       </View>
@@ -227,40 +209,40 @@ function formatDateLabel(iso: string): string {
 
 const styles = StyleSheet.create({
   emptyContainer: { padding: 32, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
   chartArea: { gap: 16, padding: 8 },
   chartCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surfaceCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     padding: 12,
     gap: 8,
     minWidth: 300,
   },
   chartHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  chartTitle: { fontSize: 15, color: COLORS.textPrimary, textAlign: 'right' },
-  chartSubtitle: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'right' },
+  chartTitle: { fontSize: 15, color: colors.textPrimary, textAlign: 'right' },
+  chartSubtitle: { fontSize: 12, color: colors.textSecondary, textAlign: 'right' },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 10, color: COLORS.textSecondary, marginRight: 4 },
+  legendText: { fontSize: 10, color: colors.textSecondary, marginRight: 4 },
   canvas: { position: 'relative', overflow: 'hidden' },
   refBand: {
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: COLORS.rangeBand,
+    backgroundColor: colors.surfaceCard,
     opacity: 0.6,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   refLine: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: COLORS.textDisabled,
+    backgroundColor: colors.textDisabled,
     opacity: 0.5,
   },
   bar: {
@@ -277,8 +259,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -16,
     fontSize: 8,
-    color: COLORS.textDisabled,
+    color: colors.textDisabled,
     textAlign: 'center',
   },
-  refNote: { fontSize: 11, color: COLORS.textSecondary, textAlign: 'right', marginTop: 4 },
+  refNote: { fontSize: 11, color: colors.textSecondary, textAlign: 'right', marginTop: 4 },
 });

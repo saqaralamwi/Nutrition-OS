@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text } from 'react-native';
 
 interface FoodItem {
   id: string;
@@ -41,16 +42,16 @@ export function FoodCard({ food, isSelected, onSelect }: FoodCardProps): React.R
       )}
       <h3 className="font-semibold text-gray-800 arabic text-lg">{food.nameAr}</h3>
       <p className="text-sm text-gray-600">{food.nameEn}</p>
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-primary-700 font-semibold">{food.calories} kcal/100g</span>
-        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{food.category}</span>
-      </div>
-      <div className="mt-2 grid grid-cols-4 gap-1 text-xs text-gray-600">
-        <span>{'\uD83D\uDCAA'} {food.protein}g</span>
-        <span>{'\uD83C\uDF5E'} {food.carbs}g</span>
-        <span>{'\uD83E\uDDC8'} {food.fat}g</span>
-        <span>{'\uD83C\uDF3E'} {food.fiber}g</span>
-      </div>
+      <View className="mt-2 flex items-center justify-between">
+        <Text className="text-primary-700 font-semibold">{food.calories} kcal/100g</Text>
+        <Text className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{food.category}</Text>
+      </View>
+      <View className="mt-2 grid grid-cols-4 gap-1 text-xs text-gray-600">
+        <Text>{'\uD83D\uDCAA'} {food.protein}g</Text>
+        <Text>{'\uD83C\uDF5E'} {food.carbs}g</Text>
+        <Text>{'\uD83E\uDDC8'} {food.fat}g</Text>
+        <Text>{'\uD83C\uDF3E'} {food.fiber}g</Text>
+      </View>
     </button>
   );
 }

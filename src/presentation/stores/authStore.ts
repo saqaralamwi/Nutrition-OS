@@ -14,10 +14,11 @@ const GUEST_PROFILE: UserProfile = {
   createdAt: new Date().toISOString(),
 };
 
-const isCloudConfigured =
+const isCloudConfigured = !!(
   typeof process !== 'undefined' &&
   process.env?.EXPO_PUBLIC_SUPABASE_URL &&
-  process.env?.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  process.env?.EXPO_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export interface AuthState {
   user: UserProfile | null;

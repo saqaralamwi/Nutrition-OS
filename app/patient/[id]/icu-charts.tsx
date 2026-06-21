@@ -20,6 +20,7 @@ import Svg, {
   LinearGradient,
   Stop,
   Line,
+  Polyline,
   Text as SvgText,
 } from 'react-native-svg';
 
@@ -75,7 +76,7 @@ export default function IcuChartsScreen() {
         // Limit to the last 10 sequential chronological entries
         const sliced = records.slice(0, 10);
         // Sort strictly by recordDate ascending for chronological plot
-        return sliced.sort((a, b) => new Date(a.recordDate).getTime() - new Date(b.recordDate).getTime());
+        return sliced.sort((a, b) => new Date((a as any).recordDate).getTime() - new Date((b as any).recordDate).getTime());
       })
     );
 
@@ -117,7 +118,7 @@ export default function IcuChartsScreen() {
   const getOsmValue = (record: ICUPatientRecord) => {
     // 1. Check notes
     try {
-      const parsed = JSON.parse(record.notes || '{}');
+      const parsed = JSON.parse((record as any).notes || '{}');
       if (parsed.icuCriticalCareSettings?.calculatedOsmolarityMosmL !== undefined) {
         return Number(parsed.icuCriticalCareSettings.calculatedOsmolarityMosmL);
       }
@@ -128,7 +129,7 @@ export default function IcuChartsScreen() {
 
     // 2. Check labValuesJson
     try {
-      const parsed = JSON.parse(record.labValuesJson || '{}');
+      const parsed = JSON.parse((record as any).labValuesJson || '{}');
       if (parsed.tpnOsmolarity !== undefined) {
         return Number(parsed.tpnOsmolarity);
       }
@@ -154,8 +155,8 @@ export default function IcuChartsScreen() {
       return paddingTop + innerHeight * (1 - clamped / 5000);
     };
 
-    const intakeCoords = icuRecords.map((r) => mapFluidY(r.fluidIntakeMl || 0));
-    const outputCoords = icuRecords.map((r) => mapFluidY(r.urineOutputMl || 0));
+    const intakeCoords = icuRecords.map((r) => mapFluidY((r as any).fluidIntakeMl || 0));
+    const outputCoords = icuRecords.map((r) => mapFluidY((r as any).urineOutputMl || 0));
 
     const intakePoints = xCoords.map((x, i) => `${x},${intakeCoords[i]}`).join(' ');
     const outputPoints = xCoords.map((x, i) => `${x},${outputCoords[i]}`).join(' ');
@@ -334,7 +335,7 @@ export default function IcuChartsScreen() {
                         fontSize="9"
                         textAnchor="middle"
                       >
-                        {formatXLabel(record.recordDate)}
+                        {formatXLabel((record as any).recordDate)}
                       </SvgText>
                     </React.Fragment>
                   );
@@ -393,26 +394,26 @@ export default function IcuChartsScreen() {
             {selectedPointA !== null && icuRecords[selectedPointA] ? (
               <View>
                 <ArabicText bold style={styles.tooltipTitle}>
-                  تفاصيل السوائل ليوم {formatXLabel(icuRecords[selectedPointA].recordDate)}:
+                  تفاصيل السوائل ليوم {formatXLabel((icuRecords[selectedPointA] as any).recordDate)}:
                 </ArabicText>
                 <View style={styles.tooltipRow}>
                   <ArabicText style={styles.tooltipText}>
                     المدخول المائي (Intake):{' '}
                     <Text style={{ color: '#30D5C8', fontWeight: 'bold' }}>
-                      {icuRecords[selectedPointA].fluidIntakeMl || 0} مل
+                      {(icuRecords[selectedPointA] as any).fluidIntakeMl || 0} مل
                     </Text>
                   </ArabicText>
                   <ArabicText style={styles.tooltipText}>
                     المخرجات والضياع (Output):{' '}
                     <Text style={{ color: '#FFBF00', fontWeight: 'bold' }}>
-                      {icuRecords[selectedPointA].urineOutputMl || 0} مل
+                      {(icuRecords[selectedPointA] as any).urineOutputMl || 0} مل
                     </Text>
                   </ArabicText>
                 </View>
                 <ArabicText style={styles.tooltipText}>
                   الميزان المائي الصافي (Balance):{' '}
                   <Text style={{ color: '#F8FAFC', fontWeight: 'bold' }}>
-                    {icuRecords[selectedPointA].fluidBalanceMl || 0} مل
+                    {(icuRecords[selectedPointA] as any).fluidBalanceMl || 0} مل
                   </Text>
                 </ArabicText>
               </View>
@@ -499,7 +500,7 @@ export default function IcuChartsScreen() {
                         fontSize="9"
                         textAnchor="middle"
                       >
-                        {formatXLabel(record.recordDate)}
+                        {formatXLabel((record as any).recordDate)}
                       </SvgText>
                     </React.Fragment>
                   );
@@ -553,7 +554,7 @@ export default function IcuChartsScreen() {
             {selectedPointB !== null && icuRecords[selectedPointB] ? (
               <View>
                 <ArabicText bold style={styles.tooltipTitle}>
-                  أسمولية المحاليل ليوم {formatXLabel(icuRecords[selectedPointB].recordDate)}:
+                  أسمولية المحاليل ليوم {formatXLabel((icuRecords[selectedPointB] as any).recordDate)}:
                 </ArabicText>
                 <View style={styles.tooltipRow}>
                   <ArabicText style={styles.tooltipText}>

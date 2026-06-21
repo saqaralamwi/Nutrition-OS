@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text } from 'react-native';
 
 interface Appointment {
   id: string;
@@ -67,17 +68,17 @@ export function AppointmentsPage(): React.ReactElement {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+    <View className="space-y-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-800 arabic">المواعيد</h2>
         <p className="text-gray-600 arabic mt-2">إدارة ومتابعة المواعيد القادمة</p>
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">موعد جديد</h3>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
+        <View className="grid grid-cols-2 gap-4 mb-4">
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">التاريخ</label>
             <input
               type="date"
@@ -85,8 +86,8 @@ export function AppointmentsPage(): React.ReactElement {
               onChange={(e) => setDate(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             />
-          </div>
-          <div>
+          </View>
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">الوقت</label>
             <input
               type="time"
@@ -94,11 +95,11 @@ export function AppointmentsPage(): React.ReactElement {
               onChange={(e) => setTime(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             />
-          </div>
-        </div>
+          </View>
+        </View>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
+        <View className="grid grid-cols-2 gap-4 mb-4">
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">مقدم الخدمة</label>
             <input
               type="text"
@@ -107,8 +108,8 @@ export function AppointmentsPage(): React.ReactElement {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg arabic"
               placeholder="اسم الدكتور/الأخصائي"
             />
-          </div>
-          <div>
+          </View>
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">نوع مقدم الخدمة</label>
             <select
               value={providerType}
@@ -119,11 +120,11 @@ export function AppointmentsPage(): React.ReactElement {
                 <option key={p.value} value={p.value}>{p.labelAr}</option>
               ))}
             </select>
-          </div>
-        </div>
+          </View>
+        </View>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
+        <View className="grid grid-cols-2 gap-4 mb-4">
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">الموقع</label>
             <input
               type="text"
@@ -132,8 +133,8 @@ export function AppointmentsPage(): React.ReactElement {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg arabic"
               placeholder="العيادة / المستشفى"
             />
-          </div>
-          <div>
+          </View>
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">نوع الموعد</label>
             <select
               value={apptType}
@@ -144,10 +145,10 @@ export function AppointmentsPage(): React.ReactElement {
                 <option key={a.value} value={a.value}>{a.labelAr}</option>
               ))}
             </select>
-          </div>
-        </div>
+          </View>
+        </View>
 
-        <div className="mb-4">
+        <View className="mb-4">
           <label className="block text-sm font-medium text-gray-700 arabic mb-2">ملاحظات</label>
           <textarea
             value={notes}
@@ -156,7 +157,7 @@ export function AppointmentsPage(): React.ReactElement {
             rows={2}
             placeholder="أي ملاحظات للموعد..."
           />
-        </div>
+        </View>
 
         <button
           onClick={saveAppointment}
@@ -164,38 +165,38 @@ export function AppointmentsPage(): React.ReactElement {
         >
           إضافة موعد
         </button>
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">المواعيد القادمة</h3>
         {appointments.length === 0 ? (
-          <div className="text-center text-gray-500 arabic py-8">لا توجد مواعيد مسجلة</div>
+          <View className="text-center text-gray-500 arabic py-8">لا توجد مواعيد مسجلة</View>
         ) : (
-          <div className="space-y-3">
+          <View className="space-y-3">
             {appointments.map((appt) => (
-              <div key={appt.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-gray-800 arabic">{appt.providerNameAr}</div>
-                    <div className="text-sm text-gray-600">{appt.providerNameEn}</div>
-                    <div className="text-sm text-gray-500 arabic mt-1">{appt.providerTypeAr}</div>
-                  </div>
-                  <div className="text-left">
-                    <div className="font-semibold text-primary-700">{formatDate(appt.date)}</div>
-                    <div className="text-sm text-gray-600">{appt.time}</div>
-                    <span className="inline-block px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800 arabic mt-1">
+              <View key={appt.id} className="border border-gray-200 rounded-lg p-4">
+                <View className="flex items-center justify-between">
+                  <View>
+                    <View className="font-semibold text-gray-800 arabic">{appt.providerNameAr}</View>
+                    <View className="text-sm text-gray-600">{appt.providerNameEn}</View>
+                    <View className="text-sm text-gray-500 arabic mt-1">{appt.providerTypeAr}</View>
+                  </View>
+                  <View className="text-left">
+                    <View className="font-semibold text-primary-700">{formatDate(appt.date)}</View>
+                    <View className="text-sm text-gray-600">{appt.time}</View>
+                    <Text className="inline-block px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800 arabic mt-1">
                       {appt.statusAr}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-2 text-sm text-gray-500 arabic">
+                    </Text>
+                  </View>
+                </View>
+                <View className="mt-2 text-sm text-gray-500 arabic">
                   {appt.typeAr} - {appt.location}
-                </div>
-              </div>
+                </View>
+              </View>
             ))}
-          </div>
+          </View>
         )}
-      </div>
-    </div>
+      </View>
+    </View>
   );
 }

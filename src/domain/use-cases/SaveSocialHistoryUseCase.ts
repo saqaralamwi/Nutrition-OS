@@ -15,8 +15,8 @@ export class SaveSocialHistoryUseCase {
     if (!record.smoking) {
       throw new Error('Smoking status is required');
     }
-    if (!record.alcoholSubstanceUse) {
-      throw new Error('Alcohol/substance use status is required');
+    if (!record.khatChewing) {
+      throw new Error('Khat chewing status is required');
     }
     if (!record.physicalActivity) {
       throw new Error('Physical activity status is required');
@@ -24,6 +24,9 @@ export class SaveSocialHistoryUseCase {
     if (!record.specialDietBeforeAdmission) {
       throw new Error('Special diet before admission status is required');
     }
+    
+    // Default deprecated field
+    record.alcoholSubstanceUse = record.alcoholSubstanceUse || 'no';
     return this.repository.save(record);
   }
 }

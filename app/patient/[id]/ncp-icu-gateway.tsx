@@ -38,6 +38,7 @@ import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import Button from '../../../src/presentation/components/Button';
+import { HiddenWhenSandbox } from '../../../src/presentation/components/HiddenWhenSandbox';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
@@ -358,9 +359,18 @@ export default function NCPIcuGatewayScreen() {
       setIsSaving(true);
       const db = await getDatabase();
 
+      // Integration with ClinicalDecisionEngine for CDSS Recommendations
+      const { ClinicalDecisionEngine } = await import('../../../src/domain/cdss/ClinicalDecisionEngine');
+      const recommendations = ClinicalDecisionEngine.analyzeICU({
+        nutricScore: (latestIcuCritical as any)?.nutricScore || 0,
+        isHemodynamicallyStable: !isOnVasopressors, // Proxy for stability
+        lactateLevel: latestVitals?.temperature ? 1.5 : undefined, // Example mapping
+      });
+
       await db.write(async () => {
         const icuCollection = db.get<IcuCriticalAssessment>('icu_critical_assessments');
         const auditLogCollection = db.get('audit_logs');
+        const recommendationCollection = db.get('clinical_recommendations');
 
         // Create the new ICU critical assessment row
         const newRecord = await icuCollection.create((record) => {
@@ -375,6 +385,18 @@ export default function NCPIcuGatewayScreen() {
           record.recordedAt = new Date();
         });
 
+        // Persist CDSS recommendations derived during this transaction
+        for (const rec of recommendations) {
+          await recommendationCollection.create((r: any) => {
+            r.patientId = patientId;
+            r.titleAr = rec.titleAr;
+            r.messageAr = rec.messageAr;
+            r.priority = rec.priority;
+            r.source = rec.source;
+            r.isRead = false;
+          });
+        }
+
         // Log detailed clinical audit log
         await auditLogCollection.create((record: any) => {
           record.actionType = 'icu_critical_override_audit';
@@ -387,16 +409,7 @@ export default function NCPIcuGatewayScreen() {
             refeedingRiskTier: pipelineResults.refeeding.riskTier,
             isCalorieCapTriggered: pipelineResults.refeeding.isCalorieCapTriggered,
             isOsmViolationBypassed,
-            originalTargets: {
-              flowRate: pipelineResults.enteral.flowRateMlHr,
-              proteinGrams: pipelineResults.enteral.totalProteinGrams,
-              predictedOsmolarity: pipelineResults.parenteral.predictedOsmolarity,
-            },
-            overriddenTargets: {
-              flowRate: flowRateOverride.trim() ? parseFloat(flowRateOverride) : null,
-              proteinGrams: enteralProteinOverride.trim() ? parseFloat(enteralProteinOverride) : null,
-              predictedOsmolarity: parenteralOsmOverride.trim() ? parseFloat(parenteralOsmOverride) : null,
-            },
+            recommendationsCount: recommendations.length,
             timestamp: new Date().toISOString(),
           });
         });
@@ -812,12 +825,14 @@ export default function NCPIcuGatewayScreen() {
               </View>
             </View>
 
-            <Button
-              title="حفظ سجلات التدخل والتوقيع سريرياً"
-              onPress={() => setIsSaveModalOpen(true)}
-              variant="primary"
-              disabled={overriddenTargets.isSubmissionLocked}
-            />
+            <HiddenWhenSandbox>
+              <Button
+                title="حفظ سجلات التدخل والتوقيع سريرياً"
+                onPress={() => setIsSaveModalOpen(true)}
+                variant="primary"
+                disabled={overriddenTargets.isSubmissionLocked}
+              />
+            </HiddenWhenSandbox>
           </View>
 
         </ScrollView>

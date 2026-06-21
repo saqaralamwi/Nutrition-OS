@@ -13,12 +13,13 @@ import { observeActiveMedications } from '../../../src/data/repositories/Reactiv
 import { watchQuery } from '../../../src/data/database/observe';
 import type DrugNutrientInteraction from '../../../src/data/models/DrugNutrientInteraction';
 
+
 interface InteractionAlert {
   id: string;
   activeIngredient: string;
   clinicalSeverity: string;
-  mechanismDescription: string;
-  dietaryActionRequired: string;
+  mechanismEn?: string;
+  dietaryActionEn?: string;
   isCritical: boolean;
   isModerate: boolean;
   isMild: boolean;
@@ -50,14 +51,15 @@ function observeDrugNutrientAlerts(patientId: string): Observable<InteractionAle
                 id: dni.id,
                 activeIngredient: dni.activeIngredient,
                 clinicalSeverity: dni.clinicalSeverity,
-                mechanismDescription: dni.mechanismDescription,
-                dietaryActionRequired: dni.dietaryActionRequired,
+                mechanismEn: dni.mechanismEn,
+                dietaryActionEn: dni.dietaryActionEn,
                 isCritical: dni.isCritical,
                 isModerate: dni.isModerate,
                 isMild: dni.isMild,
                 matchedMedication: medName,
               });
             }
+
           }
           return results;
         }),
@@ -174,13 +176,13 @@ export default function MedicationSafetyScreen() {
           <View style={styles.alertBody}>
             <View style={styles.bodySection}>
               <Text style={styles.bodyLabel}>آلية التفاعل</Text>
-              <Text style={styles.bodyText}>{alert.mechanismDescription}</Text>
+              <Text style={styles.bodyText}>{alert.mechanismEn}</Text>
             </View>
 
             <View style={styles.bodySection}>
               <Text style={styles.bodyLabel}>الإجراء الغذائي المطلوب</Text>
               <Text style={[styles.bodyText, styles.dietaryActionText]}>
-                {alert.dietaryActionRequired}
+                {alert.dietaryActionEn}
               </Text>
             </View>
 

@@ -8,6 +8,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
@@ -15,10 +16,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
+import { colors, spacing, safeHeaderPaddingTop, fontFamilies } from '../../../src/presentation/theme';
+import { useAppTheme } from '../../../src/presentation/hooks/useAppTheme';
+import SearchableDropdownField from '../../../src/presentation/components/SearchableDropdownField';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
-import DropdownField from '../../../src/presentation/components/DropdownField';
 import DatePickerField from '../../../src/presentation/components/DatePickerField';
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
@@ -120,6 +122,7 @@ export default function LaboratoryScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const showToast = useToastStore((s) => s.showToast);
+  const { theme } = useAppTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [labResults, setLabResults] = useState<LabResultRecord[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -323,16 +326,16 @@ export default function LaboratoryScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <ArabicText style={styles.loadingText}>جاري تحميل البيانات...</ArabicText>
+        <ArabicText style={[styles.loadingText, { color: theme.subtext }]}>جاري تحميل البيانات...</ArabicText>
       </View>
     );
   }
 
   return (
-    <View style={styles.flex}>
-      <ScrollView style={styles.container}>
+    <View style={[styles.flex, { backgroundColor: theme.background }]}>
+      <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
@@ -342,9 +345,9 @@ export default function LaboratoryScreen() {
         </View>
 
         {/* Lab Results List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <ArabicText bold style={styles.sectionTitle}>النتائج المسجلة</ArabicText>
+        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={[styles.sectionHeader, { borderBottomColor: theme.border }]}>
+            <ArabicText bold style={[styles.sectionTitle, { color: theme.text }]}>النتائج المسجلة</ArabicText>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <TouchableOpacity style={styles.addButton} onPress={() => router.push(`/patient/${patientId}/ocr`)}>
                 <Ionicons name="camera-outline" size={22} color={colors.primary} />
@@ -354,7 +357,7 @@ export default function LaboratoryScreen() {
                 <Ionicons name="trending-up-outline" size={22} color={colors.primary} />
                 <ArabicText style={styles.addButtonText}>اتجاهات</ArabicText>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
+              <TouchableOpacity style={styles.addButton} onPress={() => { setShowAddModal(true); }}>
                 <Ionicons name="add-circle" size={22} color={colors.primary} />
                 <ArabicText style={styles.addButtonText}>إضافة نتيجة</ArabicText>
               </TouchableOpacity>
@@ -362,33 +365,33 @@ export default function LaboratoryScreen() {
           </View>
 
           {labResults.length === 0 ? (
-            <ArabicText style={styles.emptyText}>لا توجد نتائج مختبرية مسجلة</ArabicText>
+            <ArabicText style={[styles.emptyText, { color: theme.subtext }]}>لا توجد نتائج مختبرية مسجلة</ArabicText>
           ) : (
             labResults.map((result) => (
               <TouchableOpacity
                 key={result.id}
-                style={styles.resultCard}
+                style={[styles.resultCard, { backgroundColor: theme.background, borderColor: theme.border }]}
                 onLongPress={() => handleDelete(result.id!, result.testName)}
                 activeOpacity={0.8}
               >
                 <View style={styles.resultHeader}>
                   <View style={styles.resultInfo}>
-                    <ArabicText bold style={styles.testName}>{result.testName}</ArabicText>
-                    <ArabicText style={styles.testDateText}>
+                    <ArabicText bold style={[styles.testName, { color: theme.text }]}>{result.testName}</ArabicText>
+                    <ArabicText style={[styles.testDateText, { color: theme.subtext }]}>
                       {formatSafeDate(result.testDate)}
                     </ArabicText>
                   </View>
                   <View style={[styles.interpBadge, { backgroundColor: INTERPRETATION_BG[result.interpretation as InterpretationResult] || '#F0F0F0' }]}>
-                    <ArabicText style={[styles.interpBadgeText, { color: INTERPRETATION_COLORS[result.interpretation as InterpretationResult] || colors.textSecondary }]}>
+                    <ArabicText style={[styles.interpBadgeText, { color: INTERPRETATION_COLORS[result.interpretation as InterpretationResult] || theme.subtext }]}>
                       {INTERPRETATION_LABELS[result.interpretation as InterpretationResult] || result.interpretation}
                     </ArabicText>
                   </View>
                 </View>
                 <View style={styles.resultBody}>
-                  <ArabicText style={styles.resultValue}>
-                    {result.resultValue} <ArabicText style={styles.resultUnit}>{result.unit}</ArabicText>
+                  <ArabicText style={[styles.resultValue, { color: theme.text }]}>
+                    {result.resultValue} <ArabicText style={[styles.resultUnit, { color: theme.subtext }]}>{result.unit}</ArabicText>
                   </ArabicText>
-                  <ArabicText style={styles.refRange}>
+                  <ArabicText style={[styles.refRange, { color: theme.subtext }]}>
                     النطاق المرجعي: {result.referenceRangeLow} - {result.referenceRangeHigh} {result.unit}
                   </ArabicText>
                 </View>
@@ -410,8 +413,8 @@ export default function LaboratoryScreen() {
 
       {/* Add Lab Result Modal */}
       <Modal visible={showAddModal} animationType="slide" onRequestClose={() => setShowAddModal(false)}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView style={styles.modalContainer}>
+        <KeyboardAvoidingView style={[styles.flex, { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView style={[styles.modalContainer, { backgroundColor: theme.background }]}>
             <View style={styles.modalHeader}>
               <ArabicText bold style={styles.modalTitle}>إضافة نتيجة مختبرية</ArabicText>
               <TouchableOpacity onPress={() => { setShowAddModal(false); form.reset(); setSelectedCatalogItem(null); setLiveInterpretation(null); setTestDate(null); }}>
@@ -419,7 +422,7 @@ export default function LaboratoryScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
               <TouchableOpacity
                 style={styles.ocrButton}
                 onPress={handleOcrClick}
@@ -430,9 +433,10 @@ export default function LaboratoryScreen() {
                   📸 إدخال البيانات الذكي عبر التصوير (OCR Scan)
                 </ArabicText>
               </TouchableOpacity>
-              <DropdownField
+
+              <SearchableDropdownField
                 label="اسم الفحص"
-                options={catalogOptions.map((o) => ({ label: o.label, value: o.value }))}
+                options={catalogOptions}
                 selectedValue={form.watch('testName')}
                 onValueChange={(val) => {
                   form.setValue('testName', val, { shouldValidate: true });
@@ -440,6 +444,7 @@ export default function LaboratoryScreen() {
                 }}
                 error={form.formState.errors.testName?.message}
                 placeholder="اختر الفحص..."
+                searchPlaceholder="ابحث عن الفحص..."
                 required
               />
 
@@ -621,5 +626,103 @@ const styles = StyleSheet.create({
     color: '#0369A1',
     fontSize: 12,
     fontWeight: '600',
+  },
+  searchSection: {
+    marginBottom: spacing.md,
+  },
+  searchSectionLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+    fontFamily: fontFamilies.regular,
+  },
+  searchInputContainer: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm + 2,
+    marginBottom: spacing.sm,
+    minHeight: 48,
+  },
+  searchInputFocused: {
+    borderColor: colors.accentTeal,
+    borderWidth: 1.5,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: fontFamilies.regular,
+    fontSize: 16,
+    color: colors.textPrimary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  catalogListWrapper: {
+    maxHeight: 240,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceSecondary,
+    overflow: 'hidden',
+  },
+  catalogList: {
+    flex: 1,
+  },
+  catalogItem: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    minHeight: 48,
+  },
+  catalogItemText: {
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontFamily: fontFamilies.regular,
+    textAlign: 'right',
+    flex: 1,
+  },
+  catalogItemAbbr: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontFamily: fontFamilies.regular,
+    textAlign: 'right',
+    marginStart: spacing.sm,
+  },
+  selectedTestDisplay: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.accentTeal,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    minHeight: 48,
+  },
+  emptySearchContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  emptySearchText: {
+    fontSize: 14,
+    color: colors.textDisabled,
+    fontFamily: fontFamilies.regular,
+    textAlign: 'center',
+  },
+  searchFieldError: {
+    fontSize: 12,
+    color: colors.danger,
+    marginTop: spacing.xs,
+    textAlign: 'right',
+    fontFamily: fontFamilies.regular,
   },
 });

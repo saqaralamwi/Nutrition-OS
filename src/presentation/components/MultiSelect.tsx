@@ -105,6 +105,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: 8,
     marginBottom: spacing.xs,
+    minHeight: 44,
   },
   optionSelected: {
     backgroundColor: colors.primaryLight,

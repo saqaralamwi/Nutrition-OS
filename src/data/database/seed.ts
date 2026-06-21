@@ -148,8 +148,8 @@ export async function seedDatabase(database: Database): Promise<void> {
           record.defaultUnit = t.defaultUnit;
           record.defaultRangeLow = t.defaultRangeLow;
           record.defaultRangeHigh = t.defaultRangeHigh;
-          record._raw.critical_low_factor = t.criticalLowFactor;
-          record._raw.critical_high_factor = t.criticalHighFactor;
+          record.criticalLowFactor = t.criticalLowFactor;
+          record.criticalHighFactor = t.criticalHighFactor;
           record.category = t.category;
         }),
       );
@@ -158,7 +158,6 @@ export async function seedDatabase(database: Database): Promise<void> {
         settingsCollection.prepareCreate((record: any) => {
           record.key = s.key;
           record.value = s.value;
-          record._raw.updated_at = NOW;
         }),
       );
 

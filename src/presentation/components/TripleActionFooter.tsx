@@ -177,10 +177,10 @@ export default function TripleActionFooter({
         activeOpacity={0.8}
       >
         {activeSaving ? (
-          <ActivityIndicator size="small" color="#FFF" />
+          <ActivityIndicator size="small" color={colors.primaryContrast} />
         ) : (
           <>
-            <Ionicons name="rocket-outline" size={18} color="#FFF" />
+            <Ionicons name="rocket-outline" size={18} color={colors.primaryContrast} />
             <ArabicText bold style={styles.btnGreenText}>
               حفظ واستمرار (التالي)
             </ArabicText>
@@ -197,7 +197,7 @@ export default function TripleActionFooter({
           disabled={activeSaving}
           activeOpacity={0.8}
         >
-          <Ionicons name="save-outline" size={16} color="#D97706" />
+          <Ionicons name="save-outline" size={16} color={colors.accentAmber} />
           <ArabicText style={styles.btnAmberText}>
             حفظ كمسودة
           </ArabicText>
@@ -210,7 +210,7 @@ export default function TripleActionFooter({
           disabled={activeSaving}
           activeOpacity={0.8}
         >
-          <Ionicons name="git-branch-outline" size={16} color="#4B5563" />
+          <Ionicons name="git-branch-outline" size={16} color={colors.textSecondary} />
           <ArabicText style={styles.btnSlateText}>
             انتقال مخصص...
           </ArabicText>
@@ -284,29 +284,29 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   btnGreen: {
-    backgroundColor: '#15803D', // Forest Green
+    backgroundColor: colors.success,
   },
   btnGreenText: {
-    color: '#FFF',
+    color: colors.primaryContrast,
     fontSize: 15,
   },
   btnAmber: {
     borderWidth: 1.5,
-    borderColor: '#F59E0B',
-    backgroundColor: '#FFFBEB',
+    borderColor: colors.warning,
+    backgroundColor: colors.surfaceElevated,
   },
   btnAmberText: {
-    color: '#D97706',
+    color: colors.accentAmber,
     fontSize: 13,
     fontFamily: fontFamilies?.medium || 'System',
   },
   btnSlate: {
     borderWidth: 1.5,
-    borderColor: '#9CA3AF',
-    backgroundColor: '#F9FAFB',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceCard,
   },
   btnSlateText: {
-    color: '#4B5563',
+    color: colors.textSecondary,
     fontSize: 13,
     fontFamily: fontFamilies?.medium || 'System',
   },

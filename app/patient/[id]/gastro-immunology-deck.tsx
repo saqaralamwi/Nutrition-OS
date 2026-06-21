@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { combineLatest, Observable, of } from 'rxjs';
+import { BehaviorSubject, combineLatest, Observable, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { Q } from '@nozbe/watermelondb';
 

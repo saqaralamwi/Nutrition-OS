@@ -209,7 +209,7 @@ export default function HiddenCaloriesDashboardScreen() {
               {unitStats.highRiskCount}
             </Text>
             <Text style={styles.statLabel}>حالات خطر فرط التغذية</Text>
-            <Text style={styles.statSubLabel}>السعرات المخفية &gt; 10% من TEE</Text>
+            <Text style={styles.statSubLabel}>السعرات المخفية {" > "} 10% من TEE</Text>
           </View>
         </View>
 

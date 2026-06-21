@@ -55,6 +55,10 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   clear: {
-    padding: spacing.xs,
+    padding: spacing.sm + 4,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

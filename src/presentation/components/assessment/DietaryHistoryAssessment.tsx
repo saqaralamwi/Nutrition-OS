@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontFamilies } from '../../theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import DropdownField from '../DropdownField';
 import TextInputField from '../TextInputField';
 import Button from '../Button';
@@ -114,6 +115,7 @@ export default function DietaryHistoryAssessment({
   onSaveSession,
   onSaveNewFood,
 }: DietaryHistoryAssessmentProps) {
+  const { theme, themeMode } = useAppTheme();
   const [dayType, setDayType] = useState<string>('normal_weekday');
   const [reliabilityScore, setReliabilityScore] = useState<string>('high');
   const [interviewDate, setInterviewDate] = useState<string>(formatDateString(new Date()));
@@ -121,51 +123,36 @@ export default function DietaryHistoryAssessment({
   const [saving, setSaving] = useState(false);
   const [showInjector, setShowInjector] = useState(false);
 
-  const [typeaheadText, setTypeaheadText] = useState<Record<string, string>>({});
-  const [typeaheadResults, setTypeaheadResults] = useState<Record<string, IFoodExchange[]>>({});
-  const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [searchModalSlot, setSearchModalSlot] = useState<MealSlotType | null>(null);
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [modalSearchResults, setModalSearchResults] = useState<IFoodExchange[]>([]);
+  const [isSearchingModal, setIsSearchingModal] = useState(false);
 
-  const [injectFoodName, setInjectFoodName] = useState('');
-  const [injectExchangeGroup, setInjectExchangeGroup] = useState<string>('starch');
-  const [injectCarbs, setInjectCarbs] = useState('');
-  const [injectProtein, setInjectProtein] = useState('');
-  const [injectFat, setInjectFat] = useState('');
-  const [injectCalories, setInjectCalories] = useState('');
-  const [injectGlycemicIndex, setInjectGlycemicIndex] = useState('50');
-  const [injectPotassium, setInjectPotassium] = useState<string>('low');
-  const [injectPhosphorus, setInjectPhosphorus] = useState<string>('low');
-  const [injectGlutenFree, setInjectGlutenFree] = useState(true);
-  const [injectLowFodmap, setInjectLowFodmap] = useState(true);
-  const [injectLactoseFree, setInjectLactoseFree] = useState(true);
-  const [injectMicronutrients, setInjectMicronutrients] = useState('');
-
-  const handleTypeaheadChange = useCallback((slotKey: string, text: string) => {
-    setTypeaheadText((prev) => ({ ...prev, [slotKey]: text }));
-    if (debounceRef.current[slotKey]) {
-      clearTimeout(debounceRef.current[slotKey]);
+  const performModalSearch = useCallback(async (text: string) => {
+    setModalSearchQuery(text);
+    if (!text.trim()) {
+      setModalSearchResults([]);
+      return;
     }
-    debounceRef.current[slotKey] = setTimeout(async () => {
-      if (text.trim().length === 0) {
-        setTypeaheadResults((prev) => ({ ...prev, [slotKey]: [] }));
-        return;
-      }
-      
-      try {
-        const results = await FoodRepository.searchExchanges(text);
-        const mapped = results.map(FoodRepository.mapExchangeToInterface);
-        setTypeaheadResults((prev) => ({ ...prev, [slotKey]: mapped }));
-      } catch (err) {
-        console.error('Food search failed:', err);
-        const q = text.trim().toLowerCase();
-        const filtered = masterFoods.filter((f) => f.foodNameAr.includes(q));
-        setTypeaheadResults((prev) => ({ ...prev, [slotKey]: filtered }));
-      }
-    }, 250);
+    setIsSearchingModal(true);
+    try {
+      const results = await FoodRepository.searchExchanges(text);
+      const mapped = results.map(FoodRepository.mapExchangeToInterface);
+      setModalSearchResults(mapped);
+    } catch (err) {
+      console.error('Food search failed:', err);
+      const q = text.trim().toLowerCase();
+      const filtered = masterFoods.filter((f) => f.foodNameAr.includes(q));
+      setModalSearchResults(filtered);
+    } finally {
+      setIsSearchingModal(false);
+    }
   }, [masterFoods]);
 
-  const selectTypeaheadItem = useCallback((slotKey: string, food: IFoodExchange) => {
+  const selectModalItem = useCallback((food: IFoodExchange) => {
+    if (!searchModalSlot) return;
     setMealSlots((prev) => {
-      const slot = prev[slotKey];
+      const slot = prev[searchModalSlot];
       if (!slot) return prev;
       const newEntry: MealEntry = {
         id: generateId(),
@@ -177,12 +164,13 @@ export default function DietaryHistoryAssessment({
       };
       return {
         ...prev,
-        [slotKey]: { ...slot, entries: [...slot.entries, newEntry] },
+        [searchModalSlot]: { ...slot, entries: [...slot.entries, newEntry] },
       };
     });
-    setTypeaheadText((prev) => ({ ...prev, [slotKey]: '' }));
-    setTypeaheadResults((prev) => ({ ...prev, [slotKey]: [] }));
-  }, []);
+    setSearchModalSlot(null);
+    setModalSearchQuery('');
+    setModalSearchResults([]);
+  }, [searchModalSlot]);
 
   const removeEntry = useCallback((slotKey: string, entryId: string) => {
     setMealSlots((prev) => {
@@ -311,6 +299,20 @@ export default function DietaryHistoryAssessment({
     }
   }, [onSaveSession, analysisResult, patientId, dayType, reliabilityScore, mealSlots]);
 
+  const [injectFoodName, setInjectFoodName] = useState('');
+  const [injectExchangeGroup, setInjectExchangeGroup] = useState<string>('starch');
+  const [injectCarbs, setInjectCarbs] = useState('');
+  const [injectProtein, setInjectProtein] = useState('');
+  const [injectFat, setInjectFat] = useState('');
+  const [injectCalories, setInjectCalories] = useState('');
+  const [injectGlycemicIndex, setInjectGlycemicIndex] = useState('50');
+  const [injectPotassium, setInjectPotassium] = useState<string>('low');
+  const [injectPhosphorus, setInjectPhosphorus] = useState<string>('low');
+  const [injectGlutenFree, setInjectGlutenFree] = useState(true);
+  const [injectLowFodmap, setInjectLowFodmap] = useState(true);
+  const [injectLactoseFree, setInjectLactoseFree] = useState(true);
+  const [injectMicronutrients, setInjectMicronutrients] = useState('');
+
   const handleAddNewFood = useCallback(async () => {
     const newFood: IFoodExchange = {
       exchangeGroup: injectExchangeGroup as ExchangeGroup,
@@ -366,13 +368,7 @@ export default function DietaryHistoryAssessment({
     return `${Math.min(coverage, 200)}%`;
   };
 
-  useEffect(() => {
-    return () => {
-      for (const key of Object.keys(debounceRef.current)) {
-        clearTimeout(debounceRef.current[key]);
-      }
-    };
-  }, []);
+  // Debounced search logic removed since search is modal-based with dynamic fetch
 
   const renderProgressBar = (
     labelAr: string,
@@ -385,16 +381,16 @@ export default function DietaryHistoryAssessment({
     return (
       <View style={styles.progressCard}>
         <View style={styles.progressHeader}>
-          <Text style={styles.progressLabel}>{labelAr}</Text>
-          <Text style={styles.progressValue}>
+          <Text style={[styles.progressLabel, { color: theme.subtext }]}>{labelAr}</Text>
+          <Text style={[styles.progressValue, { color: theme.subtext }]}>
             {actual.toFixed(2)} {unit} / {target.toFixed(2)} {unit} ({coverage.toFixed(2)}%)
           </Text>
         </View>
-        <View style={styles.progressTrack}>
+        <View style={[styles.progressTrack, { backgroundColor: theme.background }]}>
           <View
             style={[
               styles.progressFill,
-              { width: getProgressWidth(coverage), backgroundColor: color },
+              { width: getProgressWidth(coverage) as any, backgroundColor: color },
             ]}
           />
         </View>
@@ -405,30 +401,29 @@ export default function DietaryHistoryAssessment({
   const renderMealSlot = (slotKey: MealSlotType) => {
     const slot = mealSlots[slotKey];
     if (!slot) return null;
-    const tResults = typeaheadResults[slotKey] ?? [];
 
     return (
-      <View key={slotKey} style={styles.mealSlotCard}>
-        <Text style={styles.mealSlotTitle}>{MEAL_SLOT_LABELS[slotKey]}</Text>
+      <View key={slotKey} style={[styles.mealSlotCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <Text style={[styles.mealSlotTitle, { color: theme.text }]}>{MEAL_SLOT_LABELS[slotKey]}</Text>
 
-        <Text style={styles.fieldLabel}>وقت تناول الوجبة</Text>
+        <Text style={[styles.fieldLabel, { color: theme.subtext }]}>وقت تناول الوجبة</Text>
         <TextInput
-          style={styles.timeInput}
+          style={[styles.timeInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
           value={slot.consumptionTime}
           onChangeText={(t) => updateConsumptionTime(slotKey, t)}
           placeholder="08:00"
-          placeholderTextColor={colors.textDisabled}
+          placeholderTextColor={theme.subtext}
           textAlign="right"
         />
 
         {slot.entries.map((entry) => (
-          <View key={entry.id} style={styles.entryRow}>
+          <View key={entry.id} style={[styles.entryRow, { backgroundColor: theme.background }]}>
             <TouchableOpacity onPress={() => removeEntry(slotKey, entry.id)}>
               <Ionicons name="close-circle" size={22} color={colors.danger} />
             </TouchableOpacity>
-            <Text style={styles.entryName}>{entry.customReportedName}</Text>
+            <Text style={[styles.entryName, { color: theme.text }]}>{entry.customReportedName}</Text>
             <TextInput
-              style={styles.entryQtyInput}
+              style={[styles.entryQtyInput, { backgroundColor: theme.card, borderColor: theme.border, color: theme.text }]}
               value={String(entry.servingsConsumed)}
               onChangeText={(t) => {
                 const v = parseFloat(t) || 0;
@@ -448,303 +443,345 @@ export default function DietaryHistoryAssessment({
           </View>
         ))}
 
-        <View style={styles.typeaheadContainer}>
-          <TextInput
-            style={styles.typeaheadInput}
-            value={typeaheadText[slotKey] ?? ''}
-            onChangeText={(t) => handleTypeaheadChange(slotKey, t)}
-            placeholder="ابحث عن طعام..."
-            placeholderTextColor={colors.textDisabled}
-            textAlign="right"
-          />
-          {tResults.length > 0 && (
-            <View style={styles.typeaheadDropdown}>
-              <FlatList
-                data={tResults}
-                keyExtractor={(item) => item.foodNameAr}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.typeaheadItem}
-                    onPress={() => selectTypeaheadItem(slotKey, item)}
-                  >
-                    <Text style={styles.typeaheadItemText}>{item.foodNameAr}</Text>
-                    <Text style={styles.typeaheadItemSub}>
-                      {item.caloriesKcal} كال | {item.carbsG}g كرب | {item.proteinG}g بروتين
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                style={{ maxHeight: 180 }}
-              />
-            </View>
-          )}
-        </View>
+        <TouchableOpacity
+          style={styles.addFoodTrigger}
+          onPress={() => setSearchModalSlot(slotKey)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="search" size={18} color={colors.primary} />
+          <Text style={styles.addFoodTriggerText}>➕ بحث وإضافة طعام للوجبة</Text>
+        </TouchableOpacity>
       </View>
     );
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-    >
-      {/* ===== Session Metadata ===== */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>بيانات جلسة التغذية الراجعة</Text>
-        <View style={styles.metaRow}>
-          <View style={styles.metaHalf}>
-            <DropdownField
-              label="نوع اليوم"
-              options={DAY_TYPE_OPTIONS}
-              selectedValue={dayType}
-              onValueChange={setDayType}
-            />
-          </View>
-          <View style={styles.metaHalf}>
-            <DropdownField
-              label="مصداقية التذكر"
-              options={RELIABILITY_OPTIONS}
-              selectedValue={reliabilityScore}
-              onValueChange={setReliabilityScore}
-            />
-          </View>
-        </View>
-        <TextInputField
-          label="تاريخ المقابلة"
-          value={interviewDate}
-          onChangeText={setInterviewDate}
-          placeholder="YYYY-MM-DD"
-        />
-      </View>
-
-      {/* ===== Progress Bars ===== */}
-      {analysisResult && (
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>مؤشرات التغطية الغذائية</Text>
-          {renderProgressBar(
-            'السعرات الحرارية', 'كيلو كالوري',
-            analysisResult.actualTotals.calories,
-            targets.calories,
-            analysisResult.coveragePercentages.calories,
-          )}
-          {renderProgressBar(
-            'البروتين', 'غرام',
-            analysisResult.actualTotals.protein,
-            targets.protein,
-            analysisResult.coveragePercentages.protein,
-          )}
-          {renderProgressBar(
-            'الكربوهيدرات', 'غرام',
-            analysisResult.actualTotals.carbs,
-            targets.carbs,
-            analysisResult.coveragePercentages.carbs,
-          )}
-          {renderProgressBar(
-            'الدهون', 'غرام',
-            analysisResult.actualTotals.fat,
-            targets.fat,
-            analysisResult.coveragePercentages.fat,
-          )}
-          {renderProgressBar(
-            'السوائل', 'مل',
-            analysisResult.actualTotals.fluidMl,
-            targets.fluidMl,
-            analysisResult.coveragePercentages.fluid,
-          )}
-        </View>
-      )}
-
-      {/* ===== 6-Meal Matrix ===== */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>مصفوفة الوجبات</Text>
-        {MEAL_SLOT_ORDER.map(renderMealSlot)}
-      </View>
-
-      {/* ===== Alerts & Educational Cards ===== */}
-      {analysisResult && (analysisResult.clinicalAlerts.length > 0 || analysisResult.educationalCards.length > 0) && (
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>التنبيهات والتوجيهات السريرية</Text>
-          {analysisResult.clinicalAlerts.map((alert, i) => (
-            <View
-              key={`alert-${i}`}
-              style={[
-                styles.alertCard,
-                alert.severity === 'critical'
-                  ? styles.alertCritical
-                  : alert.severity === 'warning'
-                    ? styles.alertWarning
-                    : styles.alertInfo,
-              ]}
-            >
-              <Ionicons
-                name={
-                  alert.severity === 'critical'
-                    ? 'warning'
-                    : alert.severity === 'warning'
-                      ? 'alert-circle'
-                      : 'information-circle'
-                }
-                size={22}
-                color={
-                  alert.severity === 'critical'
-                    ? colors.danger
-                    : alert.severity === 'warning'
-                      ? colors.warning
-                      : colors.info
-                }
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.background }]}
+        contentContainerStyle={styles.contentContainer}
+      >
+        {/* ===== Session Metadata ===== */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>بيانات جلسة التغذية الراجعة</Text>
+          <View style={styles.metaRow}>
+            <View style={styles.metaHalf}>
+              <DropdownField
+                label="نوع اليوم"
+                options={DAY_TYPE_OPTIONS}
+                selectedValue={dayType}
+                onValueChange={setDayType}
               />
-              <Text style={styles.alertText}>{alert.arabicMessage}</Text>
             </View>
-          ))}
-          {analysisResult.educationalCards.map((card, i) => (
-            <View key={`edu-${i}`} style={styles.educationalCard}>
-              <Ionicons name="bulb" size={22} color={colors.warning} />
-              <Text style={styles.educationalText}>{card}</Text>
+            <View style={styles.metaHalf}>
+              <DropdownField
+                label="مصداقية التذكر"
+                options={RELIABILITY_OPTIONS}
+                selectedValue={reliabilityScore}
+                onValueChange={setReliabilityScore}
+              />
             </View>
-          ))}
-        </View>
-      )}
-
-      {/* ===== Save Session ===== */}
-      {onSaveSession && analysisResult && (
-        <View style={styles.sectionCard}>
-          <Button
-            title="حفظ التقييم التغذوي"
-            onPress={handleSaveSession}
-            loading={saving}
-            disabled={saving}
+          </View>
+          <TextInputField
+            label="تاريخ المقابلة"
+            value={interviewDate}
+            onChangeText={setInterviewDate}
+            placeholder="YYYY-MM-DD"
           />
         </View>
-      )}
 
-      {/* ===== Quick Food Injector ===== */}
-      <View style={styles.sectionCard}>
-        <TouchableOpacity
-          style={styles.injectorToggle}
-          onPress={() => setShowInjector(!showInjector)}
-        >
-          <Ionicons
-            name={showInjector ? 'chevron-up' : 'add-circle'}
-            size={22}
-            color={colors.primary}
-          />
-          <Text style={styles.injectorToggleText}>
-            {showInjector ? 'إخفاء إضافة طعام جديد' : 'إضافة طعام مخصص جديد'}
-          </Text>
-        </TouchableOpacity>
+        {/* ===== Progress Bars ===== */}
+        {analysisResult && (
+          <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>مؤشرات التغطية الغذائية</Text>
+            {renderProgressBar(
+              'السعرات الحرارية', 'كيلو كالوري',
+              analysisResult.actualTotals.calories,
+              targets.calories,
+              analysisResult.coveragePercentages.calories,
+            )}
+            {renderProgressBar(
+              'البروتين', 'غرام',
+              analysisResult.actualTotals.protein,
+              targets.protein,
+              analysisResult.coveragePercentages.protein,
+            )}
+            {renderProgressBar(
+              'الكربوهيدرات', 'غرام',
+              analysisResult.actualTotals.carbs,
+              targets.carbs,
+              analysisResult.coveragePercentages.carbs,
+            )}
+            {renderProgressBar(
+              'الدهون', 'غرام',
+              analysisResult.actualTotals.fat,
+              targets.fat,
+              analysisResult.coveragePercentages.fat,
+            )}
+            {renderProgressBar(
+              'السوائل', 'مل',
+              analysisResult.actualTotals.fluidMl,
+              targets.fluidMl,
+              analysisResult.coveragePercentages.fluid,
+            )}
+          </View>
+        )}
 
-        {showInjector && (
-          <View style={styles.injectorForm}>
-            <TextInputField
-              label="اسم الطعام (عربي)"
-              value={injectFoodName}
-              onChangeText={setInjectFoodName}
-            />
-            <DropdownField
-              label="مجموعة التبادل"
-              options={EXCHANGE_GROUP_OPTIONS}
-              selectedValue={injectExchangeGroup}
-              onValueChange={setInjectExchangeGroup}
-            />
-            <View style={styles.metaRow}>
-              <View style={styles.metaHalf}>
-                <TextInputField
-                  label="كربوهيدرات (غ)"
-                  value={injectCarbs}
-                  onChangeText={setInjectCarbs}
-                  keyboardType="decimal-pad"
+        {/* ===== 6-Meal Matrix ===== */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>مصفوفة الوجبات</Text>
+          {MEAL_SLOT_ORDER.map(renderMealSlot)}
+        </View>
+
+        {/* ===== Alerts & Educational Cards ===== */}
+        {analysisResult && (analysisResult.clinicalAlerts.length > 0 || analysisResult.educationalCards.length > 0) && (
+          <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>التنبيهات والتوجيهات السريرية</Text>
+            {analysisResult.clinicalAlerts.map((alert, i) => (
+              <View
+                key={`alert-${i}`}
+                style={[
+                  styles.alertCard,
+                  alert.severity === 'critical'
+                    ? styles.alertCritical
+                    : alert.severity === 'warning'
+                      ? styles.alertWarning
+                      : styles.alertInfo,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    alert.severity === 'critical'
+                      ? 'warning'
+                      : alert.severity === 'warning'
+                        ? 'alert-circle'
+                        : 'information-circle'
+                  }
+                  size={22}
+                  color={
+                    alert.severity === 'critical'
+                      ? colors.danger
+                      : alert.severity === 'warning'
+                        ? colors.warning
+                        : colors.info
+                  }
                 />
+                <Text style={styles.alertText}>{alert.arabicMessage}</Text>
               </View>
-              <View style={styles.metaHalf}>
-                <TextInputField
-                  label="بروتين (غ)"
-                  value={injectProtein}
-                  onChangeText={setInjectProtein}
-                  keyboardType="decimal-pad"
-                />
+            ))}
+            {analysisResult.educationalCards.map((card, i) => (
+              <View key={`edu-${i}`} style={styles.educationalCard}>
+                <Ionicons name="bulb" size={22} color={colors.warning} />
+                <Text style={styles.educationalText}>{card}</Text>
               </View>
-            </View>
-            <View style={styles.metaRow}>
-              <View style={styles.metaHalf}>
-                <TextInputField
-                  label="دهون (غ)"
-                  value={injectFat}
-                  onChangeText={setInjectFat}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={styles.metaHalf}>
-                <TextInputField
-                  label="سعرات (ك.كال)"
-                  value={injectCalories}
-                  onChangeText={setInjectCalories}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-            <TextInputField
-              label="مؤشر جلايسمي"
-              value={injectGlycemicIndex}
-              onChangeText={setInjectGlycemicIndex}
-              keyboardType="decimal-pad"
-            />
-            <View style={styles.metaRow}>
-              <View style={styles.metaHalf}>
-                <DropdownField
-                  label="مستوى البوتاسيوم"
-                  options={MINERAL_LEVEL_OPTIONS}
-                  selectedValue={injectPotassium}
-                  onValueChange={setInjectPotassium}
-                />
-              </View>
-              <View style={styles.metaHalf}>
-                <DropdownField
-                  label="مستوى الفوسفور"
-                  options={MINERAL_LEVEL_OPTIONS}
-                  selectedValue={injectPhosphorus}
-                  onValueChange={setInjectPhosphorus}
-                />
-              </View>
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>خالٍ من الغلوتين</Text>
-              <Switch
-                value={injectGlutenFree}
-                onValueChange={setInjectGlutenFree}
-                trackColor={{ false: colors.border, true: colors.primary }}
-              />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>منخفض الفودماب</Text>
-              <Switch
-                value={injectLowFodmap}
-                onValueChange={setInjectLowFodmap}
-                trackColor={{ false: colors.border, true: colors.primary }}
-              />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>خالٍ من اللاكتوز</Text>
-              <Switch
-                value={injectLactoseFree}
-                onValueChange={setInjectLactoseFree}
-                trackColor={{ false: colors.border, true: colors.primary }}
-              />
-            </View>
-            <TextInputField
-              label="وسوم غذائية دقيقة (JSON)"
-              value={injectMicronutrients}
-              onChangeText={setInjectMicronutrients}
-              placeholder='["zinc","vitamin_c"]'
-            />
+            ))}
+          </View>
+        )}
+
+        {/* ===== Save Session ===== */}
+        {onSaveSession && analysisResult && (
+          <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Button
-              title="حفظ الطعام المخصص"
-              onPress={handleAddNewFood}
-              disabled={!injectFoodName.trim()}
-              variant="secondary"
+              title="حفظ التقييم التغذوي"
+              onPress={handleSaveSession}
+              loading={saving}
+              disabled={saving}
             />
           </View>
         )}
-      </View>
-    </ScrollView>
+
+        {/* ===== Quick Food Injector ===== */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity
+            style={styles.injectorToggle}
+            onPress={() => setShowInjector(!showInjector)}
+          >
+            <Ionicons
+              name={showInjector ? 'chevron-up' : 'add-circle'}
+              size={22}
+              color={colors.primary}
+            />
+            <Text style={styles.injectorToggleText}>
+              {showInjector ? 'إخفاء إضافة طعام جديد' : 'إضافة طعام مخصص جديد'}
+            </Text>
+          </TouchableOpacity>
+
+          {showInjector && (
+            <View style={styles.injectorForm}>
+              <TextInputField
+                label="اسم الطعام (عربي)"
+                value={injectFoodName}
+                onChangeText={setInjectFoodName}
+              />
+              <DropdownField
+                label="مجموعة التبادل"
+                options={EXCHANGE_GROUP_OPTIONS}
+                selectedValue={injectExchangeGroup}
+                onValueChange={setInjectExchangeGroup}
+              />
+              <View style={styles.metaRow}>
+                <View style={styles.metaHalf}>
+                  <TextInputField
+                    label="كربوهيدرات (غ)"
+                    value={injectCarbs}
+                    onChangeText={setInjectCarbs}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={styles.metaHalf}>
+                  <TextInputField
+                    label="بروتين (غ)"
+                    value={injectProtein}
+                    onChangeText={setInjectProtein}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+              <View style={styles.metaRow}>
+                <View style={styles.metaHalf}>
+                  <TextInputField
+                    label="دهون (غ)"
+                    value={injectFat}
+                    onChangeText={setInjectFat}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={styles.metaHalf}>
+                  <TextInputField
+                    label="سعرات (ك.كال)"
+                    value={injectCalories}
+                    onChangeText={setInjectCalories}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+              <TextInputField
+                label="مؤشر جلايسمي"
+                value={injectGlycemicIndex}
+                onChangeText={setInjectGlycemicIndex}
+                keyboardType="decimal-pad"
+              />
+              <View style={styles.metaRow}>
+                <View style={styles.metaHalf}>
+                  <DropdownField
+                    label="مستوى البوتاسيوم"
+                    options={MINERAL_LEVEL_OPTIONS}
+                    selectedValue={injectPotassium}
+                    onValueChange={setInjectPotassium}
+                  />
+                </View>
+                <View style={styles.metaHalf}>
+                  <DropdownField
+                    label="مستوى الفوسفور"
+                    options={MINERAL_LEVEL_OPTIONS}
+                    selectedValue={injectPhosphorus}
+                    onValueChange={setInjectPhosphorus}
+                  />
+                </View>
+              </View>
+              <View style={styles.switchRow}>
+                <Text style={[styles.switchLabel, { color: theme.text }]}>خالٍ من الغلوتين</Text>
+                <Switch
+                  value={injectGlutenFree}
+                  onValueChange={setInjectGlutenFree}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                />
+              </View>
+              <View style={styles.switchRow}>
+                <Text style={[styles.switchLabel, { color: theme.text }]}>منخفض الفودماب</Text>
+                <Switch
+                  value={injectLowFodmap}
+                  onValueChange={setInjectLowFodmap}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                />
+              </View>
+              <View style={styles.switchRow}>
+                <Text style={[styles.switchLabel, { color: theme.text }]}>خالٍ من اللاكتوز</Text>
+                <Switch
+                  value={injectLactoseFree}
+                  onValueChange={setInjectLactoseFree}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                />
+              </View>
+              <TextInputField
+                label="وسوم غذائية دقيقة (JSON)"
+                value={injectMicronutrients}
+                onChangeText={setInjectMicronutrients}
+                placeholder='["zinc","vitamin_c"]'
+              />
+              <Button
+                title="حفظ الطعام المخصص"
+                onPress={handleAddNewFood}
+                disabled={!injectFoodName.trim()}
+                variant="secondary"
+              />
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* ===== Food Search Modal ===== */}
+      <Modal
+        visible={searchModalSlot !== null}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setSearchModalSlot(null)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: theme.background }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              {searchModalSlot ? `إضافة طعام إلى ${MEAL_SLOT_LABELS[searchModalSlot]}` : 'بحث عن طعام'}
+            </Text>
+            <TouchableOpacity onPress={() => setSearchModalSlot(null)}>
+              <Ionicons name="close" size={28} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalContent}>
+            <View style={[styles.searchBarContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Ionicons name="search" size={20} color={theme.subtext} />
+              <TextInput
+                style={[styles.modalSearchInput, { color: theme.text }]}
+                placeholder="ابحث عن طعام (مثال: تفاح، خبز، أرز...)"
+                placeholderTextColor={theme.subtext}
+                value={modalSearchQuery}
+                onChangeText={performModalSearch}
+                autoFocus
+                textAlign="right"
+              />
+            </View>
+
+            {isSearchingModal ? (
+              <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+            ) : (
+              <FlatList
+                data={modalSearchResults}
+                keyExtractor={(item, index) => `${item.foodNameAr}-${index}`}
+                contentContainerStyle={{ paddingBottom: 40 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.modalResultItem, { borderBottomColor: theme.border }]}
+                    onPress={() => selectModalItem(item)}
+                  >
+                    <Text style={[styles.modalResultText, { color: theme.text }]}>{item.foodNameAr}</Text>
+                    <Text style={[styles.modalResultSub, { color: theme.subtext }]}>
+                      {item.caloriesKcal} سعرة | {item.carbsG}g كرب | {item.proteinG}g بروتين | {item.fatG}g دهون
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  modalSearchQuery.trim().length > 0 ? (
+                    <View style={styles.modalEmptyContainer}>
+                      <Text style={[styles.modalEmptyText, { color: theme.subtext }]}>لم يتم العثور على نتائج للبحث</Text>
+                    </View>
+                  ) : null
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -988,5 +1025,91 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.regular,
     color: colors.textPrimary,
     textAlign: 'right',
+  },
+  addFoodTrigger: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    padding: spacing.sm,
+    backgroundColor: 'rgba(26, 82, 118, 0.05)',
+    marginTop: spacing.sm,
+  },
+  addFoodTriggerText: {
+    fontSize: 14,
+    fontFamily: fontFamilies.bold,
+    color: colors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    paddingTop: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
+    color: colors.textPrimary,
+  },
+  modalContent: {
+    flex: 1,
+    padding: spacing.md,
+  },
+  searchBarContainer: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  modalSearchInput: {
+    flex: 1,
+    height: 48,
+    color: colors.textPrimary,
+    fontFamily: fontFamilies.regular,
+    fontSize: 16,
+    paddingHorizontal: spacing.sm,
+  },
+  modalResultItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  modalResultText: {
+    fontSize: 16,
+    fontFamily: fontFamilies.bold,
+    color: colors.textPrimary,
+    textAlign: 'right',
+  },
+  modalResultSub: {
+    fontSize: 12,
+    fontFamily: fontFamilies.regular,
+    color: colors.textSecondary,
+    textAlign: 'right',
+    marginTop: 2,
+  },
+  modalEmptyContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  modalEmptyText: {
+    fontSize: 14,
+    color: colors.textDisabled,
+    fontFamily: fontFamilies.regular,
   },
 });

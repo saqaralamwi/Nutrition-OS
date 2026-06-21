@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   View,
+  Text,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import { useBeforeRemoveGuard } from '../../../src/presentation/hooks/useBeforeRemoveGuard';
 import { Ionicons } from '@expo/vector-icons';
 import { Q } from '@nozbe/watermelondb';
 import { combineLatest } from 'rxjs';
@@ -17,16 +18,17 @@ import { map } from 'rxjs/operators';
 
 import { useSafePatientId } from '../../../src/presentation/hooks/useSafePatientId';
 import { watchQuery, watchRecord } from '../../../src/data/database/observe';
-import { getDatabase } from '../../../src/data/database';
 import Patient from '../../../src/data/models/Patient';
 import CardiovascularAssessment from '../../../src/data/models/CardiovascularAssessment';
 import PatientEducationContent from '../../../src/data/models/PatientEducationContent';
-import { CardiovascularEarlyWarningSystem } from '../../../src/domain/monitors/CardiovascularEarlyWarningSystem';
+import { useCardioAssessmentPersister } from '../../../src/presentation/hooks/useCardioAssessmentPersister';
+import type { EdemaGrading } from '../../../src/data/types/cardiovascular';
 import { colors, spacing, safeHeaderPaddingTop, fontFamilies } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import Button from '../../../src/presentation/components/Button';
+import { HiddenWhenSandbox } from '../../../src/presentation/components/HiddenWhenSandbox';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
 const EDEMA_OPTIONS = [
@@ -38,37 +40,15 @@ const EDEMA_OPTIONS = [
 ];
 
 const DASH_CHECKBOXES = [
-  { key: 'lowSodium', label: 'تجنب الأطعمة المالحة (< 1500 مجم صوديوم/يوم)' },
-  { key: 'lowSaturatedFat', label: 'تقليل الدهون المشبعة والكوليسترول' },
-  { key: 'fruitVeg', label: 'تناول 5+ حصص من الفواكه والخضروات يومياً' },
-  { key: 'wholeGrains', label: 'استبدال الحبوب المكررة بالحبوب الكاملة' },
-  { key: 'leanProtein', label: 'اختيار البروتين الخالي من الدهون والأسماك' },
-  { key: 'lowSugar', label: 'تجنب المشروبات المحلاة والسكريات المضافة' },
-  { key: 'moderateAlcohol', label: 'الحد من الكحول (إن وجد) بمقدار مشروب واحد/يوم' },
-  { key: 'dailyExercise', label: 'نشاط بدني معتدل ≥ 30 دقيقة، 5 أيام/أسبوع' },
+  { key: 'dashLowSodium', label: 'تجنب الأطعمة المالحة (< 1500 مجم صوديوم/يوم)' },
+  { key: 'dashLowSaturatedFat', label: 'تقليل الدهون المشبعة والكوليسترول' },
+  { key: 'dashFruitVeg', label: 'تناول 5+ حصص من الفواكه والخضروات يومياً' },
+  { key: 'dashWholeGrains', label: 'استبدال الحبوب المكررة بالحبوب الكاملة' },
+  { key: 'dashLeanProtein', label: 'اختيار البروتين الخالي من الدهون والأسماك' },
+  { key: 'dashLowSugar', label: 'تجنب المشروبات المحلاة والسكريات المضافة' },
+  { key: 'dashModerateAlcohol', label: 'الحد من الكحول (إن وجد) بمقدار مشروب واحد/يوم' },
+  { key: 'dashDailyExercise', label: 'نشاط بدني معتدل ≥ 30 دقيقة، 5 أيام/أسبوع' },
 ];
-
-interface IDashState {
-  lowSodium: boolean;
-  lowSaturatedFat: boolean;
-  fruitVeg: boolean;
-  wholeGrains: boolean;
-  leanProtein: boolean;
-  lowSugar: boolean;
-  moderateAlcohol: boolean;
-  dailyExercise: boolean;
-}
-
-const initialDash: IDashState = {
-  lowSodium: false,
-  lowSaturatedFat: false,
-  fruitVeg: false,
-  wholeGrains: false,
-  leanProtein: false,
-  lowSugar: false,
-  moderateAlcohol: false,
-  dailyExercise: false,
-};
 
 function DashCheckbox({
   label,
@@ -138,42 +118,33 @@ function EducationCard({ item }: { item: PatientEducationContent }) {
 export default function CardioAssessmentScreen() {
   const patientId = useSafePatientId();
   const router = useRouter();
+  const navigation = useNavigation();
   const showToast = useToastStore((s) => s.showToast);
+
+  const {
+    formState,
+    setField,
+    computed,
+    isDirty,
+    isSaving,
+    isLoading,
+    saveImmediate,
+  } = useCardioAssessmentPersister(patientId);
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [assessments, setAssessments] = useState<CardiovascularAssessment[]>([]);
   const [educationItems, setEducationItems] = useState<PatientEducationContent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const [systolicBp, setSystolicBp] = useState('');
-  const [diastolicBp, setDiastolicBp] = useState('');
-  const [heartRate, setHeartRate] = useState('');
-  const [totalCholesterol, setTotalCholesterol] = useState('');
-  const [ldlCholesterol, setLdlCholesterol] = useState('');
-  const [hdlCholesterol, setHdlCholesterol] = useState('');
-  const [triglycerides, setTriglycerides] = useState('');
-  const [dryWeight, setDryWeight] = useState('');
-  const [edemaGrading, setEdemaGrading] = useState('none');
-  const [hasDyspnea, setHasDyspnea] = useState(false);
-  const [hasOrthopnea, setHasOrthopnea] = useState(false);
-  const [dashState, setDashState] = useState<IDashState>(initialDash);
-
-  const [riskResult, setRiskResult] = useState<RiskDisplay | null>(null);
   const [showEducation, setShowEducation] = useState(false);
+  const [hasLoadedStream, setHasLoadedStream] = useState(false);
 
   useEffect(() => {
-    setIsLoading(true);
-
     const patient$ = watchRecord<Patient>('patients', patientId);
-
     const assessments$ = watchQuery<CardiovascularAssessment>((db) => {
       return db.get('cardiovascular_assessments').query(
         Q.where('patient_id', patientId),
         Q.sortBy('recorded_at', 'desc'),
       );
     }).pipe(map((records) => records.slice(0, 30)));
-
     const education$ = watchQuery<PatientEducationContent>((db) => {
       return db.get('patient_education_content').query(
         Q.where('patient_id', patientId),
@@ -186,172 +157,33 @@ export default function CardioAssessmentScreen() {
         setPatient(p);
         setAssessments(records);
         setEducationItems(educationRecords);
-        setIsLoading(false);
+        setHasLoadedStream(true);
       },
       error: (err) => {
         console.error('Cardio stream error:', err);
         showToast('خطأ في تحميل بيانات القلب والأوعية الدموية', 'error');
-        setIsLoading(false);
+        setHasLoadedStream(true);
       },
     });
 
     return () => stream.unsubscribe();
-  }, [patientId]);
+  }, [patientId, showToast]);
 
-  const toggleDash = useCallback((key: keyof IDashState) => {
-    setDashState((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  useBeforeRemoveGuard(navigation, isDirty, saveImmediate);
 
-  const dashScore = useMemo(() => {
-    return Object.values(dashState).filter(Boolean).length;
-  }, [dashState]);
-
-  const resetForm = useCallback(() => {
-    setSystolicBp('');
-    setDiastolicBp('');
-    setHeartRate('');
-    setTotalCholesterol('');
-    setLdlCholesterol('');
-    setHdlCholesterol('');
-    setTriglycerides('');
-    setDryWeight('');
-    setEdemaGrading('none');
-    setHasDyspnea(false);
-    setHasOrthopnea(false);
-    setDashState(initialDash);
-    setRiskResult(null);
-  }, []);
-
-  type RiskDisplay = {
-    status: string;
-    color: string;
-    alerts: string[];
-    fluidRestriction: number;
-  };
-
-  const evaluateRisk = useCallback((): RiskDisplay => {
-    const sbp = parseFloat(systolicBp);
-    const dbp = parseFloat(diastolicBp);
-    const tc = parseFloat(totalCholesterol);
-    const ldl = parseFloat(ldlCholesterol);
-    const hdl = parseFloat(hdlCholesterol);
-    const tg = parseFloat(triglycerides);
-    const hr = parseFloat(heartRate);
-
-    const warnings: string[] = [];
-
-    if (sbp >= 180 || dbp >= 120) {
-      warnings.push('🚨 أزمة فرط ضغط دم (Hypertensive Crisis) — تدخل طبي فوري مطلوب');
-    } else if (sbp >= 140 || dbp >= 90) {
-      warnings.push('⚠️ المرحلة الثانية من ارتفاع الضغط — يحتاج علاج دوائي');
-    } else if (sbp >= 130 || dbp >= 85) {
-      warnings.push('⚠️ المرحلة الأولى من ارتفاع الضغط — يستلزم متابعة');
-    } else if (sbp >= 120 && sbp < 130) {
-      warnings.push('⚠️ ضغط دم مرتفع (Elevated) — يستلزم تغيير نمط الحياة');
-    }
-
-    if (tc > 0 && (tc >= 240 || ldl >= 160 || tg >= 200)) {
-      warnings.push('🚨 فرط شحوم الدم مرتفع الخطورة (High-Risk Dyslipidemia)');
-    } else if (tc > 0 && (tc >= 200 || ldl >= 130 || tg >= 150)) {
-      warnings.push('⚠️ فرط شحوم الدم حدودي (Borderline Dyslipidemia)');
-    }
-
-    if (hdl > 0 && hdl < 40) {
-      warnings.push('⚠️ HDL منخفض — خطر قلبي وعائي مرتفع');
-    }
-
-    if (hr > 0 && hr > 100) {
-      warnings.push('⚠️ تسرع القلب (Tachycardia) — معدل النبض فوق 100/دقيقة');
-    }
-    if (hr > 0 && hr < 50) {
-      warnings.push('⚠️ بطء القلب (Bradycardia) — معدل النبض أقل من 50/دقيقة');
-    }
-
-    if (dashScore < 5) {
-      warnings.push('📋 الامتثال لنظام DASH الغذائي منخفض — تحتاج استشارة تغذوية عاجلة');
-    }
-
-    let fluidRestriction = 0;
-    if (edemaGrading !== 'none' || hasDyspnea || hasOrthopnea) {
-      fluidRestriction = 1500;
-      if (edemaGrading === '3+' || edemaGrading === '4+' || hasDyspnea || hasOrthopnea) {
-        fluidRestriction = 1000;
-      }
-      warnings.push(`💧 تقييد السوائل: ${fluidRestriction} مل/يوم بناءً على حالة الاحتقان`);
-    }
-
-    let status: string;
-    let color: string;
-
-    if (warnings.some((w) => w.startsWith('🚨'))) {
-      status = 'إنذار أحمر — خطر مرتفع';
-      color = '#EF4444';
-    } else if (warnings.some((w) => w.startsWith('⚠️'))) {
-      status = 'تنبيه أصفر — بحاجة لمتابعة';
-      color = '#F59E0B';
-    } else {
-      status = 'مستقر — أخضر';
-      color = '#10B981';
-    }
-
-    return { status, color, alerts: warnings, fluidRestriction };
-  }, [systolicBp, diastolicBp, totalCholesterol, ldlCholesterol, hdlCholesterol, triglycerides, heartRate, edemaGrading, hasDyspnea, hasOrthopnea, dashScore]);
-
-  const handleSave = useCallback(async () => {
-    const sbp = parseFloat(systolicBp);
-    const dbp = parseFloat(diastolicBp);
-    const tc = totalCholesterol ? parseFloat(totalCholesterol) : 0;
-    const ldl = ldlCholesterol ? parseFloat(ldlCholesterol) : 0;
-    const hdl = hdlCholesterol ? parseFloat(hdlCholesterol) : 0;
-    const tg = triglycerides ? parseFloat(triglycerides) : 0;
-    const dw = dryWeight ? parseFloat(dryWeight) : 0;
-
-    if (!systolicBp || isNaN(sbp) || !diastolicBp || isNaN(dbp)) {
-      showToast('الرجاء إدخال قيم ضغط الدم (الانقباضي والانبساطي)', 'error');
-      return;
-    }
-    if (sbp <= 0 || dbp <= 0) {
-      showToast('قيم ضغط الدم يجب أن تكون أكبر من صفر', 'error');
-      return;
-    }
-
-    setIsSaving(true);
+  const handleSaveAndExit = useCallback(async () => {
     try {
-      const db = await getDatabase();
-      await db.write(async (writer) => {
-        await writer.create('cardiovascular_assessments', (record: any) => {
-          record.patientId = patientId;
-          record.systolicBloodPressure = sbp;
-          record.diastolicBloodPressure = dbp;
-          record.totalCholesterol = tc;
-          record.ldlCholesterol = ldl;
-          record.hdlCholesterol = hdl;
-          record.triglycerides = tg;
-          record.measuredDryWeightKg = dw;
-          record.hasPeripheralEdema = edemaGrading !== 'none';
-          record.edemaGrading = edemaGrading;
-          record.recordedAt = new Date();
-        });
-      });
-
-      const risk = evaluateRisk();
-      setRiskResult(risk);
-
+      await saveImmediate();
       showToast('تم حفظ تقييم القلب والأوعية الدموية بنجاح', 'success');
-    } catch (error) {
-      console.error('Save cardio assessment error:', error);
-      showToast('فشل في حفظ التقييم', 'error');
-    } finally {
-      setIsSaving(false);
+      router.back();
+    } catch {
+      showToast('فشل حفظ التقييم', 'error');
     }
-  }, [patientId, systolicBp, diastolicBp, totalCholesterol, ldlCholesterol, hdlCholesterol, triglycerides, dryWeight, edemaGrading, evaluateRisk, showToast]);
+  }, [saveImmediate, showToast, router]);
 
-  const handleAnalyzeOnly = useCallback(() => {
-    const risk = evaluateRisk();
-    setRiskResult(risk);
-  }, [evaluateRisk]);
+  const isLoadingScreen = isLoading || !hasLoadedStream;
 
-  if (isLoading) {
+  if (isLoadingScreen) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -384,8 +216,8 @@ export default function CardioAssessmentScreen() {
               <View style={styles.halfField}>
                 <TextInputField
                   label="الضغط الانقباضي (Systolic)"
-                  value={systolicBp}
-                  onChangeText={setSystolicBp}
+                  value={formState.systolicBp}
+                  onChangeText={(v) => setField('systolicBp', v)}
                   placeholder="مثال: 120"
                   keyboardType="numeric"
                   required
@@ -394,8 +226,8 @@ export default function CardioAssessmentScreen() {
               <View style={styles.halfField}>
                 <TextInputField
                   label="الضغط الانبساطي (Diastolic)"
-                  value={diastolicBp}
-                  onChangeText={setDiastolicBp}
+                  value={formState.diastolicBp}
+                  onChangeText={(v) => setField('diastolicBp', v)}
                   placeholder="مثال: 80"
                   keyboardType="numeric"
                   required
@@ -404,8 +236,8 @@ export default function CardioAssessmentScreen() {
             </View>
             <TextInputField
               label="معدل ضربات القلب (HR)"
-              value={heartRate}
-              onChangeText={setHeartRate}
+              value={formState.heartRate}
+              onChangeText={(v) => setField('heartRate', v)}
               placeholder="مثال: 72 نبضة/دقيقة"
               keyboardType="numeric"
             />
@@ -417,8 +249,8 @@ export default function CardioAssessmentScreen() {
               <View style={styles.halfField}>
                 <TextInputField
                   label="الكوليسترول الكلي (Total Chol)"
-                  value={totalCholesterol}
-                  onChangeText={setTotalCholesterol}
+                  value={formState.totalCholesterol}
+                  onChangeText={(v) => setField('totalCholesterol', v)}
                   placeholder="مثال: 200"
                   keyboardType="numeric"
                 />
@@ -426,8 +258,8 @@ export default function CardioAssessmentScreen() {
               <View style={styles.halfField}>
                 <TextInputField
                   label="LDL (الضار)"
-                  value={ldlCholesterol}
-                  onChangeText={setLdlCholesterol}
+                  value={formState.ldlCholesterol}
+                  onChangeText={(v) => setField('ldlCholesterol', v)}
                   placeholder="مثال: 100"
                   keyboardType="numeric"
                 />
@@ -437,8 +269,8 @@ export default function CardioAssessmentScreen() {
               <View style={styles.halfField}>
                 <TextInputField
                   label="HDL (النافع)"
-                  value={hdlCholesterol}
-                  onChangeText={setHdlCholesterol}
+                  value={formState.hdlCholesterol}
+                  onChangeText={(v) => setField('hdlCholesterol', v)}
                   placeholder="مثال: 50"
                   keyboardType="numeric"
                 />
@@ -446,8 +278,8 @@ export default function CardioAssessmentScreen() {
               <View style={styles.halfField}>
                 <TextInputField
                   label="الدهون الثلاثية (TG)"
-                  value={triglycerides}
-                  onChangeText={setTriglycerides}
+                  value={formState.triglycerides}
+                  onChangeText={(v) => setField('triglycerides', v)}
                   placeholder="مثال: 150"
                   keyboardType="numeric"
                 />
@@ -459,35 +291,35 @@ export default function CardioAssessmentScreen() {
             <ArabicText bold style={styles.cardTitle}>⚕️ التقييم السريري</ArabicText>
             <TextInputField
               label="الوزن الجاف المقاس (Dry Weight)"
-              value={dryWeight}
-              onChangeText={setDryWeight}
+              value={formState.dryWeight}
+              onChangeText={(v) => setField('dryWeight', v)}
               placeholder="مثال: 72.5 كجم"
               keyboardType="numeric"
             />
             <DropdownField
               label="تقييم الوذمة المحيطية (Edema)"
               options={EDEMA_OPTIONS}
-              selectedValue={edemaGrading}
-              onValueChange={setEdemaGrading}
+              selectedValue={formState.edemaGrading}
+              onValueChange={(v: string) => setField('edemaGrading', v as EdemaGrading)}
               placeholder="اختر درجة الوذمة..."
             />
             <TouchableOpacity
               style={styles.toggleRow}
-              onPress={() => setHasDyspnea(!hasDyspnea)}
+              onPress={() => setField('hasDyspnea', !formState.hasDyspnea)}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, hasDyspnea && styles.checkboxChecked]}>
-                {hasDyspnea && <Ionicons name="checkmark" size={14} color="#FFF" />}
+              <View style={[styles.checkbox, formState.hasDyspnea && styles.checkboxChecked]}>
+                {formState.hasDyspnea && <Ionicons name="checkmark" size={14} color="#FFF" />}
               </View>
               <ArabicText style={styles.checkboxLabel}>ضيق تنفس عند الراحة (Dyspnea at Rest)</ArabicText>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.toggleRow}
-              onPress={() => setHasOrthopnea(!hasOrthopnea)}
+              onPress={() => setField('hasOrthopnea', !formState.hasOrthopnea)}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, hasOrthopnea && styles.checkboxChecked]}>
-                {hasOrthopnea && <Ionicons name="checkmark" size={14} color="#FFF" />}
+              <View style={[styles.checkbox, formState.hasOrthopnea && styles.checkboxChecked]}>
+                {formState.hasOrthopnea && <Ionicons name="checkmark" size={14} color="#FFF" />}
               </View>
               <ArabicText style={styles.checkboxLabel}>ضيق تنفس عند الاستلقاء (Orthopnea)</ArabicText>
             </TouchableOpacity>
@@ -496,64 +328,54 @@ export default function CardioAssessmentScreen() {
           <View style={styles.card}>
             <ArabicText bold style={styles.cardTitle}>🥗 الامتثال لنظام DASH الغذائي</ArabicText>
             <ArabicText style={styles.cardSubtitle}>
-              عدد العناصر المطبقة: {dashScore} / 8
+              عدد العناصر المطبقة: {computed.dashScore} / 8
             </ArabicText>
             <View style={styles.dashList}>
               {DASH_CHECKBOXES.map((item) => (
                 <DashCheckbox
                   key={item.key}
                   label={item.label}
-                  checked={dashState[item.key as keyof IDashState]}
-                  onToggle={() => toggleDash(item.key as keyof IDashState)}
+                  checked={formState[item.key as keyof typeof formState] as boolean}
+                  onToggle={() => setField(item.key as keyof typeof formState, !(formState[item.key as keyof typeof formState] as boolean))}
                 />
               ))}
             </View>
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.analysisRow}>
-              <Button
-                title="🔍 تحليل المخاطر"
-                onPress={handleAnalyzeOnly}
-                variant="secondary"
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="💾 حفظ التقييم"
-                onPress={handleSave}
-                loading={isSaving}
-                variant="primary"
-                style={{ flex: 1 }}
-              />
-            </View>
+          <View style={[styles.card, { borderColor: computed.riskResult.color, borderWidth: 2 }]}>
+            <ArabicText bold style={[styles.cardTitle, { color: computed.riskResult.color }]}>
+              {computed.riskResult.status}
+            </ArabicText>
+            {computed.riskResult.alerts.length === 0 ? (
+              <ArabicText style={styles.riskSafeText}>
+                ✅ جميع المؤشرات ضمن الحدود الطبيعية — حافظ على نمط الحياة الصحي
+              </ArabicText>
+            ) : (
+              computed.riskResult.alerts.map((alert, i) => (
+                <ArabicText key={i} style={styles.riskAlert}>
+                  {alert}
+                </ArabicText>
+              ))
+            )}
+            {computed.riskResult.fluidRestriction > 0 && (
+              <View style={styles.fluidRestrictionBadge}>
+                <Ionicons name="water" size={16} color={colors.info} />
+                <ArabicText style={styles.fluidRestrictionText}>
+                  تقييد السوائل: {computed.riskResult.fluidRestriction} مل/24 ساعة
+                </ArabicText>
+              </View>
+            )}
           </View>
 
-          {riskResult && (
-            <View style={[styles.card, { borderColor: riskResult.color, borderWidth: 2 }]}>
-              <ArabicText bold style={[styles.cardTitle, { color: riskResult.color }]}>
-                {riskResult.status}
-              </ArabicText>
-              {riskResult.alerts.length === 0 ? (
-                <ArabicText style={styles.riskSafeText}>
-                  ✅ جميع المؤشرات ضمن الحدود الطبيعية — حافظ على نمط الحياة الصحي
-                </ArabicText>
-              ) : (
-                riskResult.alerts.map((alert, i) => (
-                  <ArabicText key={i} style={styles.riskAlert}>
-                    {alert}
-                  </ArabicText>
-                ))
-              )}
-              {riskResult.fluidRestriction > 0 && (
-                <View style={styles.fluidRestrictionBadge}>
-                  <Ionicons name="water" size={16} color={colors.info} />
-                  <ArabicText style={styles.fluidRestrictionText}>
-                    تقييد السوائل: {riskResult.fluidRestriction} مل/24 ساعة
-                  </ArabicText>
-                </View>
-              )}
-            </View>
-          )}
+          <HiddenWhenSandbox>
+            <Button
+              title={`💾 حفظ التقييم${isDirty ? ' • غير محفوظ' : ''}`}
+              onPress={handleSaveAndExit}
+              loading={isSaving}
+              variant="primary"
+              disabled={!isDirty}
+            />
+          </HiddenWhenSandbox>
 
           {assessments.length > 0 && (
             <View style={styles.card}>
@@ -724,10 +546,6 @@ const styles = StyleSheet.create({
   },
   dashList: {
     marginTop: spacing.xs,
-  },
-  analysisRow: {
-    flexDirection: 'row-reverse',
-    gap: spacing.sm,
   },
   riskAlert: {
     fontSize: 13,

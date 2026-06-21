@@ -1,23 +1,49 @@
-export interface MacroBreakdown {
-  proteinGrams: number;
-  proteinCalories: number;
-  carbsGrams: number;
-  carbsCalories: number;
-  fatGrams: number;
-  fatCalories: number;
-}
-
 export interface NutritionPlan {
   id?: string;
   patientId: string;
-  patientMetricsId: string;
-  totalCalories: number;
-  calorieAdjustment: number;
-  macros: MacroBreakdown;
-  recommendations: string[];
-  restrictions: string[];
+  targetCalories: number;
+  proteinTarget: number;
+  carbsTarget: number;
+  fatTarget: number;
+  fluidTarget: number;
+  mealsJson: string;
+  recommendationsJson: string;
+  vitalsId?: string | null;
+  finalCalories?: number | null;
+  isCaloriesOverridden?: boolean | null;
+  finalProtein?: number | null;
+  isProteinOverridden?: boolean | null;
+  finalCarbs?: number | null;
+  isCarbsOverridden?: boolean | null;
+  finalFat?: number | null;
+  isFatOverridden?: boolean | null;
+  fiber?: number | null;
+  sodium?: number | null;
+  potassium?: number | null;
+  phosphorus?: number | null;
+  calcium?: number | null;
+  magnesium?: number | null;
+  iron?: number | null;
+  zinc?: number | null;
+  vitaminA?: number | null;
+  vitaminC?: number | null;
+  vitaminD?: number | null;
+  vitaminE?: number | null;
+  vitaminK?: number | null;
+  folate?: number | null;
+  niacin?: number | null;
+  thiamin?: number | null;
+  riboflavin?: number | null;
+  biotin?: number | null;
+  pantothenicAcid?: number | null;
+  cholesterol?: number | null;
+  saturatedFat?: number | null;
+  monounsaturatedFat?: number | null;
+  polyunsaturatedFat?: number | null;
+  transFat?: number | null;
+  glycemicLoad?: number | null;
   createdAt?: string;
-  dietitianNotes?: string;
+  dietitianNotes?: string | null;
 }
 
 export const DEFAULT_PROTEIN_PER_KG = 1.2;

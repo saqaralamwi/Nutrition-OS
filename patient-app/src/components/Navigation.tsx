@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { View, Text } from 'react-native';
 
 interface NavItem {
   path: string;
@@ -24,19 +25,19 @@ export function Navigation(): React.ReactElement {
 
   return (
     <nav className="bg-primary-600 text-white shadow-lg">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center">
+      <View className="container mx-auto px-4">
+        <View className="flex items-center justify-between h-16">
+          <View className="flex items-center">
             <h1 className="text-xl font-bold">ADCN Nutrition</h1>
-          </div>
+          </View>
           <button
             onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
             className="px-3 py-1 bg-primary-700 rounded-lg hover:bg-primary-800 transition"
           >
             {language === 'en' ? '\u0627\u0644\u0639\u0631\u0628\u064A\u0629' : 'English'}
           </button>
-        </div>
-        <div className="flex items-center space-x-2 overflow-x-auto py-2">
+        </View>
+        <View className="flex items-center space-x-2 overflow-x-auto py-2">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const label = language === 'en' ? item.labelEn : item.labelAr;
@@ -50,13 +51,13 @@ export function Navigation(): React.ReactElement {
                     : 'bg-primary-500 text-white hover:bg-primary-600'
                 } ${language === 'ar' ? 'arabic' : ''}`}
               >
-                <span className="text-lg">{item.icon}</span>
-                <span className="font-medium">{label}</span>
+                <Text className="text-lg">{item.icon}</Text>
+                <Text className="font-medium">{label}</Text>
               </Link>
             );
           })}
-        </div>
-      </div>
+        </View>
+      </View>
     </nav>
   );
 }

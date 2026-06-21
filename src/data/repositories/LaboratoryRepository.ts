@@ -34,7 +34,7 @@ function toRecord(model: LaboratoryRecordModel): LaboratoryRecordRecord {
     id: model.id,
     patientId: model.patientId,
     testDate: model.testDate?.getTime() || Date.now(),
-    testType: model.testType,
+    testType: model.testName,
     createdAt: model.createdAt?.toISOString() || undefined,
     updatedAt: model.updatedAt?.toISOString() || undefined,
   };
@@ -59,19 +59,21 @@ export class LaboratoryRepository implements ILaboratoryRepository {
       throw new Error('LaboratoryRecord must have at least one test value');
     }
 
-    const result = await db.write(async () => {
+    await db.write(async () => {
       const collection = db.get<LaboratoryRecordModel>('laboratory_results');
-      return collection.create((r) => {
-        r.patientId = record.patientId;
-        r.testDate = new Date(record.testDate);
-        r.testType = rows[0].test_name;
-        r.value = rows[0].value;
-        r.unit = rows[0].unit;
-        r.isAbnormal = false;
-        r.severity = null;
-        r.source = 'manual';
-      });
+      for (const row of rows) {
+        await collection.create((r) => {
+          r.patientId = record.patientId;
+          r.testDate = new Date(record.testDate);
+          r.testName = row.test_name;
+          r.resultValue = row.value;
+          r.unit = row.unit;
+          r.isAbnormal = false;
+          r.severity = null;
+          r.source = 'manual';
+        });
+      }
     });
-    return result.id;
+    return 'success';
   }
 }

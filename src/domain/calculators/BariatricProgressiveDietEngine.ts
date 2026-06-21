@@ -20,7 +20,7 @@ export class BariatricProgressiveDietEngine {
   public static calculateBariatricDiet(input: IBariatricInput): IBariatricOutput {
     const { surgeryType, postOpDayMilestone, weightKg, hasDumpingSyndromeSymptoms } = input;
 
-    if (surgeryType === 'none' || postOpDayMilestone < 0 || weightKg <= 0) {
+    if (surgeryType === 'none' || isNaN(postOpDayMilestone) || isNaN(weightKg) || postOpDayMilestone < 0 || weightKg <= 0) {
       return {
         currentPhaseCode: 'none',
         phaseArabicLabel: '',

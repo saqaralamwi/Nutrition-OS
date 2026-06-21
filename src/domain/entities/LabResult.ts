@@ -2,15 +2,19 @@ export interface LabResult {
   id: string;
   patientId: string;
   testName: string;
-  resultValue: number;
+  value: number;
   unit: string;
-  referenceRangeLow: number;
-  referenceRangeHigh: number;
-  interpretation: InterpretationResult;
-  overrideReason: string | null;
+  normalLow?: number | null;
+  normalHigh?: number | null;
+  isAbnormal: boolean;
+  severity?: string | null;
   testDate: string;
-  comments: string | null;
-  attachedImagePath: string | null;
+  collectedBy?: string | null;
+  recordedBy?: string | null;
+  labInstanceId?: string | null;
+  notes?: string | null;
+  notesAr?: string | null;
+  source: string;
   createdAt: string;
   updatedAt: string;
 }

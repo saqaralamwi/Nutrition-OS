@@ -3,20 +3,7 @@ import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import ArabicText from './ArabicText';
 import { LabTestCategory, LAB_TEST_PARAMETERS } from '../../domain/constants/labTestParameters';
-
-const COLORS = {
-  bg: '#0F172A',
-  surface: '#1E293B',
-  surfaceSecondary: '#334155',
-  border: '#475569',
-  textPrimary: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textDisabled: '#64748B',
-  accent: '#10B981',
-  accentBg: '#064E3B',
-  danger: '#F43F5E',
-  warning: '#F59E0B',
-};
+import { colors } from '../theme/colors';
 
 const CATEGORIES: LabTestCategory[] = [
   'electrolytes',
@@ -100,7 +87,7 @@ export default function LabTrendChartFilters({
               style={[styles.chip, active && styles.chipActive]}
               onPress={() => toggleCategory(cat)}
             >
-              <Ionicons name={label.icon} size={14} color={active ? COLORS.accent : COLORS.textSecondary} />
+              <Ionicons name={label.icon} size={14} color={active ? colors.success : colors.textSecondary} />
               <ArabicText style={[styles.chipText, active && styles.chipTextActive]}>
                 {label.ar}
               </ArabicText>
@@ -114,16 +101,16 @@ export default function LabTrendChartFilters({
         <Ionicons
           name={showOnlyAbnormal ? 'checkbox' : 'square-outline'}
           size={18}
-          color={showOnlyAbnormal ? COLORS.danger : COLORS.textSecondary}
+          color={showOnlyAbnormal ? colors.danger : colors.textSecondary}
         />
-        <ArabicText style={[styles.abnormalText, showOnlyAbnormal && { color: COLORS.danger }]}>
+        <ArabicText style={[styles.abnormalText, showOnlyAbnormal && { color: colors.danger }]}>
           القيم غير الطبيعية فقط
         </ArabicText>
       </TouchableOpacity>
 
       {/* Parameter selector toggle */}
       <TouchableOpacity style={styles.paramToggle} onPress={() => setShowParams(!showParams)}>
-        <Ionicons name={showParams ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+        <Ionicons name={showParams ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
         <ArabicText style={styles.paramToggleText}>
           اختيار المعاملات ({selectedCodes.length})
         </ArabicText>
@@ -153,19 +140,19 @@ export default function LabTrendChartFilters({
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 12, gap: 10 },
+  container: { backgroundColor: colors.surfaceCard, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 12, gap: 10 },
   chipRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceSecondary },
-  chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accentBg },
-  chipText: { fontSize: 12, color: COLORS.textSecondary },
-  chipTextActive: { color: COLORS.accent },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  chipActive: { borderColor: colors.success, backgroundColor: colors.surfaceElevated },
+  chipText: { fontSize: 12, color: colors.textSecondary },
+  chipTextActive: { color: colors.success },
   abnormalRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingVertical: 4 },
-  abnormalText: { fontSize: 13, color: COLORS.textSecondary },
+  abnormalText: { fontSize: 13, color: colors.textSecondary },
   paramToggle: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingVertical: 4 },
-  paramToggleText: { fontSize: 13, color: COLORS.textSecondary },
+  paramToggleText: { fontSize: 13, color: colors.textSecondary },
   paramGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  paramChip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 6, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceSecondary },
-  paramChipSelected: { borderColor: COLORS.accent, backgroundColor: COLORS.accentBg },
-  paramChipText: { fontSize: 12, color: COLORS.textSecondary },
-  paramChipTextSelected: { color: COLORS.accent },
+  paramChip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  paramChipSelected: { borderColor: colors.success, backgroundColor: colors.surfaceElevated },
+  paramChipText: { fontSize: 12, color: colors.textSecondary },
+  paramChipTextSelected: { color: colors.success },
 });

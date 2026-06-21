@@ -1,10 +1,19 @@
 import { ClinicalEngineOutput } from '../types';
+import { VitalsRepository, VitalsRecord } from '../../../data/repositories/VitalsRepository';
+import { CardioRepository, CardioAssessmentRecord } from '../../../data/repositories/CardioRepository';
+import { SupplementRepository } from '../../../data/repositories/SupplementRepository';
+import { PatientRepository } from '../../../data/repositories/PatientRepository';
+import { getDatabase } from '../../../data/database';
+import { Q } from '@nozbe/watermelondb';
+import type { Patient } from '../../../domain/entities/Patient';
 
 export interface ReportSection {
   title: string;
   titleAr: string;
   type: 'info' | 'table' | 'list' | 'grid' | 'alert' | 'narrative';
   content: any;
+  headers?: string[];
+  rows?: string[][];
 }
 
 export interface BuiltReport {
@@ -14,17 +23,290 @@ export interface BuiltReport {
   patientName: string;
 }
 
+export interface GrowthChartSummary {
+  recordDate: string;
+  ageMonths: number;
+  weightKg?: number;
+  heightCm?: number;
+  headCircumferenceCm?: number;
+  weightZScore?: number;
+  heightZScore?: number;
+  bmiZScore?: number;
+  whoPercentile?: number;
+  standardUsed?: string;
+}
+
+export interface SupplementRecord {
+  id: string;
+  supplementName: string;
+  dosage?: string;
+  supplementType: string;
+}
+
+export interface ClinicalReportData {
+  patient: Patient;
+  vitals: VitalsRecord | null;
+  bmi: number;
+  bmiCategory: string;
+  growthCharts: GrowthChartSummary[];
+  cardiovascular: CardioAssessmentRecord | null;
+  supplements: SupplementRecord[];
+  generatedAt: string;
+  reportTitle: string;
+}
+
 export class ComprehensiveReportBuilder {
+  static async generate(patientId: string): Promise<ClinicalReportData> {
+    const patientRepo = new PatientRepository();
+    const vitalsRepo = new VitalsRepository();
+    const cardioRepo = new CardioRepository();
+    const supplementRepo = new SupplementRepository();
+
+    const db = await getDatabase();
+
+    const [patient, latestVitals, cardioAssessment, supplements, growthChartModels] = await Promise.all([
+      patientRepo.findById(patientId),
+      vitalsRepo.getLatestByPatientId(patientId),
+      cardioRepo.getLatestByPatientId(patientId),
+      supplementRepo.getByPatientId(patientId),
+      db.get('pediatric_growth_charts')
+        .query(Q.where('patient_id', patientId), Q.sortBy('record_date', Q.desc))
+        .fetch(),
+    ]);
+
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const weight = latestVitals?.weightKg ?? 70;
+    const height = latestVitals?.heightCm ?? 170;
+    const bmiVal = latestVitals?.bmi ?? (height > 0 ? weight / Math.pow(height / 100, 2) : 0);
+
+    let bmiCategory: string;
+    if (bmiVal < 18.5) bmiCategory = 'underweight';
+    else if (bmiVal < 25) bmiCategory = 'normal';
+    else if (bmiVal < 30) bmiCategory = 'overweight';
+    else bmiCategory = 'obese';
+
+    const growthCharts: GrowthChartSummary[] = growthChartModels.map((m: any) => ({
+      recordDate: m.recordDate?.toISOString() || '',
+      ageMonths: m.ageMonths,
+      weightKg: m.weightKg,
+      heightCm: m.heightCm,
+      headCircumferenceCm: m.headCircumferenceCm,
+      weightZScore: m.weightZScore,
+      heightZScore: m.heightZScore,
+      bmiZScore: m.bmiZScore,
+      whoPercentile: m.whoPercentile,
+      standardUsed: m.standardUsed,
+    }));
+
+    const supplementRecords: SupplementRecord[] = supplements.map((s: any) => ({
+      id: s.id,
+      supplementName: s.supplementName,
+      dosage: s.dosage,
+      supplementType: s.supplementType,
+    }));
+
+    return {
+      patient,
+      vitals: latestVitals,
+      bmi: Math.round(bmiVal * 100) / 100,
+      bmiCategory,
+      growthCharts,
+      cardiovascular: cardioAssessment,
+      supplements: supplementRecords,
+      generatedAt: new Date().toISOString(),
+      reportTitle: `التقرير السريري الشامل - ${patient.fullName}`,
+    };
+  }
+
+  static generateHtmlReport(data: ClinicalReportData): string {
+    const p = data.patient;
+    const v = data.vitals;
+    const c = data.cardiovascular;
+    const now = new Date(data.generatedAt);
+    const reportId = `RPT-${now.getTime().toString(36).toUpperCase()}`;
+
+    const vitalsRows = [
+      ['الوزن (كجم)', v?.weightKg?.toFixed(1) ?? '---'],
+      ['الطول (سم)', v?.heightCm?.toFixed(1) ?? '---'],
+      ['مؤشر كتلة الجسم', data.bmi.toFixed(1)],
+      ['تصنيف BMI', data.bmiCategory === 'underweight' ? 'نقص وزن' : data.bmiCategory === 'normal' ? 'طبيعي' : data.bmiCategory === 'overweight' ? 'زيادة وزن' : 'سمنة'],
+      ['درجة الحرارة', v?.temperature != null ? `${v.temperature.toFixed(1)} °C` : '---'],
+      ['معدل القلب', v?.heartRate != null ? `${v.heartRate} نبضة/د` : '---'],
+      ['ضغط الدم الانقباضي', v?.bpSystolic != null ? `${v.bpSystolic} مم زئبق` : c?.systolicBloodPressure != null ? `${c.systolicBloodPressure} مم زئبق` : '---'],
+      ['ضغط الدم الانبساطي', v?.bpDiastolic != null ? `${v.bpDiastolic} مم زئبق` : c?.diastolicBloodPressure != null ? `${c.diastolicBloodPressure} مم زئبق` : '---'],
+      ['معدل التنفس', v?.respiratoryRate != null ? `${v.respiratoryRate} نفس/د` : '---'],
+      ['تشبع الأكسجين', v?.o2Sat != null ? `${v.o2Sat}%` : '---'],
+    ];
+
+    const cardioRows: [string, string][] = [];
+    if (c) {
+      cardioRows.push(['الوزن الجاف المقاس', `${c.measuredDryWeightKg} كجم`]);
+      cardioRows.push(['الكوليسترول الكلي', `${c.totalCholesterol} مغ/دل`]);
+      cardioRows.push(['LDL', `${c.ldlCholesterol} مغ/دل`]);
+      cardioRows.push(['HDL', `${c.hdlCholesterol} مغ/دل`]);
+      cardioRows.push(['الدهون الثلاثية', `${c.triglycerides} مغ/دل`]);
+      cardioRows.push(['وذمة محيطية', c.hasPeripheralEdema ? 'نعم' : 'لا']);
+      cardioRows.push(['درجة الوذمة', c.edemaGrading]);
+    }
+
+    const suppRows = data.supplements.map((s) => [
+      s.supplementName,
+      s.dosage || '---',
+      s.supplementType === 'vitamin' ? 'فيتامين' : s.supplementType === 'mineral' ? 'معدن' : s.supplementType === 'protein' ? 'بروتين' : s.supplementType === 'amino_acid' ? 'أحماض أمينية' : s.supplementType === 'herbal' ? 'أعشاب' : s.supplementType === 'oil' ? 'زيوت' : s.supplementType,
+    ]);
+
+    const growthRows = data.growthCharts.slice(0, 5).map((g) => [
+      g.recordDate ? new Date(g.recordDate).toLocaleDateString('ar-YE') : '---',
+      `${g.ageMonths} شهر`,
+      g.weightKg?.toFixed(1) ?? '---',
+      g.weightZScore?.toFixed(2) ?? '---',
+      g.bmiZScore?.toFixed(2) ?? '---',
+    ]);
+
+    const supTable = suppRows.length > 0
+      ? `<table><thead><tr><th>الاسم</th><th>الجرعة</th><th>النوع</th></tr></thead><tbody>${suppRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+      : '<p style="color:#666; text-align:center;">لا توجد مكملات مسجلة</p>';
+
+    const growthSection = data.growthCharts.length > 0
+      ? `<h3 style="color:#1A5276; border-bottom:2px solid #1A5276; padding-bottom:8px; margin-top:24px;">📈 ملخص منحنيات النمو</h3>
+<table><thead><tr><th>التاريخ</th><th>العمر</th><th>الوزن (كجم)</th><th>Z-Score للوزن</th><th>Z-Score BMI</th></tr></thead><tbody>${growthRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+      : '';
+
+    return `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>${data.reportTitle}</title>
+<style>
+  @page { margin: 20mm 15mm; size: A4; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'system-ui', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    color: #000;
+    background: #fff;
+    padding: 0;
+    line-height: 1.6;
+    direction: rtl;
+    text-align: right;
+    font-size: 11pt;
+  }
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #1A5276;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .header h1 { font-size: 20pt; color: #1A5276; margin: 0 0 4px; }
+  .header .sub { font-size: 10pt; color: #555; }
+  .header .meta { font-size: 9pt; color: #777; margin-top: 8px; }
+  .section { margin-bottom: 20px; }
+  .section-title {
+    font-size: 13pt;
+    font-weight: bold;
+    color: #1A5276;
+    border-bottom: 2px solid #1A5276;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 10pt;
+  }
+  th {
+    background: #1A5276;
+    color: #fff;
+    padding: 8px 10px;
+    text-align: center;
+    font-weight: 600;
+  }
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+  }
+  tr:nth-child(even) td { background: #f5f7fa; }
+  .patient-info { margin-bottom: 16px; }
+  .patient-info td { text-align: right; }
+  .info-label { font-weight: bold; color: #333; width: 140px; }
+  .footer {
+    text-align: center;
+    font-size: 9pt;
+    color: #999;
+    border-top: 1px solid #ddd;
+    padding-top: 12px;
+    margin-top: 32px;
+  }
+  .print-only { display: block; }
+  .no-print { display: none; }
+  @media print {
+    body { color: #000; background: #fff; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>ADCN Clinical — التقرير السريري الشامل</h1>
+  <div class="sub">نظام إدارة التغذية العلاجية المتكامل</div>
+  <div class="meta">
+    <span>التاريخ: ${now.toLocaleDateString('ar-YE')}</span>
+    <span> | </span>
+    <span>معرف التقرير: ${reportId}</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">معلومات المريض</div>
+  <table class="patient-info">
+    <tr><td class="info-label">اسم المريض</td><td>${p.fullName}</td><td class="info-label">رقم الملف</td><td>${p.fileNumber}</td></tr>
+    <tr><td class="info-label">العمر</td><td>${p.age} سنة</td><td class="info-label">الجنس</td><td>${p.gender === 'male' ? 'ذكر' : 'أنثى'}</td></tr>
+    <tr><td class="info-label">القسم</td><td>${p.department}</td><td class="info-label">التشخيص</td><td>${p.primaryDiagnosis}</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">📏 القياسات الأنثروبومترية (Anthropometrics)</div>
+  <table>
+    <thead><tr>${vitalsRows.map(r => `<th>${r[0]}</th>`).join('')}</tr></thead>
+    <tbody><tr>${vitalsRows.map(r => `<td>${r[1]}</td>`).join('')}</tr></tbody>
+  </table>
+</div>
+
+${growthSection}
+
+<div class="section">
+  <div class="section-title">❤️ تقييم القلب والأوعية الدموية (Cardiovascular Status)</div>
+  ${c
+    ? `<table><thead><tr>${cardioRows.map(r => `<th>${r[0]}</th>`).join('')}</tr></thead><tbody><tr>${cardioRows.map(r => `<td>${r[1]}</td>`).join('')}</tr></tbody></table>`
+    : '<p style="color:#666; text-align:center;">لا يوجد تقييم قلبي وعائي مسجل</p>'}
+</div>
+
+<div class="section">
+  <div class="section-title">💊 المكملات الغذائية (Supplements)</div>
+  ${supTable}
+</div>
+
+<div class="footer">
+  <p>تم إنشاء هذا التقرير آلياً عبر نظام ADCN Clinical Nutrition Suite</p>
+  <p>تاريخ الإنشاء: ${now.toLocaleString('ar-YE')} | جميع الحقوق محفوظة © ${now.getFullYear()}</p>
+</div>
+</body>
+</html>`;
+  }
+
   static build(output: ClinicalEngineOutput): BuiltReport {
     const sections: ReportSection[] = [];
-    const { report, patientStory, clinicalAssessment, protocol, treatmentPlan, interventions, recommendations, monitoringPlan, therapeuticFoods, drugInteractions } = output;
+    const { report, patientStory, assessment, protocol, treatmentPlan, interventions, recommendations, monitoringPlan, therapeuticFoods, drugInteractions } = output;
 
     sections.push(this.headerSection(output));
     sections.push(this.executiveSummarySection(report.executiveSummary));
     sections.push(this.patientInfoSection(report.patientInfo));
     sections.push(this.patientStorySection(patientStory));
-    sections.push(this.clinicalAssessmentSection(clinicalAssessment));
-    sections.push(this.riskAssessmentSection(clinicalAssessment.risks));
+    sections.push(this.assessmentSection(assessment));
+    sections.push(this.riskAssessmentSection(assessment.risks));
     sections.push(this.protocolSection(protocol));
     sections.push(this.treatmentPlanSection(treatmentPlan));
     sections.push(this.macronutrientTableSection(treatmentPlan));
@@ -99,7 +381,7 @@ export class ComprehensiveReportBuilder {
     };
   }
 
-  private static clinicalAssessmentSection(assessment: any): ReportSection {
+  private static assessmentSection(assessment: any): ReportSection {
     return {
       title: 'Clinical Assessment',
       titleAr: 'التقييم السريري',
@@ -118,6 +400,7 @@ export class ComprehensiveReportBuilder {
       title: 'Risk Assessment',
       titleAr: 'تقييم المخاطر',
       type: 'table',
+      content: null,
       headers: ['المخاطرة', 'المستوى', 'الدرجة'],
       rows: [
         ['متلازمة إعادة التغذية', risks.refeeding.riskLevel, `${risks.refeeding.riskScore}/6`],
@@ -168,6 +451,7 @@ export class ComprehensiveReportBuilder {
       title: 'Macronutrient Distribution',
       titleAr: 'توزيع المغذيات الكبرى',
       type: 'table',
+      content: null,
       headers: ['المغذي', 'الجرام/يوم', 'السعرات', 'النسبة المئوية'],
       rows: [
         ['البروتين', `${plan.nutrition.protein} غ`, `${plan.nutrition.protein * 4} ك.ك`, `${total > 0 ? Math.round(plan.nutrition.protein * 4 / total * 100) : 0}%`],
@@ -216,6 +500,7 @@ export class ComprehensiveReportBuilder {
       title: 'Therapeutic Food Recommendations',
       titleAr: 'توصيات الأغذية العلاجية',
       type: 'table',
+      content: null,
       headers: ['الغذاء', 'الفائدة العلاجية', 'السعرات/100غ', 'البروتين/100غ'],
       rows: foods.map((f: any) => [
         f.nameAr,
@@ -231,6 +516,7 @@ export class ComprehensiveReportBuilder {
       title: 'Drug-Nutrient Interactions',
       titleAr: 'التفاعلات الدوائية-الغذائية',
       type: 'table',
+      content: null,
       headers: ['المادة الفعالة', 'الشدة السريرية', 'الإجراء الغذائي المطلوب'],
       rows: interactions.map((d: any) => [
         d.ingredient,
@@ -259,6 +545,7 @@ export class ComprehensiveReportBuilder {
       title: 'Recommendations',
       titleAr: 'التوصيات السريرية',
       type: 'table',
+      content: null,
       headers: ['الأولوية', 'الفئة', 'العنوان', 'الوصف'],
       rows: recommendations.map((r) => [
         r.priority === 'critical' ? 'حرج' : r.priority === 'high' ? 'عالية' : r.priority === 'medium' ? 'متوسطة' : 'منخفضة',

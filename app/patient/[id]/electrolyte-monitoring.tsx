@@ -227,7 +227,6 @@ export default function ElectrolyteMonitoringScreen() {
               onChangeText={setCorrectionNotes}
               placeholder="مثال: تم تعويض البوتاسيوم بـ 40 mEq KCl وتجميد السعرات عند 10 kcal/kg..."
               multiline
-              numberOfLines={3}
             />
 
             <Button

@@ -7,5 +7,6 @@ export default class AuditLog extends Model {
   @field('action_type') actionType!: string;
   @field('details') details!: string;
   @field('user_id') userId!: string;
+  @field('patient_id') patientId!: string;
   @readonly @date('created_at') createdAt!: Date;
 }

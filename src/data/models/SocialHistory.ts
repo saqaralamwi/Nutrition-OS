@@ -21,6 +21,7 @@ export default class SocialHistory extends Model {
   @field('cigarettes_per_day') cigarettesPerDay!: number;
   @field('years_smoked') yearsSmoked!: number;
   @field('alcohol_substance_use') alcoholSubstanceUse!: string;
+  @field('khat_chewing') khatChewing!: string;
   @field('physical_activity') physicalActivity!: string;
   @field('activity_description') activityDescription!: string;
   @field('dietary_history') dietaryHistory!: string;

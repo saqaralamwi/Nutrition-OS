@@ -8,15 +8,56 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useNavigation } from 'expo-router';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import { Patient } from '../../../src/domain/entities/Patient';
 import { ActivityLevel, ACTIVITY_LEVELS } from '../../../src/domain/entities/NutritionPlan';
+import { PatientMetrics } from '../../../src/domain/entities/PatientMetrics';
+import { useSafePatientId } from '../../../src/presentation/hooks/useSafePatientId';
+
+interface EngineNutritionPlan {
+  totalCalories: number;
+  calorieAdjustment: number;
+  macros: {
+    proteinGrams: number;
+    proteinCalories: number;
+    carbsGrams: number;
+    carbsCalories: number;
+    fatGrams: number;
+    fatCalories: number;
+  };
+  recommendations: string[];
+  restrictions: string[];
+  patientId: string;
+  patientMetricsId: string;
+}
+
+interface DisplayNutritionPlan {
+  id?: string;
+  totalCalories: number;
+  calorieAdjustment: number;
+  macros: {
+    proteinGrams: number;
+    proteinCalories: number;
+    carbsGrams: number;
+    carbsCalories: number;
+    fatGrams: number;
+    fatCalories: number;
+  };
+  recommendations: string[];
+  restrictions: string[];
+  dietitianNotes?: string;
+}
+
+interface PlanMetadata {
+  bmr?: number;
+  activityLevel?: string;
+}
 
 const DEPARTMENT_LABELS: Record<string, string> = {
   ICU: 'عناية مركزة',
@@ -33,38 +74,114 @@ const PATIENT_TYPE_LABELS: Record<string, string> = {
   consultation: 'استشارة',
 };
 
+function parseStringArray(json: string | undefined | null): string[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function tryParsePlanMeta(json: string | undefined | null): PlanMetadata | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return {
+        bmr: typeof parsed.bmr === 'number' ? parsed.bmr : undefined,
+        activityLevel: typeof parsed.activityLevel === 'string' ? parsed.activityLevel : undefined,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export default function ClinicalAnalysisScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const id = useSafePatientId();
   const router = useRouter();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState(false);
   const [weightKg, setWeightKg] = useState('');
   const [heightCm, setHeightCm] = useState('');
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('sedentary');
   const [dietitianNotes, setDietitianNotes] = useState('');
 
+  const [savedWeight, setSavedWeight] = useState('');
+  const [savedHeight, setSavedHeight] = useState('');
+  const [savedActivity, setSavedActivity] = useState<ActivityLevel>('sedentary');
+  const [savedNotes, setSavedNotes] = useState('');
+
   const showToast = useToastStore((s) => s.showToast);
 
-  const [currentMetrics, setCurrentMetrics] = useState<any>(null);
-  const [currentPlan, setCurrentPlan] = useState<any>(null);
+  const [currentMetrics, setCurrentMetrics] = useState<PatientMetrics | null>(null);
+  const [currentPlan, setCurrentPlan] = useState<DisplayNutritionPlan | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const restorationAttempted = useRef(false);
 
   useEffect(() => {
+    if (!id) {
+      router.replace('/');
+      return;
+    }
     loadPatient();
     setCurrentMetrics(null);
     setCurrentPlan(null);
+    restorationAttempted.current = false;
   }, [id]);
 
   useEffect(() => {
-    if (currentMetrics) {
-      setWeightKg(String(currentMetrics.weightKg));
-      setHeightCm(String(currentMetrics.heightCm));
-    }
-    if (currentPlan?.dietitianNotes) {
-      setDietitianNotes(currentPlan.dietitianNotes);
-    }
-  }, [currentMetrics, currentPlan]);
+    if (!patient || restorationAttempted.current) return;
+    restorationAttempted.current = true;
+    restorePriorRecords();
+  }, [patient]);
+
+  const navigation = useNavigation();
+
+  // Check for any unsaved changes compared to the last database record
+  const hasUnsavedChanges = useMemo(() => {
+    return (
+      weightKg !== savedWeight ||
+      heightCm !== savedHeight ||
+      activityLevel !== savedActivity ||
+      dietitianNotes !== savedNotes
+    );
+  }, [weightKg, savedWeight, heightCm, savedHeight, activityLevel, savedActivity, dietitianNotes, savedNotes]);
+
+  // Intercept navigation if there are unsaved changes
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!hasUnsavedChanges) {
+        return;
+      }
+
+      e.preventDefault();
+
+      Alert.alert(
+        'تنبيه: تغييرات غير محفوظة',
+        'لديك تغييرات غير محفوظة على هذه الصفحة. هل ترغب في الخروج وتجاهل التغييرات؟',
+        [
+          {
+            text: 'تراجع وبقاء',
+            style: 'cancel',
+            onPress: () => {},
+          },
+          {
+            text: 'تجاهل وخروج',
+            style: 'destructive',
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation, hasUnsavedChanges]);
 
   async function loadPatient() {
     try {
@@ -79,6 +196,89 @@ export default function ClinicalAnalysisScreen() {
     }
   }
 
+  async function restorePriorRecords() {
+    if (!patient) return;
+    setRestoring(true);
+    try {
+      const { VitalsRepository } = await import('../../../src/data/repositories/VitalsRepository');
+      const vitalsRepo = new VitalsRepository();
+      const latestVitals = await vitalsRepo.getLatestByPatientId(id);
+
+      if (latestVitals && latestVitals.weightKg && latestVitals.heightCm) {
+        const wtStr = String(latestVitals.weightKg);
+        const htStr = String(latestVitals.heightCm);
+        setWeightKg(wtStr);
+        setSavedWeight(wtStr);
+        setHeightCm(htStr);
+        setSavedHeight(htStr);
+
+        const { calculateBmi } = await import('../../../src/domain/calculators/BmiCalculator');
+        const { calculateBmr } = await import('../../../src/domain/calculators/BmrCalculator');
+        const { calculateTdee } = await import('../../../src/domain/calculators/TdeeCalculator');
+
+        const bmiResult = calculateBmi(latestVitals.weightKg, latestVitals.heightCm);
+        const bmrResult = calculateBmr(
+          latestVitals.weightKg,
+          latestVitals.heightCm,
+          patient.age ?? 30,
+          patient.gender === 'male',
+        );
+        const tdeeResult = calculateTdee(bmrResult.value, activityLevel);
+
+        setCurrentMetrics({
+          patientId: id,
+          weightKg: latestVitals.weightKg,
+          heightCm: latestVitals.heightCm,
+          bmi: bmiResult,
+          bmr: bmrResult,
+          tdee: tdeeResult,
+        });
+      }
+
+      const { NutritionPlanRepository } = await import('../../../src/data/repositories/NutritionPlanRepository');
+      const planRepo = new NutritionPlanRepository();
+      const latestPlan = await planRepo.getLatestByPatientId(id);
+
+      if (latestPlan) {
+        let restoredActivity: ActivityLevel | undefined;
+        const meta = tryParsePlanMeta(latestPlan.mealsJson);
+        if (meta?.activityLevel && meta.activityLevel in ACTIVITY_LEVELS) {
+          restoredActivity = meta.activityLevel as ActivityLevel;
+        }
+
+        setCurrentPlan({
+          id: latestPlan.id,
+          totalCalories: latestPlan.targetCalories,
+          calorieAdjustment: 0,
+          macros: {
+            proteinGrams: latestPlan.proteinTarget,
+            proteinCalories: latestPlan.proteinTarget * 4,
+            carbsGrams: latestPlan.carbsTarget,
+            carbsCalories: latestPlan.carbsTarget * 4,
+            fatGrams: latestPlan.fatTarget,
+            fatCalories: latestPlan.fatTarget * 9,
+          },
+          recommendations: parseStringArray(latestPlan.recommendationsJson),
+          restrictions: [],
+          dietitianNotes: latestPlan.dietitianNotes ?? '',
+        });
+
+        const notes = latestPlan.dietitianNotes ?? '';
+        setDietitianNotes(notes);
+        setSavedNotes(notes);
+
+        if (restoredActivity) {
+          setActivityLevel(restoredActivity);
+          setSavedActivity(restoredActivity);
+        }
+      }
+    } catch {
+      showToast('فشل في استعادة البيانات السابقة', 'error');
+    } finally {
+      setRestoring(false);
+    }
+  }
+
   const handleCalculate = useCallback(async () => {
     if (!patient) return;
     const w = parseFloat(weightKg);
@@ -87,55 +287,134 @@ export default function ClinicalAnalysisScreen() {
       showToast('يرجى إدخال وزن وطول صحيحين', 'error');
       return;
     }
+    setIsCalculating(true);
     try {
       const { calculatePatientMetrics } = await import('../../../src/domain/calculators/NutritionEngine');
       const result = calculatePatientMetrics({
         patientId: patient.id,
         weightKg: w,
         heightCm: h,
-        age: patient.age,
+        age: patient.age ?? 30,
         isMale: patient.gender === 'male',
         activityLevel,
       });
-      setCurrentMetrics(result as any);
+
+      const { VitalsRepository } = await import('../../../src/data/repositories/VitalsRepository');
+      const vitalsRepo = new VitalsRepository();
+      await vitalsRepo.create({
+        patientId: patient.id,
+        weightKg: w,
+        heightCm: h,
+        bmi: result.bmi.value,
+      });
+
+      const { NutritionPlanRepository } = await import('../../../src/data/repositories/NutritionPlanRepository');
+      const planRepo = new NutritionPlanRepository();
+      await planRepo.save({
+        patientId: patient.id,
+        targetCalories: result.tdee.value,
+        proteinTarget: 0,
+        carbsTarget: 0,
+        fatTarget: 0,
+        fluidTarget: 0,
+        mealsJson: JSON.stringify({ bmr: result.bmr.value, activityLevel }),
+        recommendationsJson: '[]',
+        vitalsId: undefined,
+      });
+
+      setCurrentMetrics(result);
+      setSavedWeight(String(w));
+      setSavedHeight(String(h));
+      setSavedActivity(activityLevel);
       setIsCalculating(false);
-      showToast('تم حساب القياسات بنجاح', 'success');
+      showToast('تم حساب القياسات وحفظها بنجاح', 'success');
     } catch {
       setIsCalculating(false);
+      showToast('حدث خطأ أثناء حفظ القياسات في قاعدة البيانات', 'error');
     }
   }, [patient, weightKg, heightCm, activityLevel, showToast]);
 
   const handleGeneratePlan = useCallback(async () => {
-    if (!patient || !currentMetrics || !currentMetrics.tdee) return;
+    if (!patient || !currentMetrics) return;
     setIsGeneratingPlan(true);
     try {
       const { generateNutritionPlan } = await import('../../../src/domain/calculators/NutritionEngine');
-      const plan = generateNutritionPlan({
+      const rawPlan = generateNutritionPlan({
         patientId: patient.id,
-        metricsId: currentMetrics.id || '',
+        metricsId: currentMetrics.id ?? '',
         weightKg: currentMetrics.weightKg || parseFloat(weightKg),
         tdee: currentMetrics.tdee.value || 1800,
-        diagnosis: patient.primaryDiagnosis,
+        diagnosis: patient.primaryDiagnosis ?? '',
         activityLevel,
+      }) as unknown as EngineNutritionPlan;
+
+      const { NutritionPlanRepository } = await import('../../../src/data/repositories/NutritionPlanRepository');
+      const planRepo = new NutritionPlanRepository();
+
+      const planId = await planRepo.save({
+        patientId: patient.id,
+        targetCalories: rawPlan.totalCalories,
+        proteinTarget: rawPlan.macros.proteinGrams,
+        carbsTarget: rawPlan.macros.carbsGrams,
+        fatTarget: rawPlan.macros.fatGrams,
+        fluidTarget: 0,
+        mealsJson: JSON.stringify({
+          bmr: currentMetrics.bmr.value,
+          activityLevel,
+          meals: [],
+        }),
+        recommendationsJson: JSON.stringify(rawPlan.recommendations ?? []),
+        dietitianNotes: dietitianNotes || '',
       });
-      setCurrentPlan(plan as any);
+
+      setCurrentPlan({
+        id: planId,
+        totalCalories: rawPlan.totalCalories,
+        calorieAdjustment: rawPlan.calorieAdjustment,
+        macros: rawPlan.macros,
+        recommendations: rawPlan.recommendations ?? [],
+        restrictions: rawPlan.restrictions ?? [],
+        dietitianNotes: dietitianNotes || '',
+      });
+      setSavedNotes(dietitianNotes);
+      setSavedActivity(activityLevel);
       setIsGeneratingPlan(false);
-      showToast('تم إنشاء الخطة الغذائية', 'success');
+      showToast('تم إنشاء الخطة الغذائية وحفظها بنجاح', 'success');
     } catch {
       setIsGeneratingPlan(false);
+      showToast('حدث خطأ أثناء حفظ الخطة الغذائية في قاعدة البيانات', 'error');
     }
-  }, [patient, currentMetrics, activityLevel, showToast, weightKg]);
+  }, [patient, currentMetrics, activityLevel, showToast, weightKg, dietitianNotes]);
 
   const handleSaveNotes = useCallback(async () => {
-    if (!currentPlan) return;
-    setCurrentPlan((prev: any) => prev ? { ...prev, dietitianNotes } : null);
-    showToast('تم حفظ الملاحظات', 'success');
+    if (!currentPlan?.id) return;
+    try {
+      const { NutritionPlanRepository } = await import('../../../src/data/repositories/NutritionPlanRepository');
+      const planRepo = new NutritionPlanRepository();
+      await planRepo.updateNotes(currentPlan.id, dietitianNotes);
+      setCurrentPlan((prev) => prev ? { ...prev, dietitianNotes } : null);
+      setSavedNotes(dietitianNotes);
+      showToast('تم حفظ الملاحظات بنجاح', 'success');
+    } catch {
+      showToast('حدث خطأ أثناء حفظ الملاحظات في قاعدة البيانات', 'error');
+    }
   }, [currentPlan, dietitianNotes, showToast]);
 
-  if (loading) {
+  if (!id) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>معرف المريض غير صالح</Text>
+      </View>
+    );
+  }
+
+  if (loading || restoring) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>
+          {restoring ? 'جاري استعادة البيانات...' : 'جاري التحميل...'}
+        </Text>
       </View>
     );
   }
@@ -165,7 +444,7 @@ export default function ClinicalAnalysisScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>القياسات والاحتياجات</Text>
-          
+
           <Text style={styles.fieldLabel}>الوزن (كجم)</Text>
           <TextInput
             style={styles.input}
@@ -232,22 +511,22 @@ export default function ClinicalAnalysisScreen() {
             <View style={styles.metricsContainer}>
               <View style={styles.metricRow}>
                 <Text style={styles.metricLabel}>مؤشر كتلة الجسم (BMI)</Text>
-                <Text style={styles.metricValue}>{currentMetrics.bmi.value.toFixed(2)}</Text>
+                <Text style={styles.metricValue}>{(currentMetrics.bmi?.value ?? 0).toFixed(2)}</Text>
               </View>
               <View style={styles.metricRow}>
                 <Text style={styles.metricLabel}>التصنيف</Text>
-                <Text style={[styles.metricValue, { color: colors.primary }]}>{currentMetrics.bmi.categoryLabel}</Text>
+                <Text style={[styles.metricValue, { color: colors.primary }]}>{currentMetrics.bmi?.categoryLabel ?? 'غير محدد'}</Text>
               </View>
               <View style={styles.clinicalNote}>
-                <Text style={styles.clinicalNoteText}>{currentMetrics.bmi.clinicalNote}</Text>
+                <Text style={styles.clinicalNoteText}>{currentMetrics.bmi?.clinicalNote ?? ''}</Text>
               </View>
               <View style={styles.metricRow}>
                 <Text style={styles.metricLabel}>معدل الأيض الأساسي (BMR)</Text>
-                <Text style={styles.metricValue}>{currentMetrics.bmr.value.toFixed(0)} سعرة</Text>
+                <Text style={styles.metricValue}>{(currentMetrics.bmr?.value ?? 0).toFixed(0)} سعرة</Text>
               </View>
               <View style={styles.metricRow}>
                 <Text style={styles.metricLabel}>إجمالي السعرات (TDEE)</Text>
-                <Text style={styles.metricValue}>{currentMetrics.tdee.value} سعرة</Text>
+                <Text style={styles.metricValue}>{(currentMetrics.tdee?.value ?? 0)} سعرة</Text>
               </View>
             </View>
           )}
@@ -285,19 +564,19 @@ export default function ClinicalAnalysisScreen() {
                 </View>
               </View>
 
-              {currentPlan.recommendations && currentPlan.recommendations.length > 0 && (
+              {currentPlan.recommendations.length > 0 && (
                 <View style={styles.listSection}>
                   <Text style={styles.listTitle}>توصيات:</Text>
-                  {currentPlan.recommendations.map((r: string, i: number) => (
+                  {currentPlan.recommendations.map((r, i) => (
                     <Text key={i} style={styles.listItem}>• {r}</Text>
                   ))}
                 </View>
               )}
 
-              {currentPlan.restrictions && currentPlan.restrictions.length > 0 && (
+              {currentPlan.restrictions.length > 0 && (
                 <View style={styles.listSection}>
                   <Text style={[styles.listTitle, { color: colors.danger }]}>محظورات:</Text>
-                  {currentPlan.restrictions.map((r: string, i: number) => (
+                  {currentPlan.restrictions.map((r, i) => (
                     <Text key={i} style={[styles.listItem, { color: colors.danger }]}>• {r}</Text>
                   ))}
                 </View>
@@ -349,6 +628,13 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSecondary },
   errorText: { fontSize: 16, color: colors.danger, fontFamily: 'ThmanyahSans-Medium' },
+  loadingText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontFamily: 'ThmanyahSans-Regular',
+    marginTop: spacing.sm,
+    lineHeight: 14 * 1.8,
+  },
   header: { backgroundColor: colors.primary, paddingTop: safeHeaderPaddingTop, paddingBottom: spacing.lg, paddingHorizontal: spacing.md, position: 'relative' },
   backBtn: { position: 'absolute', top: safeHeaderPaddingTop - 6, start: spacing.md, zIndex: 1, padding: 4 },
   headerTitle: { fontSize: 22, fontFamily: 'ThmanyahSans-Bold', color: colors.primaryContrast, textAlign: 'right', marginTop: spacing.lg },

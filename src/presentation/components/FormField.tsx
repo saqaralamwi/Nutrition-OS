@@ -1,5 +1,5 @@
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { colors, spacing } from '../theme';
+import { colors, spacing, fontFamilies } from '../theme';
 
 interface FormFieldProps {
   label: string;
@@ -64,6 +64,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.xs,
     textAlign: 'right',
+    fontFamily: fontFamilies.regular,
   },
   required: {
     color: colors.danger,

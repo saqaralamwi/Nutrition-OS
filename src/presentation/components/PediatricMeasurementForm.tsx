@@ -9,18 +9,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { getDatabase } from '../../data/database';
 import { PediatricZScoreEngine } from '../../domain/calculators/PediatricZScoreEngine';
 import type { GrowthStandard } from '../../domain/calculators/PediatricZScoreEngine';
-import { computeZScoreFromReference, zScoreLabelAr } from '../../domain/data/whoGrowthReference';
+import { computeZScoreFromReference, generateReferenceCurve, zScoreLabelAr } from '../../domain/data/whoGrowthReference';
+import type { ReferenceDataPoint } from '../../domain/data/whoGrowthReference';
+import { getAdolescentRefData } from '../../domain/data/adolescentRefData';
+import { Cdc2022ExtendedBmiEngine, BMI_EXTENDED_COLORS } from '../../domain/calculators/Cdc2022ExtendedBmiEngine';
+import type { IExtendedBmiResult } from '../../domain/calculators/Cdc2022ExtendedBmiEngine';
 import { colors, spacing, fontFamilies } from '../theme';
 import ArabicText from './ArabicText';
 import TextInputField from './TextInputField';
-import DropdownField from './DropdownField';
 import Button from './Button';
 import { useToastStore } from '../stores/toastStore';
-
-const STANDARD_OPTIONS: { label: string; value: GrowthStandard }[] = [
-  { label: 'WHO (منظمة الصحة العالمية)', value: 'WHO' },
-  { label: 'CDC (مراكز السيطرة على الأمراض)', value: 'CDC' },
-];
 
 interface IZScoreDisplay {
   indicator: string;
@@ -36,6 +34,24 @@ interface PediatricMeasurementFormProps {
   gender: 'male' | 'female';
   ageMonths: number;
   onSave: () => void;
+  standard?: GrowthStandard;
+}
+
+function computeZScoreFromAdolescentRef(
+  value: number,
+  ageMonths: number,
+  gender: 'male' | 'female',
+  indicator: 'lhfa' | 'bmifa',
+): { zScore: number; classification: ReturnType<typeof zScoreLabelAr> } {
+  const lmsData = getAdolescentRefData(gender, indicator);
+  const refData = generateReferenceCurve(lmsData);
+  const idx = refData.reduce((best, p, i) =>
+    Math.abs(p.ageMonthsOrCm - ageMonths) < Math.abs(refData[best].ageMonthsOrCm - ageMonths) ? i : best, 0);
+  const point = refData[idx];
+  const sdScale = (point.plus2 - point.minus2) / 4;
+  const z = sdScale > 0 ? (value - point.median) / sdScale : 0;
+  const clamped = Math.max(-5, Math.min(5, z));
+  return { zScore: Math.round(clamped * 100) / 100, classification: zScoreLabelAr(clamped) };
 }
 
 export default function PediatricMeasurementForm({
@@ -43,6 +59,7 @@ export default function PediatricMeasurementForm({
   gender,
   ageMonths,
   onSave,
+  standard: standardProp,
 }: PediatricMeasurementFormProps) {
   const showToast = useToastStore((s) => s.showToast);
 
@@ -51,13 +68,20 @@ export default function PediatricMeasurementForm({
   const [headCircumference, setHeadCircumference] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [zResults, setZResults] = useState<IZScoreDisplay[]>([]);
-  const [standard, setStandard] = useState<GrowthStandard>(ageMonths < 24 ? 'WHO' : 'CDC');
+  const [extendedBmi, setExtendedBmi] = useState<IExtendedBmiResult | null>(null);
+  const [standard] = useState<GrowthStandard>(() => {
+    if (standardProp) return standardProp;
+    if (ageMonths > 60) return 'WHO_2007_Adolescent';
+    if (ageMonths >= 24) return 'CDC';
+    return 'WHO';
+  });
 
   const resetForm = useCallback(() => {
     setWeightKg('');
     setHeightCm('');
     setHeadCircumference('');
     setZResults([]);
+    setExtendedBmi(null);
   }, []);
 
   async function computeZScore(
@@ -91,7 +115,9 @@ export default function PediatricMeasurementForm({
         zScore = engine.zScore;
         classification = engine.classification;
       } else {
-        const fallback = computeZScoreFromReference(value, ageMonths, gender, indicator);
+        const fallback = ageMonths > 60 && indicator !== 'wfa'
+          ? computeZScoreFromAdolescentRef(value, ageMonths, gender, indicator)
+          : computeZScoreFromReference(value, ageMonths, gender, indicator);
         zScore = fallback.zScore;
         classification = fallback.classification;
       }
@@ -108,7 +134,9 @@ export default function PediatricMeasurementForm({
       };
     } catch (err) {
       console.error(`computeZScore error for ${indicator}:`, err);
-      const fallback = computeZScoreFromReference(value, ageMonths, gender, indicator);
+      const fallback = ageMonths > 60 && indicator !== 'wfa'
+        ? computeZScoreFromAdolescentRef(value, ageMonths, gender, indicator)
+        : computeZScoreFromReference(value, ageMonths, gender, indicator);
       const abs = Math.abs(fallback.zScore);
       const color = abs >= 3 ? '#EF4444' : abs >= 2 ? '#F59E0B' : '#34D399';
       return {
@@ -149,6 +177,9 @@ export default function PediatricMeasurementForm({
         const bmi = w / ((h / 100) * (h / 100));
         const bmifaResult = await computeZScore(bmi, 'bmifa');
         if (bmifaResult) results.push(bmifaResult);
+
+        const extended = Cdc2022ExtendedBmiEngine.calculateExtendedBmiMetrics(bmi, ageMonths, gender);
+        setExtendedBmi(extended);
       }
 
       setZResults(results);
@@ -192,6 +223,11 @@ export default function PediatricMeasurementForm({
           if (h > 0 && w > 0) {
             const bmifa = safeFind('bmifa');
             if (bmifa) record.bmiZScore = bmifa.zScore;
+
+            if (extendedBmi && extendedBmi.classification !== 'unknown') {
+              record.bmiP95Percent = extendedBmi.bmiP95Percent;
+              record.bmiExtendedClassification = extendedBmi.classification;
+            }
           }
         });
       });
@@ -211,15 +247,6 @@ export default function PediatricMeasurementForm({
     <View style={styles.container}>
       <ArabicText bold style={styles.title}>➕ إضافة قياسات نمو جديدة</ArabicText>
 
-      <DropdownField
-        label="مرجع النمو المعتمد"
-        options={STANDARD_OPTIONS}
-        selectedValue={standard}
-        onValueChange={(val: string) => setStandard(val as GrowthStandard)}
-        placeholder="اختر مرجع النمو..."
-        required
-      />
-
       <View style={styles.standardHint}>
         <Ionicons
           name="information-circle"
@@ -227,9 +254,11 @@ export default function PediatricMeasurementForm({
           color={colors.textDisabled}
         />
         <ArabicText style={styles.standardHintText}>
-          {standard === 'WHO'
-            ? 'موصى به للأطفال أقل من 24 شهراً — WHO 2006'
-            : 'موصى به للأطفال 24 شهراً فأكثر — CDC 2022'}
+          {standard === 'WHO_2007_Adolescent'
+            ? 'مرجع WHO 2007 للمراهقين (5–19 سنة) — BMI-for-age'
+            : standard === 'CDC'
+              ? 'مرجع CDC 2022 — موصى به للأطفال 24–60 شهراً'
+              : 'مرجع WHO 2006 — موصى به للأطفال أقل من 24 شهراً'}
         </ArabicText>
       </View>
 
@@ -283,6 +312,28 @@ export default function PediatricMeasurementForm({
               </View>
             </View>
           ))}
+        </View>
+      )}
+
+      {extendedBmi && extendedBmi.classification !== 'normal' && extendedBmi.classification !== 'unknown' && (
+        <View style={styles.extendedBmiCard}>
+          <View style={styles.extendedBmiHeader}>
+            <View style={[styles.extendedBmiDot, { backgroundColor: BMI_EXTENDED_COLORS[extendedBmi.classification] }]} />
+            <ArabicText bold style={styles.extendedBmiTitle}>
+              CDC 2022 التصنيف الموسع (Extended BMI Classification)
+            </ArabicText>
+          </View>
+          <View style={styles.extendedBmiRow}>
+            <ArabicText style={styles.extendedBmiLabel}>BMI: {extendedBmi.bmi.toFixed(1)}</ArabicText>
+            <ArabicText style={styles.extendedBmiLabel}>
+              {extendedBmi.bmiP95Percent.toFixed(1)}% من percentile 95
+            </ArabicText>
+          </View>
+          <View style={[styles.extendedBmiBadge, { borderColor: BMI_EXTENDED_COLORS[extendedBmi.classification] }]}>
+            <ArabicText bold style={[styles.extendedBmiClassification, { color: BMI_EXTENDED_COLORS[extendedBmi.classification] }]}>
+              {extendedBmi.classificationLabelAr}
+            </ArabicText>
+          </View>
         </View>
       )}
     </View>
@@ -369,5 +420,53 @@ const styles = StyleSheet.create({
     color: colors.textDisabled,
     fontFamily: fontFamilies.regular,
     flex: 1,
+  },
+  extendedBmiCard: {
+    marginTop: spacing.md,
+    backgroundColor: '#1C1917',
+    borderRadius: 10,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#78350F',
+  },
+  extendedBmiHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  extendedBmiDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  extendedBmiTitle: {
+    fontSize: 12,
+    color: '#FBBF24',
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: fontFamilies.bold,
+  },
+  extendedBmiRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  extendedBmiLabel: {
+    fontSize: 13,
+    color: '#E2E8F0',
+    fontFamily: fontFamilies.regular,
+  },
+  extendedBmiBadge: {
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+  },
+  extendedBmiClassification: {
+    fontSize: 14,
+    fontFamily: fontFamilies.bold,
   },
 });

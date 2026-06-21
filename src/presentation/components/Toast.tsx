@@ -21,15 +21,15 @@ const TOAST_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 const TOAST_BG: Record<string, string> = {
-  success: '#D4EDDA',
-  error: '#FDE8E8',
-  info: '#D1ECF1',
+  success: colors.success,
+  error: colors.danger,
+  info: colors.info,
 };
 
 const TOAST_TEXT: Record<string, string> = {
-  success: '#155724',
-  error: colors.danger,
-  info: '#0C5460',
+  success: colors.primaryContrast,
+  error: colors.primaryContrast,
+  info: colors.primaryContrast,
 };
 
 export default function Toast({ toast, onDismiss }: ToastProps) {
@@ -103,5 +103,9 @@ const styles = StyleSheet.create({
   },
   dismiss: {
     padding: spacing.xs,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -33,6 +33,7 @@ import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import Button from '../../../src/presentation/components/Button';
+import { HiddenWhenSandbox } from '../../../src/presentation/components/HiddenWhenSandbox';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 
@@ -183,6 +184,7 @@ export default function NCPNephrologyGatewayScreen() {
       await db.write(async () => {
         const assessmentCollection = db.get<RenalAssessment>('renal_assessments');
         const auditLogCollection = db.get('audit_logs');
+        const recommendationCollection = db.get('clinical_recommendations');
 
         // Create new assessment record
         const newRecord = await assessmentCollection.create((record) => {
@@ -197,6 +199,9 @@ export default function NCPNephrologyGatewayScreen() {
           record.measuredUrineOutput = parseFloat(measuredUrineOutput) || 0;
           record.recordedAt = new Date();
         });
+
+        // CDSS Placeholder: Renal specific recommendations can be added here
+        // if (egfrResult.stage === '5' && dialysisStatus === 'none') { ... }
 
         // Log clinical audit entry
         await auditLogCollection.create((record: any) => {
@@ -495,11 +500,13 @@ export default function NCPNephrologyGatewayScreen() {
               </View>
             </View>
 
-            <Button
-              title="حفظ السجل الكلوي وتوقيع التبرير السريري"
-              onPress={() => setIsSaveModalOpen(true)}
-              variant="primary"
-            />
+            <HiddenWhenSandbox>
+              <Button
+                title="حفظ السجل الكلوي وتوقيع التبرير السريري"
+                onPress={() => setIsSaveModalOpen(true)}
+                variant="primary"
+              />
+            </HiddenWhenSandbox>
           </View>
 
         </ScrollView>
@@ -543,13 +550,15 @@ export default function NCPNephrologyGatewayScreen() {
                   variant="ghost"
                   style={{ flex: 1 }}
                 />
-                <Button
-                  title="توقيع وحفظ السجل"
-                  onPress={handleSaveAssessment}
-                  variant="primary"
-                  loading={isSaving}
-                  style={{ flex: 2 }}
-                />
+                <HiddenWhenSandbox>
+                  <Button
+                    title="توقيع وحفظ السجل"
+                    onPress={handleSaveAssessment}
+                    variant="primary"
+                    loading={isSaving}
+                    style={{ flex: 2 }}
+                  />
+                </HiddenWhenSandbox>
               </View>
             </View>
           </View>

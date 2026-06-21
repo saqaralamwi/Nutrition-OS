@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { usePatientStore } from './patientStore';
 import { useSecurityStore } from './securityStore';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
@@ -75,15 +74,7 @@ export const useSettingsStore = create<SettingsState>()(
 
         // --- Safe-Switch Logic ---
         
-        // 1. Flush transient memory / search / sort states
-        const patientStore = usePatientStore.getState();
-        patientStore.searchQuery = '';
-        patientStore.sortOrder = 'newest';
-        
-        // Reload patients list to flush/sync
-        await patientStore.loadPatients();
-
-        // 2. Clear current OCR cropping cache (temporary image picker files)
+        // 1. Clear current OCR cropping cache (temporary image picker files)
         if (Platform.OS !== 'web') {
           try {
             const cacheDir = (FileSystem as any).cacheDirectory;

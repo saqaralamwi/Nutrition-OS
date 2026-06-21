@@ -60,6 +60,7 @@ import IcuCriticalAssessment from '../models/IcuCriticalAssessment';
 import GastroSurgeryAssessment from '../models/GastroSurgeryAssessment';
 import ClinicalAuditLog from '../models/ClinicalAuditLog';
 import CardiovascularAssessment from '../models/CardiovascularAssessment';
+import WhoGrowthStandard from '../models/WhoGrowthStandard';
 import NutritionRequirements from '../models/NutritionRequirements';
 import TherapeuticFood from '../models/TherapeuticFood';
 import DrugNutrientInteraction from '../models/DrugNutrientInteraction';
@@ -71,6 +72,16 @@ import FoodExchange from '../models/FoodExchange';
 import PatientMealPlan from '../models/PatientMealPlan';
 import DietaryHistorySession from '../models/DietaryHistorySession';
 import DietaryHistoryItem from '../models/DietaryHistoryItem';
+import AnemiaAssessment from '../models/AnemiaAssessment';
+import AnemiaNutritionPlan from '../models/AnemiaNutritionPlan';
+import AnemiaMonitoring from '../models/AnemiaMonitoring';
+import OsteoporosisAssessment from '../models/OsteoporosisAssessment';
+import OsteoporosisNutritionPlan from '../models/OsteoporosisNutritionPlan';
+import OsteoporosisMonitoring from '../models/OsteoporosisMonitoring';
+import GoutAssessment from '../models/GoutAssessment';
+import GoutNutritionPlan from '../models/GoutNutritionPlan';
+import GoutMonitoring from '../models/GoutMonitoring';
+import Report from '../models/Report';
 import { setupAuditTriggers } from './auditTrigger';
 import { waitForDatabaseReady } from './utils';
 
@@ -132,6 +143,7 @@ const modelClasses = [
   GastroSurgeryAssessment,
   ClinicalAuditLog,
   CardiovascularAssessment,
+  WhoGrowthStandard,
   NutritionRequirements,
   TherapeuticFood,
   DrugNutrientInteraction,
@@ -143,10 +155,39 @@ const modelClasses = [
   PatientMealPlan,
   DietaryHistorySession,
   DietaryHistoryItem,
+  AnemiaAssessment,
+  AnemiaNutritionPlan,
+  AnemiaMonitoring,
+  OsteoporosisAssessment,
+  OsteoporosisNutritionPlan,
+  OsteoporosisMonitoring,
+  GoutAssessment,
+  GoutNutritionPlan,
+  GoutMonitoring,
+  Report,
 ];
 
 const DB_KEY = '__WATERMELONDB_WEB__';
 let initPromise: Promise<Database> | null = null;
+
+function deleteLokiIndexedDB(): Promise<void> {
+  const dbName = 'clinical_nutrition';
+  return new Promise((resolve) => {
+    const request = indexedDB.deleteDatabase(dbName);
+    request.onsuccess = () => {
+      console.log(`[IndexedDB] Database '${dbName}' deleted`);
+      resolve();
+    };
+    request.onerror = () => {
+      console.error(`[IndexedDB] Failed to delete database '${dbName}'`);
+      resolve();
+    };
+    request.onblocked = () => {
+      console.warn(`[IndexedDB] Deletion blocked for '${dbName}', continuing...`);
+      setTimeout(resolve, 1000);
+    };
+  });
+}
 
 export async function getDatabase(): Promise<Database> {
   const cached = (globalThis as any)[DB_KEY];
@@ -159,36 +200,54 @@ export async function getDatabase(): Promise<Database> {
   }
 
   initPromise = (async () => {
-    try {
-      const adapter = new LokiJSAdapter({
-        dbName: 'clinical_nutrition',
-        schema,
-        migrations,
-        useWebWorker: false,
-        useIncrementalIndexedDB: true,
-      });
+    let lastError: Error | null = null;
 
-      console.log('[WatermelonDB] Initializing LokiJS adapter for web...');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        let setupFailed = false;
 
-      const db = new Database({
-        adapter,
-        modelClasses,
-      });
+        const adapter = new LokiJSAdapter({
+          dbName: 'clinical_nutrition',
+          schema,
+          migrations,
+          useWebWorker: false,
+          useIncrementalIndexedDB: true,
+          onSetUpError: (error: Error) => {
+            setupFailed = true;
+            console.error(`[LokiJS] Setup failed (attempt ${attempt + 1}):`, error);
+          },
+        });
 
-      setupAuditTriggers(db);
+        console.log('[WatermelonDB] Initializing LokiJS adapter for web...');
 
-      // CRITICAL: Ensure database is ready (especially LokiJS on Web) before seeding
-      await waitForDatabaseReady(db);
+        const db = new Database({
+          adapter,
+          modelClasses,
+        });
 
-      await seedDatabase(db);
+        setupAuditTriggers(db);
 
-      (globalThis as any)[DB_KEY] = db;
-      return db;
-    } catch (error) {
-      console.error('[WatermelonDB] Initialization failed, clearing retry:', error);
-      initPromise = null;
-      throw error;
+        await waitForDatabaseReady(db, () => setupFailed);
+
+        await seedDatabase(db);
+
+        (globalThis as any)[DB_KEY] = db;
+        return db;
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`[WatermelonDB] Initialization attempt ${attempt + 1} failed:`, error);
+
+        if (attempt === 0) {
+          console.log('[WatermelonDB] Attempting to delete IndexedDB and retry with fresh database...');
+          await deleteLokiIndexedDB();
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
     }
+
+    initPromise = null;
+    console.error('[WatermelonDB] All initialization attempts failed.');
+    throw lastError || new Error('Failed to initialize database');
   })();
 
   return initPromise;

@@ -8,8 +8,9 @@ import {
   TouchableOpacity,
   Modal,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { useBeforeRemoveGuard } from '../../../src/presentation/hooks/useBeforeRemoveGuard';
 import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
 import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
@@ -20,21 +21,13 @@ import Button from '../../../src/presentation/components/Button';
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import RadioGroup from '../../../src/presentation/components/RadioGroup';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
-import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { useSettingsStore } from '../../../src/presentation/stores/settingsStore';
 import { Patient } from '../../../src/domain/entities/Patient';
 import { ACTIVITY_LEVELS } from '../../../src/domain/entities/NutritionPlan';
 import { CalculationResult } from '../../../src/domain/entities/Calculation';
-import { getDatabase } from '../../../src/data/database';
-import {
-  calculateHarrisBenedictBMR,
-  calculateMifflinStJeorBMR,
-  calculateVentilatedREE,
-  KAU_ILLNESS_MATRIX,
-  calculateHollidaySegarFluid,
-  calculateGUR,
-} from '../../../src/domain/utils/kauRequirementsEngine';
+import { KAU_ILLNESS_MATRIX } from '../../../src/domain/utils/kauRequirementsEngine';
+import { useCalculationPersister } from '../../../src/presentation/hooks/useCalculationPersister';
 
 const ACTIVITY_SEGMENTS = Object.entries(ACTIVITY_LEVELS).map(([key, val]) => ({
   label: val.label,
@@ -66,47 +59,27 @@ const overrideSchema = z.object({
 export default function CalculationsScreen() {
   const { id: patientId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
   const showToast = useToastStore((s) => s.showToast);
-  
-  // Dynamic default formula
   const { defaultEnergyFormula } = useSettingsStore();
 
-  const [isLoading, setIsLoading] = useState(true);
   const [patient, setPatient] = useState<Patient | null>(null);
-
-  // Core Inputs
-  const [weightKg, setWeightKg] = useState('70');
-  const [heightCm, setHeightCm] = useState('170');
-  const [activityLevel, setActivityLevel] = useState('sedentary');
-  const [stressFactor, setStressFactor] = useState('1.0');
-
-  // KAU Mechanically Ventilated inputs
-  const [mechanicallyVentilated, setMechanicallyVentilated] = useState(false);
-  const [trauma, setTrauma] = useState(false);
-  const [burn, setBurn] = useState(false);
-  const [ve, setVe] = useState('8.0'); // L/min
-  const [tmax, setTmax] = useState('37.0'); // °C
-
-  // Fever adjustment inputs
-  const [fever, setFever] = useState(false);
-  const [currentTemp, setCurrentTemp] = useState('37.0');
-  const [tempUnit, setTempUnit] = useState<'C' | 'F'>('C');
-
-  // Illness specific multipliers selector
-  const [selectedIllness, setSelectedIllness] = useState('');
-
-  // Enteral nutrition inputs
-  const [enteralVolume, setEnteralVolume] = useState('');
-  const [enteralHours, setEnteralHours] = useState('24');
-
-  // Parenteral nutrition inputs
-  const [pnVolume, setPnVolume] = useState('');
-  const [pnDextrosePercent, setPnDextrosePercent] = useState('');
-
-  // Database results
   const [calculations, setCalculations] = useState<CalculationResult[]>([]);
+  const [hasLoadedPatient, setHasLoadedPatient] = useState(false);
 
-  // Override logic states
+  const age = patient?.age || 30;
+  const isMale = patient?.gender === 'male';
+
+  const {
+    formState,
+    setField,
+    computed,
+    isDirty,
+    isSaving,
+    isLoading: isDraftLoading,
+    saveImmediate,
+  } = useCalculationPersister(patientId, age, isMale);
+
   const [showOverride, setShowOverride] = useState(false);
   const [overrideTarget, setOverrideTarget] = useState<CalculationResult | null>(null);
   const [overrideValue, setOverrideValue] = useState('');
@@ -114,12 +87,11 @@ export default function CalculationsScreen() {
   const [isOverriding, setIsOverriding] = useState(false);
 
   useEffect(() => {
-    loadData();
+    loadPatientAndCalculations();
   }, [patientId]);
 
-  async function loadData() {
+  async function loadPatientAndCalculations() {
     try {
-      setIsLoading(true);
       const { GetPatientUseCase } = await import('../../../src/domain/use-cases/GetPatientUseCase');
       const patientUC = new GetPatientUseCase();
       const p = await patientUC.execute(patientId);
@@ -128,155 +100,28 @@ export default function CalculationsScreen() {
       const { CalculationRepository } = await import('../../../src/data/repositories/CalculationRepository');
       const repo = new CalculationRepository();
       const existing = await repo.getByPatientId(patientId);
-      if (existing.length > 0) {
-        setCalculations(existing);
-        const first = existing[0];
-        if (first.inputValues?.weightKg) setWeightKg(String(first.inputValues.weightKg));
-        if (first.inputValues?.heightCm) setHeightCm(String(first.inputValues.heightCm));
-        if (first.inputValues?.activityLevel) setActivityLevel(first.inputValues.activityLevel);
-        if (first.inputValues?.stressFactor) setStressFactor(String(first.inputValues.stressFactor));
-      }
+      setCalculations(existing);
     } catch (error) {
       console.error('Error loading calculations data:', error);
       showToast('فشل تحميل البيانات السريرية', 'error');
     } finally {
-      setIsLoading(false);
+      setHasLoadedPatient(true);
     }
   }
 
-  // Parse Numeric Inputs
-  const w = parseFloat(weightKg) || 0;
-  const h = parseFloat(heightCm) || 0;
-  const age = patient?.age || 30;
-  const isMale = patient?.gender === 'male';
-
-  // Calculations
-  const bmi = useMemo(() => {
-    if (w <= 0 || h <= 0) return 0;
-    return w / Math.pow(h / 100, 2);
-  }, [w, h]);
-
-  const mifflinBMR = useMemo(() => {
-    if (w <= 0 || h <= 0) return 0;
-    return calculateMifflinStJeorBMR(w, h, age, isMale);
-  }, [w, h, age, isMale]);
-
-  const harrisBMR = useMemo(() => {
-    if (w <= 0 || h <= 0) return 0;
-    return calculateHarrisBenedictBMR(w, h, age, isMale);
-  }, [w, h, age, isMale]);
-
-  const ventilatedREE = useMemo(() => {
-    if (w <= 0 || h <= 0) return null;
-    return calculateVentilatedREE({
-      weightKg: w,
-      heightCm: h,
-      age,
-      isMale,
-      mechanicallyVentilated,
-      trauma,
-      burn,
-      ve: parseFloat(ve) || 0,
-      tmax: parseFloat(tmax) || 37.0,
-    });
-  }, [w, h, age, isMale, mechanicallyVentilated, trauma, burn, ve, tmax]);
-
-  const feverFactor = useMemo(() => {
-    if (!fever) return 1.0;
-    const temp = parseFloat(currentTemp) || 0;
-    if (tempUnit === 'C') {
-      const diff = temp - 37.0;
-      return diff > 0 ? 1.0 + (diff * 0.13) : 1.0;
-    } else {
-      const diff = temp - 98.6;
-      return diff > 0 ? 1.0 + (diff * 0.07) : 1.0;
-    }
-  }, [fever, currentTemp, tempUnit]);
-
-  // Activity stress factors
-  const activityMultipliers: Record<string, number> = {
-    comatose: 1.1,
-    sedentary: 1.2, // Confined to bed
-    active: 1.3, // Out of bed
-    very_active: 1.5, // Normal activities
-  };
-
-  const activityFactor = activityMultipliers[activityLevel] || 1.2;
-  const injuryFactor = parseFloat(stressFactor) || 1.0;
-
-  const calculatedTEE = useMemo(() => {
-    let baseREE = mifflinBMR;
-    if (ventilatedREE) {
-      baseREE = ventilatedREE.value;
-    } else {
-      if (defaultEnergyFormula === 'Harris-Benedict') {
-        baseREE = harrisBMR;
-      } else if (defaultEnergyFormula === 'Weight-Based') {
-        baseREE = w * 27.5; // Quick rule midpoint
-      } else {
-        baseREE = mifflinBMR;
-      }
-    }
-    return baseREE * activityFactor * injuryFactor * feverFactor;
-  }, [w, mifflinBMR, harrisBMR, ventilatedREE, activityFactor, injuryFactor, feverFactor, defaultEnergyFormula]);
-
-  // Illness specific ranges
-  const illnessDetails = useMemo(() => {
-    if (!selectedIllness || !KAU_ILLNESS_MATRIX[selectedIllness] || w <= 0) return null;
-    const rule = KAU_ILLNESS_MATRIX[selectedIllness];
-    let multiplierKcalMin = rule.minKcal;
-    let multiplierKcalMax = rule.maxKcal;
-    let multiplierProteinMin = rule.minProtein;
-    let multiplierProteinMax = rule.maxProtein;
-
-    // Special case for pregnancy: add absolute +25g protein
-    const baseProteinMin = multiplierProteinMin * w;
-    const baseProteinMax = multiplierProteinMax * w;
-    const finalProteinMin = selectedIllness === 'pregnancy' ? baseProteinMin + 25 : baseProteinMin;
-    const finalProteinMax = selectedIllness === 'pregnancy' ? baseProteinMax + 25 : baseProteinMax;
-
-    return {
-      rule,
-      targetKcalMin: multiplierKcalMin * w,
-      targetKcalMax: multiplierKcalMax * w,
-      targetProteinMin: finalProteinMin,
-      targetProteinMax: finalProteinMax,
-    };
-  }, [selectedIllness, w]);
-
-  // Fluids
-  const fluidHollidaySegar = useMemo(() => {
-    if (w <= 0) return 0;
-    return calculateHollidaySegarFluid(w);
-  }, [w]);
-
-  // Alternative RDA shortcut: 1ml fluid / kcal of needs
-  const fluidRda = useMemo(() => {
-    return calculatedTEE;
-  }, [calculatedTEE]);
-
-  // Enteral rate
-  const enteralFeedingRate = useMemo(() => {
-    const vol = parseFloat(enteralVolume) || 0;
-    const hrs = parseFloat(enteralHours) || 0;
-    if (vol <= 0 || hrs <= 0) return 0;
-    return vol / hrs;
-  }, [enteralVolume, enteralHours]);
-
-  // PN GUR
-  const gurResult = useMemo(() => {
-    const vol = parseFloat(pnVolume) || 0;
-    const dexPercent = parseFloat(pnDextrosePercent) || 0;
-    if (vol <= 0 || dexPercent <= 0 || w <= 0) return null;
-    const gur = calculateGUR(vol, dexPercent, w);
-    const isSafe = gur >= 4.0 && gur <= 6.0;
-    return {
-      gur,
-      isSafe,
-    };
-  }, [pnVolume, pnDextrosePercent, w]);
+  useBeforeRemoveGuard(navigation, isDirty, saveImmediate);
 
   const handleSave = useCallback(async (status: 'complete' | 'incomplete'): Promise<string | undefined> => {
+    try {
+      await saveImmediate();
+    } catch {
+      showToast('فشل حفظ المسودة', 'error');
+      return undefined;
+    }
+
+    const w = parseFloat(formState.weightKg) || 0;
+    const h = parseFloat(formState.heightCm) || 0;
+
     if (w <= 0 || h <= 0) {
       showToast('يرجى إدخال وزن وطول صحيحين لإجراء الحسابات السريرية', 'error');
       return undefined;
@@ -292,11 +137,11 @@ export default function CalculationsScreen() {
           calculationType: 'bmi',
           formulaName: 'BMI',
           inputValues: { weightKg: w, heightCm: h },
-          resultValue: bmi,
+          resultValue: computed.bmi,
           steps: [
             { label: 'الوزن', value: `${w} كجم` },
             { label: 'الطول', value: `${h} سم` },
-            { label: 'النتيجة', value: bmi.toFixed(2) },
+            { label: 'النتيجة', value: computed.bmi.toFixed(2) },
           ],
         },
         {
@@ -304,9 +149,9 @@ export default function CalculationsScreen() {
           calculationType: 'bmr_mifflin',
           formulaName: 'Mifflin-St Jeor',
           inputValues: { weightKg: w, heightCm: h, age, isMale },
-          resultValue: mifflinBMR,
+          resultValue: computed.mifflinBMR,
           steps: [
-            { label: 'النتيجة', value: `${mifflinBMR.toFixed(0)} سعرة/يوم` },
+            { label: 'النتيجة', value: `${computed.mifflinBMR.toFixed(0)} سعرة/يوم` },
           ],
         },
         {
@@ -314,50 +159,50 @@ export default function CalculationsScreen() {
           calculationType: 'bmr_harris',
           formulaName: 'Harris-Benedict',
           inputValues: { weightKg: w, heightCm: h, age, isMale },
-          resultValue: harrisBMR,
+          resultValue: computed.harrisBMR,
           steps: [
-            { label: 'النتيجة', value: `${harrisBMR.toFixed(0)} سعرة/يوم` },
+            { label: 'النتيجة', value: `${computed.harrisBMR.toFixed(0)} سعرة/يوم` },
           ],
         },
         {
           patientId,
           calculationType: 'total_energy',
-          formulaName: ventilatedREE
-            ? ventilatedREE.formulaName
+          formulaName: computed.ventilatedREE
+            ? computed.ventilatedREE.formulaName
             : defaultEnergyFormula === 'Harris-Benedict'
-            ? 'Harris-Benedict + Factor'
-            : defaultEnergyFormula === 'Weight-Based'
-            ? 'Weight-Based (25-30 kcal/kg)'
-            : 'Mifflin-St Jeor + Factor',
-          inputValues: {
-            baseREE: ventilatedREE
-              ? ventilatedREE.value
-              : defaultEnergyFormula === 'Harris-Benedict'
-              ? harrisBMR
+              ? 'Harris-Benedict + Factor'
               : defaultEnergyFormula === 'Weight-Based'
-              ? w * 27.5
-              : mifflinBMR,
-            activityFactor,
-            injuryFactor,
-            feverFactor,
+                ? 'Weight-Based (25-30 kcal/kg)'
+                : 'Mifflin-St Jeor + Factor',
+          inputValues: {
+            baseREE: computed.ventilatedREE
+              ? computed.ventilatedREE.value
+              : defaultEnergyFormula === 'Harris-Benedict'
+                ? computed.harrisBMR
+                : defaultEnergyFormula === 'Weight-Based'
+                  ? w * 27.5
+                  : computed.mifflinBMR,
+            activityFactor: computed.activityFactor,
+            injuryFactor: computed.injuryFactor,
+            feverFactor: computed.feverFactor,
           },
-          resultValue: calculatedTEE,
+          resultValue: computed.calculatedTEE,
           steps: [
             {
               label: 'الأيض الأساسي المستهدف',
-              value: `${(ventilatedREE
-                ? ventilatedREE.value
+              value: `${(computed.ventilatedREE
+                ? computed.ventilatedREE.value
                 : defaultEnergyFormula === 'Harris-Benedict'
-                ? harrisBMR
-                : defaultEnergyFormula === 'Weight-Based'
-                ? w * 27.5
-                : mifflinBMR
+                  ? computed.harrisBMR
+                  : defaultEnergyFormula === 'Weight-Based'
+                    ? w * 27.5
+                    : computed.mifflinBMR
               ).toFixed(0)} سعرة`,
             },
-            { label: 'معامل النشاط البدني', value: String(activityFactor) },
-            { label: 'معامل الإجهاد السريري', value: String(injuryFactor) },
-            { label: 'معامل الحرارة/الحمى', value: String(feverFactor) },
-            { label: 'الاحتياج الكلي للطاقة', value: `${calculatedTEE.toFixed(0)} سعرة` },
+            { label: 'معامل النشاط البدني', value: String(computed.activityFactor) },
+            { label: 'معامل الإجهاد السريري', value: String(computed.injuryFactor) },
+            { label: 'معامل الحرارة/الحمى', value: String(computed.feverFactor) },
+            { label: 'الاحتياج الكلي للطاقة', value: `${computed.calculatedTEE.toFixed(0)} سعرة` },
           ],
         },
         {
@@ -365,22 +210,23 @@ export default function CalculationsScreen() {
           calculationType: 'fluid',
           formulaName: 'Holliday-Segar',
           inputValues: { weightKg: w },
-          resultValue: fluidHollidaySegar,
+          resultValue: computed.fluidHollidaySegar,
           steps: [
-            { label: 'احتياج السوائل (Holliday-Segar)', value: `${fluidHollidaySegar.toFixed(0)} مل` },
-            { label: 'احتياج السوائل البديل (RDA)', value: `${fluidRda.toFixed(0)} مل` },
+            { label: 'احتياج السوائل (Holliday-Segar)', value: `${computed.fluidHollidaySegar.toFixed(0)} مل` },
+            { label: 'احتياج السوائل البديل (RDA)', value: `${computed.fluidRda.toFixed(0)} مل` },
           ],
         },
       ];
 
       await repo.upsertBatch(results);
       setCalculations(results);
+      showToast('تم حفظ الحسابات بنجاح', 'success');
       return patientId;
     } catch {
       showToast('فشل في حفظ الحسابات في قاعدة البيانات', 'error');
       return undefined;
     }
-  }, [patientId, w, h, age, isMale, bmi, mifflinBMR, harrisBMR, ventilatedREE, activityFactor, injuryFactor, feverFactor, calculatedTEE, fluidHollidaySegar, fluidRda, showToast, defaultEnergyFormula]);
+  }, [patientId, formState, computed, age, isMale, defaultEnergyFormula, saveImmediate, showToast]);
 
   const openOverride = useCallback((calc: CalculationResult) => {
     setOverrideTarget(calc);
@@ -419,7 +265,9 @@ export default function CalculationsScreen() {
     }
   }, [overrideTarget, overrideValue, overrideReason, patientId, showToast]);
 
-  if (isLoading) {
+  const isLoadingScreen = !hasLoadedPatient || isDraftLoading;
+
+  if (isLoadingScreen) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -440,7 +288,6 @@ export default function CalculationsScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-forward" size={24} color={colors.primaryContrast} />
@@ -449,7 +296,6 @@ export default function CalculationsScreen() {
           <ArabicText style={styles.headerSubtitle}>{patient.fullName} | {patient.fileNumber}</ArabicText>
         </View>
 
-        {/* Section 1: البيانات القياسية والوزن */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="body-outline" size={20} color={colors.primary} />
@@ -460,8 +306,8 @@ export default function CalculationsScreen() {
             <View style={styles.halfInput}>
               <TextInputField
                 label="الوزن الحالي (كجم)"
-                value={weightKg}
-                onChangeText={setWeightKg}
+                value={formState.weightKg}
+                onChangeText={(v) => setField('weightKg', v)}
                 keyboardType="decimal-pad"
                 placeholder="مثال: 70"
               />
@@ -469,8 +315,8 @@ export default function CalculationsScreen() {
             <View style={styles.halfInput}>
               <TextInputField
                 label="الطول الحالي (سم)"
-                value={heightCm}
-                onChangeText={setHeightCm}
+                value={formState.heightCm}
+                onChangeText={(v) => setField('heightCm', v)}
                 keyboardType="decimal-pad"
                 placeholder="مثال: 170"
               />
@@ -488,23 +334,23 @@ export default function CalculationsScreen() {
             </View>
             <View style={styles.metaBox}>
               <ArabicText style={styles.metaLabel}>كتلة الجسم (BMI)</ArabicText>
-              <ArabicText bold style={[styles.metaValue, { color: colors.primary }]}>{bmi.toFixed(1)}</ArabicText>
+              <ArabicText bold style={[styles.metaValue, { color: colors.primary }]}>{computed.bmi.toFixed(1)}</ArabicText>
             </View>
           </View>
 
           <ArabicText style={styles.fieldLabel}>مستوى النشاط البدني للمريض</ArabicText>
           <SegmentedControl
             segments={ACTIVITY_SEGMENTS}
-            selectedValue={activityLevel}
-            onValueChange={(val) => setActivityLevel(val)}
+            selectedValue={formState.activityLevel}
+            onValueChange={(val) => setField('activityLevel', val)}
           />
 
           <View style={styles.inputRow}>
             <View style={styles.halfInput}>
               <TextInputField
                 label="معامل الإجهاد السريري (Injury Factor)"
-                value={stressFactor}
-                onChangeText={setStressFactor}
+                value={formState.stressFactor}
+                onChangeText={(v) => setField('stressFactor', v)}
                 keyboardType="decimal-pad"
                 placeholder="1.0"
               />
@@ -512,7 +358,6 @@ export default function CalculationsScreen() {
           </View>
         </View>
 
-        {/* Section 2: مرضى التنفس الاصطناعي والإجهاد الحراري */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="pulse-outline" size={20} color={colors.primary} />
@@ -525,19 +370,19 @@ export default function CalculationsScreen() {
               { label: 'نعم (Yes)', value: 'yes' },
               { label: 'لا (No)', value: 'no' },
             ]}
-            selectedValue={mechanicallyVentilated ? 'yes' : 'no'}
-            onValueChange={(val) => setMechanicallyVentilated(val === 'yes')}
+            selectedValue={formState.mechanicallyVentilated ? 'yes' : 'no'}
+            onValueChange={(val) => setField('mechanicallyVentilated', val === 'yes')}
             direction="row"
           />
 
-          {mechanicallyVentilated && (
+          {formState.mechanicallyVentilated && (
             <View style={styles.ventilatorSubSection}>
               <View style={styles.inputRow}>
                 <View style={styles.halfInput}>
                   <TextInputField
                     label="معدل التهوية بالدقيقة (VE - L/min)"
-                    value={ve}
-                    onChangeText={setVe}
+                    value={formState.ve}
+                    onChangeText={(v) => setField('ve', v)}
                     keyboardType="decimal-pad"
                     placeholder="8.0"
                   />
@@ -545,8 +390,8 @@ export default function CalculationsScreen() {
                 <View style={styles.halfInput}>
                   <TextInputField
                     label="أقصى درجة حرارة اليوم (Tmax - °C)"
-                    value={tmax}
-                    onChangeText={setTmax}
+                    value={formState.tmax}
+                    onChangeText={(v) => setField('tmax', v)}
                     keyboardType="decimal-pad"
                     placeholder="37.0"
                   />
@@ -560,13 +405,13 @@ export default function CalculationsScreen() {
                     { label: 'نعم', value: 'yes' },
                     { label: 'لا', value: 'no' },
                   ]}
-                  selectedValue={trauma ? 'yes' : 'no'}
-                  onValueChange={(val) => setTrauma(val === 'yes')}
+                  selectedValue={formState.trauma ? 'yes' : 'no'}
+                  onValueChange={(val) => setField('trauma', val === 'yes')}
                   direction="row"
                 />
               </View>
 
-              {trauma && (
+              {formState.trauma && (
                 <View style={styles.switchRow}>
                   <RadioGroup
                     label="هل توجد حروق مرافقة؟ (Burn)"
@@ -574,8 +419,8 @@ export default function CalculationsScreen() {
                       { label: 'نعم', value: 'yes' },
                       { label: 'لا', value: 'no' },
                     ]}
-                    selectedValue={burn ? 'yes' : 'no'}
-                    onValueChange={(val) => setBurn(val === 'yes')}
+                    selectedValue={formState.burn ? 'yes' : 'no'}
+                    onValueChange={(val) => setField('burn', val === 'yes')}
                     direction="row"
                   />
                 </View>
@@ -591,19 +436,19 @@ export default function CalculationsScreen() {
               { label: 'نعم', value: 'yes' },
               { label: 'لا', value: 'no' },
             ]}
-            selectedValue={fever ? 'yes' : 'no'}
-            onValueChange={(val) => setFever(val === 'yes')}
+            selectedValue={formState.fever ? 'yes' : 'no'}
+            onValueChange={(val) => setField('fever', val === 'yes')}
             direction="row"
           />
 
-          {fever && (
+          {formState.fever && (
             <View style={styles.ventilatorSubSection}>
               <View style={styles.inputRow}>
                 <View style={styles.halfInput}>
                   <TextInputField
                     label="درجة الحرارة المسجلة"
-                    value={currentTemp}
-                    onChangeText={setCurrentTemp}
+                    value={formState.currentTemp}
+                    onChangeText={(v) => setField('currentTemp', v)}
                     keyboardType="decimal-pad"
                     placeholder="38.5"
                   />
@@ -615,8 +460,8 @@ export default function CalculationsScreen() {
                       { label: 'مئوي (°C)', value: 'C' },
                       { label: 'فهرنهايت (°F)', value: 'F' },
                     ]}
-                    selectedValue={tempUnit}
-                    onValueChange={(val) => setTempUnit(val as 'C' | 'F')}
+                    selectedValue={formState.tempUnit}
+                    onValueChange={(val) => setField('tempUnit', val as 'C' | 'F')}
                     direction="row"
                   />
                 </View>
@@ -625,7 +470,6 @@ export default function CalculationsScreen() {
           )}
         </View>
 
-        {/* Section 3: النتائج المباشرة لمعدلات الأيض المستهدفة */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="analytics-outline" size={20} color={colors.primary} />
@@ -635,17 +479,17 @@ export default function CalculationsScreen() {
           <View style={styles.resultDetailsCard}>
             <View style={styles.resultDetailRow}>
               <ArabicText style={styles.resultDetailLabel}>أيض الأساس (Mifflin-St Jeor BMR):</ArabicText>
-              <ArabicText bold style={styles.resultDetailValue}>{mifflinBMR.toFixed(0)} سعرة/يوم</ArabicText>
+              <ArabicText bold style={styles.resultDetailValue}>{computed.mifflinBMR.toFixed(0)} سعرة/يوم</ArabicText>
             </View>
             <View style={styles.resultDetailRow}>
               <ArabicText style={styles.resultDetailLabel}>أيض الأساس (Harris-Benedict RMR):</ArabicText>
-              <ArabicText bold style={styles.resultDetailValue}>{harrisBMR.toFixed(0)} سعرة/يوم</ArabicText>
+              <ArabicText bold style={styles.resultDetailValue}>{computed.harrisBMR.toFixed(0)} سعرة/يوم</ArabicText>
             </View>
 
-            {ventilatedREE && (
+            {computed.ventilatedREE && (
               <View style={[styles.resultDetailRow, styles.activeREEHighlight]}>
-                <ArabicText bold style={{ color: colors.primary, fontSize: 13 }}>معادلة التنفس المطبقة ({ventilatedREE.formulaName}):</ArabicText>
-                <ArabicText bold style={{ color: colors.primary, fontSize: 13 }}>{ventilatedREE.value.toFixed(0)} سعرة/يوم</ArabicText>
+                <ArabicText bold style={{ color: colors.primary, fontSize: 13 }}>معادلة التنفس المطبقة ({computed.ventilatedREE.formulaName}):</ArabicText>
+                <ArabicText bold style={{ color: colors.primary, fontSize: 13 }}>{computed.ventilatedREE.value.toFixed(0)} سعرة/يوم</ArabicText>
               </View>
             )}
 
@@ -653,12 +497,11 @@ export default function CalculationsScreen() {
 
             <View style={styles.teeTotalBox}>
               <ArabicText bold style={styles.teeTotalLabel}>إجمالي طاقة التمثيل اليومي (Calculated TEE):</ArabicText>
-              <ArabicText bold style={styles.teeTotalValue}>{calculatedTEE.toFixed(0)} سعرة/يوم</ArabicText>
+              <ArabicText bold style={styles.teeTotalValue}>{computed.calculatedTEE.toFixed(0)} سعرة/يوم</ArabicText>
             </View>
           </View>
         </View>
 
-        {/* Section 4: مصفوفة الإرشاد السريري والحالات المرضية */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="medkit-outline" size={20} color={colors.primary} />
@@ -668,37 +511,36 @@ export default function CalculationsScreen() {
           <DropdownField
             label="اختر الحالة السريرية الخاصة للمريض"
             options={ILLNESS_OPTIONS}
-            selectedValue={selectedIllness}
-            onValueChange={setSelectedIllness}
+            selectedValue={formState.selectedIllness}
+            onValueChange={(v) => setField('selectedIllness', v)}
             placeholder="اختر الحالة..."
           />
 
-          {illnessDetails && (
+          {computed.illnessDetails && (
             <View style={styles.illnessResultCard}>
-              <ArabicText bold style={styles.illnessName}>{illnessDetails.rule.nameAr}</ArabicText>
+              <ArabicText bold style={styles.illnessName}>{computed.illnessDetails.rule.nameAr}</ArabicText>
               <View style={styles.divider} />
               <View style={styles.illnessMetricsGrid}>
                 <View style={styles.illnessMetricItem}>
                   <ArabicText style={styles.illnessMetricLabel}>السعرات المستهدفة</ArabicText>
                   <ArabicText bold style={styles.illnessMetricValue}>
-                    {illnessDetails.targetKcalMin.toFixed(0)} - {illnessDetails.targetKcalMax.toFixed(0)} سعرة
+                    {computed.illnessDetails.targetKcalMin.toFixed(0)} - {computed.illnessDetails.targetKcalMax.toFixed(0)} سعرة
                   </ArabicText>
-                  <ArabicText style={styles.illnessMetricSub}>{illnessDetails.rule.minKcal} - {illnessDetails.rule.maxKcal} kcal/kg</ArabicText>
+                  <ArabicText style={styles.illnessMetricSub}>{computed.illnessDetails.rule.minKcal} - {computed.illnessDetails.rule.maxKcal} kcal/kg</ArabicText>
                 </View>
 
                 <View style={styles.illnessMetricItem}>
                   <ArabicText style={styles.illnessMetricLabel}>البروتين المستهدف</ArabicText>
                   <ArabicText bold style={styles.illnessMetricValue}>
-                    {illnessDetails.targetProteinMin.toFixed(1)} - {illnessDetails.targetProteinMax.toFixed(1)} غم
+                    {computed.illnessDetails.targetProteinMin.toFixed(1)} - {computed.illnessDetails.targetProteinMax.toFixed(1)} غم
                   </ArabicText>
-                  <ArabicText style={styles.illnessMetricSub}>{illnessDetails.rule.minProtein} - {illnessDetails.rule.maxProtein} g/kg</ArabicText>
+                  <ArabicText style={styles.illnessMetricSub}>{computed.illnessDetails.rule.minProtein} - {computed.illnessDetails.rule.maxProtein} g/kg</ArabicText>
                 </View>
               </View>
             </View>
           )}
         </View>
 
-        {/* Section 5: السوائل وترطيب الجسم */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="water-outline" size={20} color={colors.primary} />
@@ -708,16 +550,15 @@ export default function CalculationsScreen() {
           <View style={styles.metaInfoGrid}>
             <View style={styles.metaBox}>
               <ArabicText style={styles.metaLabel}>Holliday-Segar</ArabicText>
-              <ArabicText bold style={styles.metaValue}>{fluidHollidaySegar.toFixed(0)} مل/يوم</ArabicText>
+              <ArabicText bold style={styles.metaValue}>{computed.fluidHollidaySegar.toFixed(0)} مل/يوم</ArabicText>
             </View>
             <View style={styles.metaBox}>
               <ArabicText style={styles.metaLabel}>احتياج RDA (البديل)</ArabicText>
-              <ArabicText bold style={styles.metaValue}>{fluidRda.toFixed(0)} مل/يوم</ArabicText>
+              <ArabicText bold style={styles.metaValue}>{computed.fluidRda.toFixed(0)} مل/يوم</ArabicText>
             </View>
           </View>
         </View>
 
-        {/* Section 6: الدعم التغذوي والـ GUR (Enteral & Parenteral) */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="beaker-outline" size={20} color={colors.primary} />
@@ -729,8 +570,8 @@ export default function CalculationsScreen() {
             <View style={styles.halfInput}>
               <TextInputField
                 label="الحجم المستهدف (مل)"
-                value={enteralVolume}
-                onChangeText={setEnteralVolume}
+                value={formState.enteralVolume}
+                onChangeText={(v) => setField('enteralVolume', v)}
                 keyboardType="numeric"
                 placeholder="1000"
               />
@@ -738,18 +579,18 @@ export default function CalculationsScreen() {
             <View style={styles.halfInput}>
               <TextInputField
                 label="مدة الضخ (ساعة)"
-                value={enteralHours}
-                onChangeText={setEnteralHours}
+                value={formState.enteralHours}
+                onChangeText={(v) => setField('enteralHours', v)}
                 keyboardType="numeric"
                 placeholder="24"
               />
             </View>
           </View>
 
-          {enteralFeedingRate > 0 && (
+          {computed.enteralFeedingRate > 0 && (
             <View style={styles.valueRowHighlight}>
               <ArabicText style={styles.highlightLabel}>معدل الضخ الموصى به:</ArabicText>
-              <ArabicText bold style={styles.highlightValue}>{enteralFeedingRate.toFixed(1)} مل/ساعة</ArabicText>
+              <ArabicText bold style={styles.highlightValue}>{computed.enteralFeedingRate.toFixed(1)} مل/ساعة</ArabicText>
             </View>
           )}
 
@@ -760,8 +601,8 @@ export default function CalculationsScreen() {
             <View style={styles.halfInput}>
               <TextInputField
                 label="الحجم الكلي للـ PN (مل)"
-                value={pnVolume}
-                onChangeText={setPnVolume}
+                value={formState.pnVolume}
+                onChangeText={(v) => setField('pnVolume', v)}
                 keyboardType="numeric"
                 placeholder="1500"
               />
@@ -769,24 +610,24 @@ export default function CalculationsScreen() {
             <View style={styles.halfInput}>
               <TextInputField
                 label="نسبة تركيز الديكستروز (%)"
-                value={pnDextrosePercent}
-                onChangeText={setPnDextrosePercent}
+                value={formState.pnDextrosePercent}
+                onChangeText={(v) => setField('pnDextrosePercent', v)}
                 keyboardType="decimal-pad"
                 placeholder="10"
               />
             </View>
           </View>
 
-          {gurResult && (
+          {computed.gurResult && (
             <View>
-              <View style={[styles.valueRowHighlight, { borderColor: gurResult.isSafe ? colors.success : colors.danger, backgroundColor: gurResult.isSafe ? '#E8F5E9' : '#FFEBEE' }]}>
-                <ArabicText style={[styles.highlightLabel, { color: gurResult.isSafe ? colors.success : colors.danger }]}>معدل استهلاك الجلوكوز (GUR):</ArabicText>
-                <ArabicText bold style={[styles.highlightValue, { color: gurResult.isSafe ? colors.success : colors.danger }]}>
-                  {gurResult.gur.toFixed(2)} mg/kg/min
+              <View style={[styles.valueRowHighlight, { borderColor: computed.gurResult.isSafe ? colors.success : colors.danger, backgroundColor: computed.gurResult.isSafe ? '#E8F5E9' : '#FFEBEE' }]}>
+                <ArabicText style={[styles.highlightLabel, { color: computed.gurResult.isSafe ? colors.success : colors.danger }]}>معدل استهلاك الجلوكوز (GUR):</ArabicText>
+                <ArabicText bold style={[styles.highlightValue, { color: computed.gurResult.isSafe ? colors.success : colors.danger }]}>
+                  {computed.gurResult.gur.toFixed(2)} mg/kg/min
                 </ArabicText>
               </View>
 
-              {!gurResult.isSafe && (
+              {!computed.gurResult.isSafe && (
                 <View style={styles.warningGURContainer}>
                   <Ionicons name="warning-outline" size={18} color="#D32F2F" />
                   <ArabicText style={styles.warningGURText}>
@@ -798,7 +639,6 @@ export default function CalculationsScreen() {
           )}
         </View>
 
-        {/* Database records list */}
         {calculations.length > 0 && (
           <View style={styles.section}>
             <ArabicText bold style={styles.sectionTitle}>السجلات المسجلة مسبقاً</ArabicText>
@@ -816,14 +656,13 @@ export default function CalculationsScreen() {
           patientId={patientId}
           screenKey="calculations"
           onSave={handleSave}
-          isSaving={false}
+          isSaving={isSaving}
           isValid={true}
         />
 
         <View style={styles.spacer} />
       </ScrollView>
 
-      {/* Override Modal */}
       <Modal visible={showOverride} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -1131,13 +970,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: spacing.xs,
   },
-  fieldValue: {
-    fontSize: 16,
-    color: colors.textPrimary,
-    fontWeight: '600',
-    textAlign: 'right',
-    marginBottom: spacing.xs,
-  },
   metaInfoGrid: {
     flexDirection: 'row-reverse',
     gap: spacing.sm,
@@ -1285,11 +1117,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     lineHeight: 18,
     fontWeight: '700',
-  },
-  actions: {
-    padding: spacing.md,
-    gap: spacing.sm,
-    marginTop: spacing.md,
   },
   spacer: {
     height: 40,

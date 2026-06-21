@@ -1,4 +1,11 @@
-import { MacroBreakdown } from '../entities/NutritionPlan';
+interface MacroBreakdown {
+  proteinGrams: number;
+  proteinCalories: number;
+  carbsGrams: number;
+  carbsCalories: number;
+  fatGrams: number;
+  fatCalories: number;
+}
 
 const CALORIES_PER_GRAM_PROTEIN = 4;
 const CALORIES_PER_GRAM_CARBS = 4;

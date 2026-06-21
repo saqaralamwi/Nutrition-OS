@@ -12,7 +12,7 @@ export class InterpretLabResultUseCase {
   execute(input: InterpretLabResultInput): InterpretationResult {
     const { resultValue, referenceRangeLow, referenceRangeHigh, criticalLowFactor, criticalHighFactor } = input;
 
-    if (referenceRangeLow >= referenceRangeHigh) {
+    if (isNaN(resultValue) || isNaN(referenceRangeLow) || isNaN(referenceRangeHigh) || referenceRangeLow >= referenceRangeHigh) {
       return 'normal';
     }
 

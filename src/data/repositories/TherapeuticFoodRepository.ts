@@ -18,8 +18,8 @@ function toRecord(model: TherapeuticFoodModel): TherapeuticFoodRecord {
     calciumMg: model.calciumMg ?? undefined,
     glycemicIndex: model.glycemicIndex ?? undefined,
     purineLevel: model.purineLevel ?? undefined,
-    allergenTags: model.allergenTags ?? undefined,
-    therapeuticBenefits: model.therapeuticBenefits ?? undefined,
+    allergenTags: model.allergenTags && model.allergenTags.length > 0 ? JSON.stringify(model.allergenTags) : undefined,
+    therapeuticBenefits: model.therapeuticBenefits && Object.keys(model.therapeuticBenefits).length > 0 ? JSON.stringify(model.therapeuticBenefits) : undefined,
     createdAt: model.createdAt?.toISOString() || undefined,
     updatedAt: model.updatedAt?.toISOString() || undefined,
   };

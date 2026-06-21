@@ -14,6 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, safeHeaderPaddingTop, fontFamilies } from '../../../src/presentation/theme';
+import { useAppTheme } from '../../../src/presentation/hooks/useAppTheme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
@@ -153,7 +154,7 @@ const socialHistorySchema = z.object({
   smoking: z.string().min(1, 'حقل التدخين مطلوب'),
   cigarettesPerDay: z.string(),
   yearsSmoked: z.string(),
-  alcoholSubstanceUse: z.string().min(1, 'حقل الكحول/المخدرات مطلوب'),
+  khatChewing: z.string().min(1, 'حقل تناول القات مطلوب'),
   physicalActivity: z.string().min(1, 'حقل النشاط البدني مطلوب'),
   activityDescription: z.string(),
   dietaryHistory: z.string(),
@@ -169,6 +170,7 @@ export default function SocialHistoryScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const { theme } = useAppTheme();
 
   // Cascading Region States
   const [selectedGov, setSelectedGov] = useState('');
@@ -194,7 +196,7 @@ export default function SocialHistoryScreen() {
       smoking: '',
       cigarettesPerDay: '',
       yearsSmoked: '',
-      alcoholSubstanceUse: '',
+      khatChewing: '',
       physicalActivity: '',
       activityDescription: '',
       dietaryHistory: '',
@@ -237,7 +239,7 @@ export default function SocialHistoryScreen() {
           smoking: data.smoking || '',
           cigarettesPerDay: data.cigarettesPerDay ? String(data.cigarettesPerDay) : '',
           yearsSmoked: data.yearsSmoked ? String(data.yearsSmoked) : '',
-          alcoholSubstanceUse: data.alcoholSubstanceUse || '',
+          khatChewing: data.khatChewing || '',
           physicalActivity: data.physicalActivity || '',
           activityDescription: data.activityDescription || '',
           dietaryHistory: data.dietaryHistory || '',
@@ -277,13 +279,14 @@ export default function SocialHistoryScreen() {
           smoking: values.smoking,
           cigarettesPerDay: values.cigarettesPerDay ? parseInt(values.cigarettesPerDay, 10) : undefined,
           yearsSmoked: values.yearsSmoked ? parseInt(values.yearsSmoked, 10) : undefined,
-          alcoholSubstanceUse: values.alcoholSubstanceUse,
+          khatChewing: values.khatChewing,
           physicalActivity: values.physicalActivity,
           activityDescription: values.activityDescription || undefined,
           dietaryHistory: values.dietaryHistory || undefined,
           foodAllergies: values.foodAllergies || undefined,
           specialDietBeforeAdmission: values.specialDietBeforeAdmission,
           comments: values.comments || undefined,
+          alcoholSubstanceUse: 'no',
         });
         success = true;
       } catch {
@@ -339,9 +342,9 @@ export default function SocialHistoryScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <ArabicText style={styles.loadingText}>جاري تحميل البيانات...</ArabicText>
+        <ArabicText style={[styles.loadingText, { color: theme.subtext }]}>جاري تحميل البيانات...</ArabicText>
       </View>
     );
   }
@@ -351,7 +354,7 @@ export default function SocialHistoryScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container}>
+      <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
@@ -361,14 +364,14 @@ export default function SocialHistoryScreen() {
         </View>
 
         {/* Demographic Info */}
-        <View style={styles.section}>
-          <ArabicText bold style={styles.sectionTitle}>المعلومات الديموغرافية</ArabicText>
+        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <ArabicText bold style={[styles.sectionTitle, { color: theme.text, borderBottomColor: theme.border }]}>المعلومات الديموغرافية</ArabicText>
           {renderDropdown('maritalStatus', 'الحالة الاجتماعية', MARITAL_OPTIONS)}
           {renderDropdown('educationLevel', 'المستوى التعليمي', EDUCATION_OPTIONS)}
           {renderDropdown('occupation', 'المهنة', OCCUPATION_OPTIONS)}
           
           <View style={styles.cascadingContainer}>
-            <ArabicText style={styles.fieldLabel}>منطقة السكن (Residence Area)</ArabicText>
+            <ArabicText style={[styles.fieldLabel, { color: theme.subtext }]}>منطقة السكن (Residence Area)</ArabicText>
             
             <DropdownField
               label="المحافظة"
@@ -411,8 +414,8 @@ export default function SocialHistoryScreen() {
         </View>
 
         {/* Smoking & Substances */}
-        <View style={styles.section}>
-          <ArabicText bold style={styles.sectionTitle}>التدخين والمؤثرات</ArabicText>
+        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <ArabicText bold style={[styles.sectionTitle, { color: theme.text, borderBottomColor: theme.border }]}>التدخين والمؤثرات</ArabicText>
           {renderRadioGroup('smoking', 'التدخين', YES_NO_OPTIONS)}
           {showSmokingDetails && (
             <View style={styles.subSection}>
@@ -420,27 +423,27 @@ export default function SocialHistoryScreen() {
               {renderTextInput('yearsSmoked', 'عدد سنوات التدخين', { keyboardType: 'numeric' })}
             </View>
           )}
-          {renderRadioGroup('alcoholSubstanceUse', 'الكحول / المخدرات', YES_NO_OPTIONS)}
+          {renderRadioGroup('khatChewing', 'تناول القات', YES_NO_OPTIONS)}
         </View>
 
         {/* Physical Activity */}
-        <View style={styles.section}>
-          <ArabicText bold style={styles.sectionTitle}>النشاط البدني</ArabicText>
+        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <ArabicText bold style={[styles.sectionTitle, { color: theme.text, borderBottomColor: theme.border }]}>النشاط البدني</ArabicText>
           {renderRadioGroup('physicalActivity', 'مستوى النشاط البدني', PHYSICAL_ACTIVITY_OPTIONS)}
           {renderTextInput('activityDescription', 'وصف النشاط البدني', { multiline: true })}
         </View>
 
         {/* Dietary History */}
-        <View style={styles.section}>
-          <ArabicText bold style={styles.sectionTitle}>التاريخ الغذائي</ArabicText>
+        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <ArabicText bold style={[styles.sectionTitle, { color: theme.text, borderBottomColor: theme.border }]}>التاريخ الغذائي</ArabicText>
           {renderDropdown('dietaryHistory', 'النظام الغذائي المتبع', DIET_OPTIONS)}
           {renderTextInput('foodAllergies', 'الحساسية الغذائية', { multiline: true })}
           {renderRadioGroup('specialDietBeforeAdmission', 'حمية خاصة قبل التنويم', YES_NO_OPTIONS)}
         </View>
 
         {/* Comments */}
-        <View style={styles.section}>
-          <ArabicText bold style={styles.sectionTitle}>ملاحظات</ArabicText>
+        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <ArabicText bold style={[styles.sectionTitle, { color: theme.text, borderBottomColor: theme.border }]}>ملاحظات</ArabicText>
           {renderTextInput('comments', 'ملاحظات إضافية', { multiline: true })}
         </View>
 

@@ -82,3 +82,8 @@ export function usePatients(): {
 
   return { patients, isLoading, error, deletePatient };
 }
+
+/**
+ * @deprecated Use usePatients() instead. Included for compatibility with legacy components.
+ */
+export const usePatientStore = usePatients;

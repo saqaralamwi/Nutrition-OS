@@ -44,6 +44,7 @@ function getTrimesterLabel(weeks: number): string {
 export class GestationalDiabetesEngine {
   public static calculateGDMDynamics(input: IGDMDietInput): IGDMCalculationResult {
     if (
+      isNaN(input.prePregnancyBMI) || isNaN(input.gestationalWeeks) || isNaN(input.baseCaloriesREE) ||
       input.prePregnancyBMI <= 0 ||
       input.gestationalWeeks < 1 ||
       input.gestationalWeeks > 42 ||

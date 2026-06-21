@@ -33,7 +33,7 @@ export class EnteralNutritionEngine {
       formulaOsmolality,
     } = input;
 
-    if (netCaloricRequirement <= 0 || formulaCaloricDensity <= 0 || gastricResidualVolumeMl < 0) {
+    if (isNaN(netCaloricRequirement) || isNaN(formulaCaloricDensity) || isNaN(formulaProteinDensityGrams) || isNaN(gastricResidualVolumeMl) || isNaN(formulaOsmolality) || netCaloricRequirement <= 0 || formulaCaloricDensity <= 0 || gastricResidualVolumeMl < 0) {
       return {
         totalDailyVolumeMl: 0,
         flowRateMlHr: 0,

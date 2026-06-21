@@ -8,6 +8,8 @@ import DrugNutrientInteractionModel from '../../data/models/DrugNutrientInteract
 import ICUAdmissionModel from '../../data/models/ICUAdmission';
 import RenalAssessmentModel from '../../data/models/RenalAssessment';
 import StampPediatricScreeningModel from '../../data/models/StampPediatricScreening';
+import { EgfrCalculatorEngine } from '../calculators/EgfrCalculatorEngine';
+import { RenalMineralRestrictionEngine } from '../calculators/RenalMineralRestrictionEngine';
 
 export interface IUniversalReportPayload {
   header: {
@@ -51,12 +53,12 @@ export interface IUniversalReportPayload {
   specializedMetrics: {
     icu?: {
       admissionDate: string;
-      apacheScore?: number;
+      apacheScore: string;
       enPnTargets: string;
-      fluidBalance24h?: string;
+      fluidBalance24h: string;
     };
     renal?: {
-      egfr: number | null;
+      egfr: number;
       potassiumLimit: string;
       phosphorusLimit: string;
       sodiumLimit: string;
@@ -129,9 +131,9 @@ export class GenerateUniversalReportUseCase {
         const adm = icuAdmissions[0];
         const icuPrescriptions = await db.get('icu_prescriptions')
           .query(Q.where('icu_admission_id', adm.id), Q.sortBy('created_at', Q.desc), Q.take(1))
-          .fetch() as Promise<any[]>;
+          .fetch() as any[];
         
-        const presc = (await icuPrescriptions)[0];
+        const presc = icuPrescriptions[0];
         specializedData.icu = {
           admissionDate: new Date(adm.admissionDate).toLocaleDateString(),
           apacheScore: (adm as any).apacheTwoScore || 'N/A',
@@ -141,15 +143,28 @@ export class GenerateUniversalReportUseCase {
       }
     } else if (caseType === 'RENAL') {
       const renalAssms = await db.get<RenalAssessmentModel>('renal_assessments')
-        .query(Q.where('patient_id', patientId), Q.sortBy('assessment_date', Q.desc), Q.take(1))
+        .query(Q.where('patient_id', patientId), Q.sortBy('recorded_at', Q.desc), Q.take(1))
         .fetch();
       if (renalAssms.length > 0) {
         const ra = renalAssms[0];
+        const egfrResult = EgfrCalculatorEngine.calculateEgfr({
+          serumCreatinine: ra.serumCreatinine,
+          age: patient.age,
+          gender: patient.gender === 'female' ? 'female' : 'male',
+        });
+        const latestWeight = vitals[0]?.weightKg || 70;
+        const restrictionResult = RenalMineralRestrictionEngine.calculateRestrictions({
+          ckdStage: egfrResult.stage === 'unknown' ? 'stage_1' : egfrResult.stage,
+          dialysisStatus: (ra.dialysisStatus === 'hemodialysis' || ra.dialysisStatus === 'peritoneal' || ra.dialysisStatus === 'none') ? ra.dialysisStatus : 'none',
+          weightKg: latestWeight,
+          measuredUrineOutputMl: ra.measuredUrineOutput || null,
+        });
+
         specializedData.renal = {
-          egfr: ra.egfrValue,
-          potassiumLimit: ra.potassiumRestriction || "< 2000mg/day",
-          phosphorusLimit: ra.phosphorusRestriction || "800-1000mg/day",
-          sodiumLimit: ra.sodiumRestriction || "< 2300mg/day"
+          egfr: egfrResult.egfrValue,
+          potassiumLimit: restrictionResult.potassiumMaxMg ? `< ${restrictionResult.potassiumMaxMg}mg/day` : "< 2000mg/day",
+          phosphorusLimit: restrictionResult.phosphorusMaxMg ? `${restrictionResult.phosphorusMaxMg}mg/day` : "800-1000mg/day",
+          sodiumLimit: restrictionResult.sodiumMaxMg ? `< ${restrictionResult.sodiumMaxMg}mg/day` : "< 2300mg/day"
         };
       }
     } else if (isPediatric) {
@@ -177,9 +192,9 @@ export class GenerateUniversalReportUseCase {
         screening = {
           toolName: 'STAMP',
           score: s[0].totalScore,
-          riskLevel: s[0].riskLevelLabel,
-          riskLevelAr: s[0].riskLevelLabelAr,
-          date: new Date(s[0].createdAt).toLocaleDateString()
+          riskLevel: s[0].riskLevelLabel || 'Unknown',
+          riskLevelAr: s[0].riskLevelLabelAr || 'غير معروف',
+          date: s[0].createdAt ? new Date(s[0].createdAt).toLocaleDateString() : new Date().toLocaleDateString()
         };
       }
     } else {
@@ -190,23 +205,23 @@ export class GenerateUniversalReportUseCase {
           score: s.resultValue,
           riskLevel: s.resultValue >= 3 ? 'At Risk' : 'Low Risk',
           riskLevelAr: s.resultValue >= 3 ? 'معرض للخطر' : 'خطر منخفض',
-          date: new Date(s.createdAt).toLocaleDateString()
+          date: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : new Date().toLocaleDateString()
         };
       }
     }
 
     // Build Trends
     const trends = vitals.map(v => ({
-      date: new Date(v.recordedAt).toLocaleDateString(),
-      weight: v.weightKg,
-      bmi: v.bmiValue || 0
+      date: new Date(v.recordDate || v.createdAt || new Date()).toLocaleDateString(),
+      weight: v.weightKg || 0,
+      bmi: v.bmi || 0
     })).reverse();
 
     // Map Alerts
     const alerts = dnis.map(d => ({
-      severity: d.severity,
-      messageAr: d.interactionMechanismAr || 'تنبيه سريري',
-      messageEn: d.interactionMechanismEn || 'Clinical Alert'
+      severity: d.clinicalSeverity,
+      messageAr: d.mechanismAr || 'تنبيه سريري',
+      messageEn: d.mechanismEn || 'Clinical Alert'
     }));
 
     // Intake Analysis
@@ -233,8 +248,11 @@ export class GenerateUniversalReportUseCase {
         current: {
           weight: vitals[0]?.weightKg || null,
           height: vitals[0]?.heightCm || null,
-          bmi: vitals[0]?.bmiValue || null,
-          bmiCategory: vitals[0]?.bmiCategoryAr || 'N/A'
+          bmi: vitals[0]?.bmi || null,
+          bmiCategory: (vitals[0]?.bmiCategory === 'underweight' ? 'نقص وزن' :
+                        vitals[0]?.bmiCategory === 'normal' ? 'وزن طبيعي' :
+                        vitals[0]?.bmiCategory === 'overweight' ? 'وزن زائد' :
+                        vitals[0]?.bmiCategory === 'obese' ? 'سمنة' : 'غير معروف')
         },
         trends
       },

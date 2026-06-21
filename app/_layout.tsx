@@ -3,21 +3,28 @@ import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, I18nManager, Text, TextInput, AppState, AppStateStatus, ActivityIndicator, Image } from 'react-native';
 import { colors, spacing, fontFamilies, fontSizes, lineHeights } from '../src/presentation/theme';
-import { useFonts } from 'expo-font';
+import * as Font from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useSecurityStore } from '../src/presentation/stores/securityStore';
 import { useSettingsStore } from '../src/presentation/stores/settingsStore';
 import { useAuthStore } from '../src/presentation/stores/authStore';
 import LockScreen from '../src/presentation/components/LockScreen';
+import ErrorBoundary from '../src/presentation/components/ErrorBoundary';
 import Animated from 'react-native-reanimated';
 import { useAppTheme } from '../src/presentation/hooks/useAppTheme';
+import { SandboxProvider } from '../src/presentation/contexts/SandboxContext';
 
+// Prevent splash screen from auto-hiding before we are ready
 SplashScreen.preventAutoHideAsync();
 
+// Force RTL for Arabic layout support
 I18nManager.allowRTL(true);
 I18nManager.forceRTL(true);
 
-// Globally patch Text and TextInput components to use ThmanyahSans-Regular as default
+/**
+ * Global component patching for ThmanyahSans typography.
+ * Ensures consistent line-height and font application across the entire app tree.
+ */
 if ((Text as any).defaultProps == null) {
   (Text as any).defaultProps = {};
 }
@@ -35,17 +42,8 @@ if ((TextInput as any).defaultProps == null) {
 };
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    'ThmanyahSans-Regular': require('../assets/fonts/thmanyah-sans-regular.otf'),
-    'ThmanyahSans-Medium': require('../assets/fonts/thmanyah-sans-medium.otf'),
-    'ThmanyahSans-Bold': require('../assets/fonts/thmanyah-sans-bold.otf'),
-    'ThmanyahSans-Black': require('../assets/fonts/thmanyah-sans-black.otf'),
-    'ThmanyahSans-Light': require('../assets/fonts/thmanyah-sans-light.otf'),
-  });
-
-  const [isDbReady, setIsDbReady] = useState(false);
+  const [isAppReady, setIsAppReady] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
-  const [splashReady, setSplashReady] = useState(false);
 
   const router = useRouter();
   const segments = useSegments();
@@ -56,44 +54,49 @@ export default function RootLayout() {
   const isCloudConfigured = useAuthStore((s) => s.isCloudConfigured);
   const restoreSession = useAuthStore((s) => s.restoreSession);
 
-  // Initialize Database and then Security/Auth
+  /**
+   * CRITICAL PATH OPTIMIZATION:
+   * 1. Concurrency: Parallelize Font loading, WatermelonDB module import, and Splash visibility guarantee.
+   * 2. Lazy Loading: Defer DB initialization and Auth/Security hydration until secondary phase.
+   * 3. Macro-tick Execution: Resolve initialization state in a single update.
+   */
   useEffect(() => {
     async function setupApp() {
       try {
-        const { getDatabase } = await import('../src/data/database');
-        await getDatabase();
-        setIsDbReady(true);
+        // Phase 1: Heavy Static Assets & Module Resolution
+        const [databaseModule] = await Promise.all([
+          import('../src/data/database'),
+          Font.loadAsync({
+            'ThmanyahSans-Regular': require('../assets/fonts/thmanyah-sans-regular.otf'),
+            'ThmanyahSans-Medium': require('../assets/fonts/thmanyah-sans-medium.otf'),
+            'ThmanyahSans-Bold': require('../assets/fonts/thmanyah-sans-bold.otf'),
+            'ThmanyahSans-Black': require('../assets/fonts/thmanyah-sans-black.otf'),
+            'ThmanyahSans-Light': require('../assets/fonts/thmanyah-sans-light.otf'),
+          }),
+          new Promise(resolve => setTimeout(resolve, 1000)), // Enforce 1s splash for branding/UX
+        ]);
+
+        // Phase 2: Core Engine Initialization
+        await databaseModule.getDatabase();
+        
+        // Phase 3: Hydrate Stores (Security & Session) concurrently
+        await Promise.all([
+          restoreSession(),
+          initSecurity(activeProfileId)
+        ]);
+
+        setIsAppReady(true);
       } catch (err: any) {
-        console.error('[RootLayout] DB Init failed:', err);
-        setDbError(err.message || 'فشل تهيئة قاعدة البيانات');
+        console.error('[RootLayout] Boot Sequence Failed:', err);
+        setDbError(err.message || 'فشل تهيئة النظام السريري');
       }
     }
     setupApp();
   }, []);
 
-  // Minimum 1-second splash visibility guarantee
+  // Redirect based on auth state after hydration
   useEffect(() => {
-    const timer = setTimeout(() => setSplashReady(true), 1000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Initialize security for the active clinician profile on change/launch
-  useEffect(() => {
-    if (isDbReady) {
-      initSecurity(activeProfileId);
-    }
-  }, [activeProfileId, isDbReady]);
-
-  // Restore auth session on mount
-  useEffect(() => {
-    if (isDbReady) {
-      restoreSession();
-    }
-  }, [isDbReady]);
-
-  // Redirect based on auth state
-  useEffect(() => {
-    if (!isDbReady || hydrationState !== 'hydrated') return;
+    if (!isAppReady || hydrationState !== 'hydrated') return;
     if (!isCloudConfigured) return;
 
     const inAuthGroup = segments[0] === 'auth';
@@ -103,7 +106,7 @@ export default function RootLayout() {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/');
     }
-  }, [isAuthenticated, hydrationState, isCloudConfigured, segments, isDbReady]);
+  }, [isAuthenticated, hydrationState, isCloudConfigured, segments, isAppReady]);
 
   // AppState listener for 2-minute background auto-lock
   useEffect(() => {
@@ -130,20 +133,23 @@ export default function RootLayout() {
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded && isDbReady && splashReady) {
-      await SplashScreen.hideAsync();
+    if (isAppReady && (hydrationState === 'hydrated' || hydrationState === 'error')) {
+      // Trigger hide instantly on the macro tick after resolution
+      setTimeout(async () => {
+        await SplashScreen.hideAsync();
+      }, 0);
     }
-  }, [fontsLoaded, isDbReady, splashReady]);
+  }, [isAppReady, hydrationState]);
 
   const { themeMode, animatedContainer } = useAppTheme();
 
-  const isSplashActive = !fontsLoaded || !isDbReady || !splashReady || hydrationState === 'idle' || hydrationState === 'hydrating';
+  const isSplashActive = !isAppReady || hydrationState === 'idle' || hydrationState === 'hydrating';
 
   if (isSplashActive) {
     let loadingMsg = 'جاري تهيئة النظام السريري...';
-    if (!isDbReady) loadingMsg = 'جاري تهيئة قاعدة البيانات الآمنة...';
-    else if (!splashReady) loadingMsg = 'جاري تهيئة النظام السريري...';
-    else if (hydrationState === 'idle' || hydrationState === 'hydrating') loadingMsg = 'جاري التحقق من الجلسة...';
+    if (hydrationState === 'idle' || hydrationState === 'hydrating') {
+      loadingMsg = 'جاري التحقق من الجلسة الآمنة...';
+    }
 
     return (
       <View style={splashStyles.root}>
@@ -191,6 +197,8 @@ export default function RootLayout() {
   }
 
   return (
+    <ErrorBoundary>
+    <SandboxProvider>
     <Animated.View style={[{ flex: 1 }, animatedContainer]} onLayout={onLayoutRootView}>
       <StatusBar style={themeMode === 'night' ? 'light' : 'dark'} />
       <LockScreen />
@@ -274,6 +282,22 @@ export default function RootLayout() {
           options={{ title: 'المسح الذكي للتحاليل (OCR)', headerShown: false }}
         />
         <Stack.Screen
+          name="patient/[id]/growth-charts"
+          options={{ title: 'منحنيات النمو للأطفال', headerShown: false }}
+        />
+        <Stack.Screen
+          name="patient/[id]/ncp-gastro-oncology-gateway"
+          options={{ title: 'بوابة الجهاز الهضمي والأورام', headerShown: false }}
+        />
+        <Stack.Screen
+          name="patient/[id]/pediatric-measurement-form"
+          options={{ title: 'نموذج قياسات الأطفال', headerShown: false }}
+        />
+        <Stack.Screen
+          name="patient/[id]/ncp-anemia-gateway"
+          options={{ title: 'رعاية فقر الدم والتأهيل التغذوي (Anemia NCP)', headerShown: false }}
+        />
+        <Stack.Screen
           name="about"
           options={{ title: 'عن المطور', headerShown: false }}
         />
@@ -303,6 +327,8 @@ export default function RootLayout() {
         />
       </Stack>
     </Animated.View>
+    </SandboxProvider>
+    </ErrorBoundary>
   );
 }
 

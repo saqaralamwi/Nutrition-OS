@@ -3,7 +3,7 @@
 Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any code.
 
 ## Goal
-- Activate the Pediatric Growth Module — install recharts, rebuild the growth charts screen, build the measurement form with Z-score computation, and integrate into patient dashboard.
+- Build Reporting & Export Engine — transform reactive state into clinical PDF documents.
 
 ## Constraints & Preferences
 - Dark-slate theme, RTL Arabic layout, WatermelonDB ORM, RxJS combineLatest, Q.sortBy/Q.take WatermelonDB queries
@@ -34,9 +34,30 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
   - Refactored `patientStore.ts`: removed imperative `loadPatients`/`searchPatients`/`addPatient`/`setSortOrder`, now exposes `patients$` Observable + `usePatients()` reactive hook using `observePatients()` + `useObservableArray()`
   - Added `observePatients()` to `src/data/database/observe.ts` with `query().observe()` for automatic UI updates on any DB mutation
   - Refactored `app/index.tsx`: replaced `usePatientStore` with reactive `usePatients()` hook, local filtering/sorting, removed `useFocusEffect`/imperative fetches — list updates reactively on insert/delete/update
+- **Ghost UI Elimination — Anemia & Cardio Persisters**:
+  - Schema v49→v50: 11 new columns (`heart_rate`, `has_dyspnea`, `has_orthopnea`, 8 DASH booleans) in `cardiovascular_assessments`
+  - `useAnemiaAssessmentPersister` hook + screen rewrite (590→lines, `beforeRemove` guard, 800ms auto-save)
+  - `useCardioAssessmentPersister` hook + screen rewrite (replaces 17 individual `useState` calls, single `computed` object for severity/risk, removes "Analyze Only" ephemeral button)
+- **Phase 3 — Calculations Hub Persister**:
+  - `useCalculationPersister` hook — single-row draft in existing `calculations` table via `calculation_type = 'calculation_inputs'`, 17-field `formState` with 800ms debounced auto-save, `computed` object (13 derived values), `beforeRemove` navigation guard
+  - Screen rewrite: replaced 17 `useState` declarations + 7 `useMemo` blocks with `formState` + `computed`, all 6 sections reactively synced, TripleActionFooter wired to `saveImmediate()`
+  - 928/928 tests pass
 
-### In Progress
-- (none)
+- **Phase 5 — Reactive Global Sync**: `ClinicalEventBus` (RxJS Subject singleton, 3 filtered observable methods), integrated into all 3 persister hooks with `revision` counter for re-computation, `useCalculationPersister` publishes `weightKg`/`heightCm`/`fever` on save
+- **Routing & Orphan Recovery (Waves 1-2)**:
+  - `useBeforeRemoveGuard` hook — replaces 3x duplicated `beforeRemove` + Alert blocks
+  - `DraftRepository` — queries 3 draft tables per patient
+  - `usePatientDrafts` — RxJS `combineLatest` reactive hook
+  - `DraftBanner` — animated slide-in banner with resume/dismiss
+  - Integrated into `app/patient/[id].tsx`
+- **Phase 6 — Reporting & Export Engine (Steps 1-2)**:
+  - `ReportTemplate` interfaces (ReportPayload, ReportSection, ReportFindingRow, ReportType)
+  - `AnemiaSectionBuilder` — DB query + `AnemiaNutritionEngine` (same as hook)
+  - `CardioSectionBuilder` — DB query + `computeRisk()` (inlined, matches hook)
+  - `CalculationsSectionBuilder` — DB query + `kauRequirementsEngine` (same as hook)
+  - `ReportGenerator` — orchestrates section builders per reportType
+  - `HtmlRenderer` — pure function `(payload: ReportPayload) => string`, A4 RTL Arabic template with embedded CSS, severity badges, patient info grid, findings tables with zebra striping, header/footer, certification stamp
+  - 928/928 tests pass, 0 TS errors
 
 ### Blocked
 - (none)
@@ -46,14 +67,14 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
 - Two charting strategies coexist: recharts for web (LineChart, ResponsiveContainer, Tooltip), existing `GrowthChartComponent` (react-native-svg) for native fallback
 - Supplements get a standalone screen NOT merged into medications screen — aligns with `medications.tsx:117` comment "Supplements should be handled in a separate module"
 - The 13-table database in HeidiSQL is external to this project; no migration or schema sync needed
-- Schema versions 24–30 were sequentially consumed; current schema is v39 with 72 tables (stale docs count of 61 is incorrect)
+- Schema versions 24–50 were sequentially consumed; current schema is v50 with 72 tables (stale docs count of 61 is incorrect)
 - Migration ordering defect (v11→v19 ascending instead of descending) was corrected in v30
 - Eleven tables lacked `created_at`/`updated_at` columns; added via v30 `addColumns` migration
 - Patient table duplicates kept in schema with `// @deprecated` comments for legacy data safety
 - Pre-existing tsc error at `app/admin/hidden-calories-dashboard.tsx:197` (HTML entity `>` rendered literally) is unrelated to all work
 
 ## Next Steps
-- (pending user direction — potential: build remaining 4 orphaned model UIs, convert `patientStore` to reactive, add `patientId` runtime guards to remaining screens, or start Phase 8 work once scoped)
+- (pending user direction — potential: build screen integration for ReportGenerator, add `reports` table schema, or start remaining steps of Phase 6)
 
 ## Critical Context
 - `Q.desc` and `Q.take` are valid WatermelonDB exports used in `CalculationRepository.ts`
@@ -70,6 +91,17 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
 ## Relevant Files
 - `src/data/database/schema.ts`: v39, 72 tables
 - `src/data/database/migrations.ts`: 35 migration blocks (v5→v39)
+- `src/services/ClinicalEventBus.ts`: RxJS singleton bus, 3 filtered observable methods
+- `src/presentation/hooks/useBeforeRemoveGuard.ts`: Reusable navigation guard
+- `src/presentation/hooks/usePatientDrafts.ts`: Reactive draft-querying hook (RxJS combineLatest)
+- `src/presentation/components/DraftBanner.tsx`: Animated orphan recovery banner
+- `src/data/repositories/DraftRepository.ts`: 3-table draft query + dismiss
+- `src/domain/reports/ReportTemplate.ts`: ReportPayload, ReportSection, ReportFindingRow types
+- `src/domain/reports/ReportGenerator.ts`: Section builder orchestrator
+- `src/domain/reports/section-builders/AnemiaSectionBuilder.ts`: DB + AnemiaNutritionEngine
+- `src/domain/reports/section-builders/CardioSectionBuilder.ts`: DB + computeRisk
+- `src/domain/reports/section-builders/CalculationsSectionBuilder.ts`: DB + kauRequirementsEngine
+- `src/presentation/reports/HtmlRenderer.tsx`: Pure function (payload → HTML string)
 - `src/domain/data/whoGrowthReference.ts`: `computeZScoreFromReference()` — interpolated Z-score fallback from embedded WHO 2006 LMS data (21 age points × 3 indicators × 2 genders), `ReferenceDataPoint` interface
 - `src/presentation/components/PediatricMeasurementForm.tsx`: Reusable form with dual-path Z-score calc + DB persistence (296 lines)
 - `app/patient/[id]/growth-charts.tsx`: Rebuilt with recharts — WFA/LHFA/BMIFA LineChart (±3SD, ±2SD, Median, patient overlay), ZScoreTooltip, data table, measurement form integration, clinical directives card

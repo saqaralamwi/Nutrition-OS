@@ -29,7 +29,7 @@ export class RefeedingSyndromeMonitor {
       weightKg,
     } = input;
 
-    if (weightKg <= 0 || plannedInitialCalories <= 0 || daysOfStarvationOrSevereMalnutrition < 0) {
+    if (isNaN(weightKg) || isNaN(plannedInitialCalories) || isNaN(daysOfStarvationOrSevereMalnutrition) || weightKg <= 0 || plannedInitialCalories <= 0 || daysOfStarvationOrSevereMalnutrition < 0) {
       return {
         riskTier: 'low',
         isCalorieCapTriggered: false,
@@ -48,12 +48,12 @@ export class RefeedingSyndromeMonitor {
     let maxSafeCaloriesCeiling: number;
 
     if (riskTier === 'critical' || riskTier === 'moderate') {
-      maxSafeCaloriesCeiling = RefeedingSyndromeMonitor.round2(weightKg * 10);
+      maxSafeCaloriesCeiling = RefeedingSyndromeMonitor.round2(weightKg * 15);
       if (plannedInitialCalories > maxSafeCaloriesCeiling) {
         isCalorieCapTriggered = true;
         adjustedCalories = maxSafeCaloriesCeiling;
         alerts.push(
-          `تم تطبيق الحد الآمن للسعرات: ${maxSafeCaloriesCeiling} سعرة/يوم (${weightKg} كغ × 10) بدلاً من ${plannedInitialCalories} سعرة`,
+          `تم تطبيق الحد الآمن للسعرات: ${maxSafeCaloriesCeiling} سعرة/يوم (${weightKg} كغ × 15) بدلاً من ${plannedInitialCalories} سعرة`,
         );
       } else {
         isCalorieCapTriggered = false;
@@ -91,6 +91,10 @@ export class RefeedingSyndromeMonitor {
     const { serumPhosphorus, serumPotassium, serumMagnesium, daysOfStarvationOrSevereMalnutrition } = input;
 
     if (
+      isNaN(serumPhosphorus) ||
+      isNaN(serumPotassium) ||
+      isNaN(serumMagnesium) ||
+      isNaN(daysOfStarvationOrSevereMalnutrition) ||
       serumPhosphorus < 2.5 ||
       serumPotassium < 3.5 ||
       serumMagnesium < 1.5 ||

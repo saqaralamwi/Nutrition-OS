@@ -31,6 +31,7 @@ export default class Medication extends Model {
   @field('is_active') isActive?: boolean;
   @field('notes') notes?: string;
   @field('notes_ar') notesAr?: string;
+  @date('recorded_at') recordedAt?: Date;
 
   get hiddenCalories(): number {
     const nameStr = (this.name || this.drugName || '').toLowerCase().trim();

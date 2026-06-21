@@ -186,9 +186,9 @@ export default function NutritionCalculatorScreen() {
         }
 
         // Refeeding logic:
-        let phos = undefined;
-        let pot = undefined;
-        let mag = undefined;
+        let phos: number | undefined = undefined;
+        let pot: number | undefined = undefined;
+        let mag: number | undefined = undefined;
 
         for (const r of records) {
           if (phos === undefined && r.phosphorus !== undefined && r.phosphorus !== null) phos = r.phosphorus;
@@ -196,15 +196,15 @@ export default function NutritionCalculatorScreen() {
         }
 
         labs.forEach((l: Record<string, unknown>) => {
-          const name = (l.testName || '').toLowerCase().trim();
-          const val = l.resultValue;
+          const name = ((l.testName as string) || '').toLowerCase().trim();
+          const val = l.resultValue as number | undefined;
           if (val === undefined || val === null || isNaN(Number(val))) return;
           if (name.includes('phosphorus') || name.includes('phosphate') || name.includes('فوسفور') || name.includes('فسفور') || name === 'phos' || name === 'p') {
-            if (phos === undefined) phos = val;
+            if (phos === undefined) phos = Number(val);
           } else if (name.includes('potassium') || name.includes('بوتاسيوم') || name === 'k') {
-            if (pot === undefined) pot = val;
+            if (pot === undefined) pot = Number(val);
           } else if (name.includes('magnesium') || name.includes('ماغنسيوم') || name === 'mg') {
-            if (mag === undefined) mag = val;
+            if (mag === undefined) mag = Number(val);
           }
         });
 

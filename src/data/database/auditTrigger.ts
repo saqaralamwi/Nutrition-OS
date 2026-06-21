@@ -6,6 +6,13 @@ const CRITICAL_TABLES = ['patients', 'laboratory_results', 'interventions', 'mea
 let triggersInstalled = false;
 let dbInstance: any = null;
 
+export function extractPatientId(record: any, table: string): string | undefined {
+  if (table === 'patients') {
+    return record.id;
+  }
+  return record._raw?.patient_id || record.patientId || undefined;
+}
+
 export function setupAuditTriggers(db?: any) {
   if (db) dbInstance = db;
   if (triggersInstalled) return;
@@ -21,10 +28,12 @@ export function setupAuditTriggers(db?: any) {
         const db = this.database;
         const auditCollection = db.collections.get('audit_logs');
         const activeUser = useSettingsStore.getState().username;
+        const patientId = extractPatientId(record, table);
 
         await originalCreate.call(auditCollection, (log: any) => {
           log.actionType = 'EDIT_PATIENT';
           log.userId = activeUser;
+          log.patientId = patientId;
           log.details = JSON.stringify({
             action: 'CREATE',
             table,
@@ -51,10 +60,12 @@ export function setupAuditTriggers(db?: any) {
         const db = this.collection.database;
         const auditCollection = db.collections.get('audit_logs');
         const activeUser = useSettingsStore.getState().username;
+        const patientId = extractPatientId(record, table);
 
         await Collection.prototype.create.call(auditCollection, (log: any) => {
           log.actionType = 'EDIT_PATIENT';
           log.userId = activeUser;
+          log.patientId = patientId;
           log.details = JSON.stringify({
             action: 'UPDATE',
             table,
@@ -74,7 +85,8 @@ export function setupAuditTriggers(db?: any) {
 
 export async function logManualAuditEvent(
   actionType: 'LOGIN' | 'EDIT_PATIENT' | 'EXPORT_PDF' | 'DB_BACKUP',
-  details: object
+  details: object,
+  patientId?: string
 ) {
   try {
     const db = dbInstance;
@@ -89,6 +101,7 @@ export async function logManualAuditEvent(
       await collection.create((log: any) => {
         log.actionType = actionType;
         log.userId = activeUser;
+        log.patientId = patientId;
         log.details = JSON.stringify(details);
       });
     });

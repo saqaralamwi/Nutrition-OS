@@ -1,7 +1,9 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal, FlatList } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import Animated from 'react-native-reanimated';
 import { colors, spacing, fontFamilies } from '../theme';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 interface DropdownOption {
   label: string;
@@ -27,31 +29,34 @@ export default function DropdownField({
   required = false,
   placeholder = 'اختر...',
 }: DropdownFieldProps) {
+  const { theme, animatedCard, animatedText, animatedSubtext, themeMode } = useAppTheme();
   const [isOpen, setIsOpen] = useState(false);
 
   const selectedOption = options.find((opt) => opt.value === selectedValue);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>
+      <Animated.Text style={[styles.label, animatedSubtext]}>
         {label}
         {required && <Text style={styles.required}> *</Text>}
-      </Text>
+      </Animated.Text>
 
       <TouchableOpacity
-        style={[styles.trigger, error && styles.triggerError]}
         onPress={() => setIsOpen(true)}
         activeOpacity={0.7}
       >
-        <Text
-          style={[
-            styles.triggerText,
-            !selectedOption && styles.placeholderText,
-          ]}
-        >
-          {selectedOption ? selectedOption.label : placeholder}
-        </Text>
-        <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+        <Animated.View style={[styles.trigger, animatedCard, error && styles.triggerError]}>
+          <Animated.Text
+            style={[
+              styles.triggerText,
+              animatedText,
+              !selectedOption && { color: theme.subtext },
+            ]}
+          >
+            {selectedOption ? selectedOption.label : placeholder}
+          </Animated.Text>
+          <Ionicons name="chevron-down" size={20} color={theme.subtext} />
+        </Animated.View>
       </TouchableOpacity>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -67,11 +72,11 @@ export default function DropdownField({
           activeOpacity={1}
           onPress={() => setIsOpen(false)}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{label}</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Animated.Text style={[styles.modalTitle, animatedText]}>{label}</Animated.Text>
               <TouchableOpacity onPress={() => setIsOpen(false)}>
-                <Ionicons name="close" size={24} color={colors.textPrimary} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -81,21 +86,23 @@ export default function DropdownField({
                 <TouchableOpacity
                   style={[
                     styles.option,
-                    item.value === selectedValue && styles.optionSelected,
+                    { borderBottomColor: theme.border },
+                    item.value === selectedValue && { backgroundColor: themeMode === 'night' ? 'rgba(27, 107, 74, 0.2)' : 'rgba(27, 107, 74, 0.1)' },
                   ]}
                   onPress={() => {
                     onValueChange(item.value);
                     setIsOpen(false);
                   }}
                 >
-                  <Text
+                  <Animated.Text
                     style={[
                       styles.optionText,
+                      animatedText,
                       item.value === selectedValue && styles.optionTextSelected,
                     ]}
                   >
                     {item.label}
-                  </Text>
+                  </Animated.Text>
                   {item.value === selectedValue && (
                     <Ionicons name="checkmark" size={20} color={colors.primary} />
                   )}
@@ -145,9 +152,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fontFamilies.regular,
   },
-  placeholderText: {
-    color: colors.textDisabled,
-  },
   error: {
     fontSize: 12,
     color: colors.danger,
@@ -188,9 +192,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 4,
     minHeight: 44,
-  },
-  optionSelected: {
-    backgroundColor: colors.primaryLight,
   },
   optionText: {
     fontSize: 16,

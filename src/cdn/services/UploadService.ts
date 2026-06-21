@@ -6,18 +6,53 @@ export class UploadService {
   private s3Client: S3Client;
   private bucketName: string;
   private cdnDomain: string;
+  private credentialVersion: string = 'v1'; // ✅ Track version of credentials
+  private endpoint: string;
+  private region: string;
 
   constructor(env: any) {
+    const accessKeyId = env.CLOUDFLARE_ACCESS_KEY_ID || env.accessKeyId;
+    const secretAccessKey = env.CLOUDFLARE_ACCESS_KEY || env.secretAccessKey;
+
+    // ✅ Validate credentials exist
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error('R2 credentials (accessKeyId / CLOUDFLARE_ACCESS_KEY_ID, secretAccessKey / CLOUDFLARE_ACCESS_KEY) are required');
+    }
+
+    this.credentialVersion = env.credentialVersion || 'v1';
+    this.endpoint = env.CLOUDFLARE_ACCOUNT_ID
+      ? `https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`
+      : (env.endpoint || '');
+    this.region = env.region || 'us-east-1';
+
     this.s3Client = new S3Client({
-      endpoint: `https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      region: 'us-east-1',
+      endpoint: this.endpoint || undefined,
+      region: this.region,
       credentials: {
-        accessKeyId: env.CLOUDFLARE_ACCESS_KEY_ID,
-        secretAccessKey: env.CLOUDFLARE_ACCESS_KEY,
+        accessKeyId,
+        secretAccessKey,
       },
     });
     this.bucketName = 'adcn-storage';
     this.cdnDomain = env.CDN_DOMAIN || 'cdn.adcn.io';
+  }
+
+  // ✅ Rotation method
+  public rotateCredentials(newAccessKeyId: string, newSecretAccessKey: string, newVersion: string): void {
+    this.s3Client = new S3Client({
+      endpoint: this.endpoint || undefined,
+      region: this.region,
+      credentials: {
+        accessKeyId: newAccessKeyId,
+        secretAccessKey: newSecretAccessKey
+      }
+    });
+    this.credentialVersion = newVersion;
+  }
+
+  // ✅ Get current credential version (for monitoring)
+  public getCredentialVersion(): string {
+    return this.credentialVersion;
   }
 
   async uploadImage(
@@ -77,7 +112,8 @@ export class UploadService {
         },
       };
     } catch (error: any) {
-      console.error('Upload error:', error);
+      // ✅ Removed sensitive error object logging
+      console.error('Upload failed');
       throw new UploadError(
         `Failed to upload image: ${error.message}`,
         'UPLOAD_FAILED',
@@ -97,7 +133,8 @@ export class UploadService {
         CacheControl: 'public, max-age=31536000, immutable',
       }));
     } catch (error: any) {
-      console.error(`R2 upload error for ${path}:`, error);
+      // ✅ Removed sensitive error object logging
+      console.error('R2 upload operation failed');
       throw new UploadError(
         `Failed to upload to R2: ${error.message}`,
         'R2_UPLOAD_FAILED',
@@ -116,7 +153,8 @@ export class UploadService {
       if (!uint8) throw new Error('Empty response from R2');
       return Buffer.from(uint8);
     } catch (error: any) {
-      console.error(`R2 download error for ${path}:`, error);
+      // ✅ Removed sensitive error object logging
+      console.error('R2 download operation failed');
       throw new UploadError(
         `Failed to download from R2: ${error.message}`,
         'R2_DOWNLOAD_FAILED',
@@ -134,7 +172,8 @@ export class UploadService {
         }));
       }
     } catch (error: any) {
-      console.error('R2 delete error:', error);
+      // ✅ Removed sensitive error object logging
+      console.error('R2 delete operation failed');
       throw new UploadError(
         `Failed to delete images from R2: ${error.message}`,
         'R2_DELETE_FAILED',

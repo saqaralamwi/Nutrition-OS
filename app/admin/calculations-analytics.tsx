@@ -8,8 +8,6 @@ import {
   queryCalculationsByTEE,
   aggregateCalculations
 } from '../../src/data/repositories/CalculationRepository';
-import { runPerformanceComparison, PerformanceBenchmarkResult } from '../../src/utils/performance-comparison';
-import { getDatabase } from '../../src/data/database';
 import CalculationModel from '../../src/data/models/Calculation';
 
 export default function CalculationsAnalyticsScreen() {
@@ -24,10 +22,6 @@ export default function CalculationsAnalyticsScreen() {
 
   // Aggregates
   const [aggregates, setAggregates] = useState<Record<string, { count: number; avgTee: number; avgProtein: number }>>({});
-
-  // Performance benchmark
-  const [perfResult, setPerfResult] = useState<PerformanceBenchmarkResult | null>(null);
-  const [runningPerf, setRunningPerf] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,57 +70,6 @@ export default function CalculationsAnalyticsScreen() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function runPerfTest() {
-    setRunningPerf(true);
-    // Slight timeout to let the loader render
-    setTimeout(async () => {
-      try {
-        let db;
-        try {
-          db = await getDatabase();
-        } catch {
-          console.error('Performance test: database not available');
-          return;
-        }
-        if (!db) return;
-        let records = await db.get<CalculationModel>('calculations').query().fetch();
-
-        // If no calculations exist, seed some mock data in-memory for the performance test
-        if (records.length === 0) {
-          records = Array.from({ length: 50 }).map((_, index) => {
-            const wt = 50 + Math.random() * 70;
-            const gender = Math.random() > 0.5 ? 'male' : 'female';
-            return {
-              inputWeightKg: wt,
-              inputGender: gender,
-              inputValues: JSON.stringify({
-                weightKg: wt,
-                gender,
-                age: 40,
-                heightCm: 170,
-              }),
-            } as any;
-          });
-        }
-
-        // Run benchmark with 2000 iterations to show clear time difference
-        const result = runPerformanceComparison(
-          records.map(r => ({
-            inputValues: r.inputValues,
-            inputWeightKg: r.inputWeightKg,
-            inputGender: r.inputGender,
-          })),
-          2000
-        );
-        setPerfResult(result);
-      } catch (err) {
-        console.error('Error running performance test:', err);
-      } finally {
-        setRunningPerf(false);
-      }
-    }, 100);
   }
 
   if (loading) {
@@ -264,56 +207,6 @@ export default function CalculationsAnalyticsScreen() {
               <Text style={styles.patientMetricText}>{calc.resultTee} kcal</Text>
             </View>
           ))
-        )}
-      </View>
-
-      {/* Performance Benchmark */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>اختبار مقارنة أداء الاستعلام والوصول للبيانات</Text>
-        <Text style={styles.descriptionText}>
-          هذا الاختبار يقارن سرعة قراءة المعطيات بين فك تشفير JSON string (الطريقة القديمة) وبين القراءة المباشرة للأعمدة المسطحة والمفهرسة (الطريقة المطورة). يتم التكرار 2,000 مرة لقياس الفرق بدقة.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.perfButton}
-          onPress={runPerfTest}
-          disabled={runningPerf}
-        >
-          {runningPerf ? (
-            <ActivityIndicator size="small" color={colors.primaryContrast} />
-          ) : (
-            <>
-              <Ionicons name="speedometer-outline" size={18} color={colors.primaryContrast} style={{ marginLeft: 8 }} />
-              <Text style={styles.applyButtonText}>بدء اختبار الأداء</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {perfResult && (
-          <View style={styles.perfResultsContainer}>
-            <View style={styles.perfRow}>
-              <Text style={styles.perfLabel}>عدد السجلات المفحوصة:</Text>
-              <Text style={styles.perfValue}>{perfResult.recordCount} سجل</Text>
-            </View>
-            <View style={styles.perfRow}>
-              <Text style={styles.perfLabel}>وقت قراءة وفك JSON (القديم):</Text>
-              <Text style={[styles.perfValue, { color: colors.danger }]}>
-                {perfResult.jsonParsingTimeMs} ms
-              </Text>
-            </View>
-            <View style={styles.perfRow}>
-              <Text style={styles.perfLabel}>وقت قراءة الأعمدة المفهرسة (الجديد):</Text>
-              <Text style={[styles.perfValue, { color: colors.success }]}>
-                {perfResult.flatColumnsTimeMs} ms
-              </Text>
-            </View>
-            <View style={[styles.perfRow, styles.speedupBox]}>
-              <Text style={styles.speedupLabel}>نسبة تسريع الاستعلام والوصول:</Text>
-              <Text style={styles.speedupValue}>
-                +{perfResult.speedupPercentage}% أسرع ({(perfResult.jsonParsingTimeMs / (perfResult.flatColumnsTimeMs || 1)).toFixed(1)}x)
-              </Text>
-            </View>
-          </View>
         )}
       </View>
 
@@ -470,61 +363,5 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginVertical: spacing.md,
-  },
-  descriptionText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'right',
-    lineHeight: 18,
-    marginBottom: spacing.md,
-  },
-  perfButton: {
-    backgroundColor: colors.primaryLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  perfResultsContainer: {
-    backgroundColor: colors.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  perfRow: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  perfLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  perfValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  speedupBox: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  speedupLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.success,
-  },
-  speedupValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.success,
   },
 });

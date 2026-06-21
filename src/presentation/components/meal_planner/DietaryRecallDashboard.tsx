@@ -385,7 +385,7 @@ export default function DietaryRecallDashboard({
           <View
             style={[
               styles.progressFill,
-              { width: getProgressWidth(coverage), backgroundColor: color },
+              { width: getProgressWidth(coverage) as any, backgroundColor: color },
             ]}
           />
         </View>

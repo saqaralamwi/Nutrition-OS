@@ -131,6 +131,15 @@ export function parseAiResponse(
   return {
     patientId,
     patientMetricsId: '',
+    // NutritionPlan required fields (mapped from AI output)
+    targetCalories: totalCalories,
+    proteinTarget: proteinGrams,
+    carbsTarget: carbsGrams,
+    fatTarget: fatGrams,
+    fluidTarget: 2000,
+    mealsJson: JSON.stringify(sanitizeMealPlan(parsed.mealPlan)),
+    recommendationsJson: JSON.stringify(sanitizeStringArray(parsed.recommendations)),
+    // AI-specific output fields
     totalCalories,
     calorieAdjustment: sanitizeNumber(parsed.calorieAdjustment, 0),
     macros: {
@@ -145,7 +154,7 @@ export function parseAiResponse(
     recommendations: sanitizeStringArray(parsed.recommendations),
     restrictions: sanitizeStringArray(parsed.restrictions),
     clinicalNotes: typeof parsed.clinicalNotes === 'string' ? parsed.clinicalNotes : undefined,
-    aiGenerated: true,
+    aiGenerated: true as const,
     model,
     disclaimer: AI_DISCLAIMER,
   };

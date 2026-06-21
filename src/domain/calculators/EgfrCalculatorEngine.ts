@@ -15,7 +15,7 @@ export class EgfrCalculatorEngine {
   public static calculateEgfr(input: IEgfrInput): IEgfrResult {
     const { serumCreatinine, age, gender } = input;
 
-    if (serumCreatinine <= 0 || age < 18 || age > 120) {
+    if (isNaN(serumCreatinine) || isNaN(age) || serumCreatinine <= 0 || age < 18 || age > 120) {
       return {
         egfrValue: 0,
         stage: 'unknown',

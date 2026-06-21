@@ -11,6 +11,17 @@ export interface ICardiovascularAssessment {
   measuredDryWeightKg: number;
   hasPeripheralEdema: boolean;
   edemaGrading: EdemaGrading;
+  heartRate: number;
+  hasDyspnea: boolean;
+  hasOrthopnea: boolean;
+  dashLowSodium: boolean;
+  dashLowSaturatedFat: boolean;
+  dashFruitVeg: boolean;
+  dashWholeGrains: boolean;
+  dashLeanProtein: boolean;
+  dashLowSugar: boolean;
+  dashModerateAlcohol: boolean;
+  dashDailyExercise: boolean;
   recordedAt: number;
 }
 

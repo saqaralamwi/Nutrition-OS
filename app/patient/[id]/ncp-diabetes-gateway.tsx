@@ -12,7 +12,7 @@ import {
   Modal,
   Text,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { combineLatest } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -32,6 +32,18 @@ import { Type2DiabetesEngine } from '../../../src/domain/calculators/Type2Diabet
 import { GestationalDiabetesEngine } from '../../../src/domain/calculators/GestationalDiabetesEngine';
 import { GestationalMetabolicTracker } from '../../../src/domain/monitors/GestationalMetabolicTracker';
 
+// Psychiatric Engines
+import { AnorexiaNutritionalRehab } from '../../../src/domain/calculators/AnorexiaNutritionalRehab';
+import { BulimiaNutritionalPlan } from '../../../src/domain/calculators/BulimiaNutritionalPlan';
+import { EVAvoidantRestrictiveDiet } from '../../../src/domain/calculators/EVAvoidantRestrictiveDiet';
+import { PsychotropicNutrientInteractions } from '../../../src/domain/calculators/PsychotropicNutrientInteractions';
+
+// Pediatric Engines
+import { PediatricEERCalculator } from '../../../src/domain/calculators/PediatricEERCalculator';
+import { PediatricFluidRequirement } from '../../../src/domain/calculators/PediatricFluidRequirement';
+import { PediatricProteinRequirement } from '../../../src/domain/calculators/PediatricProteinRequirement';
+import { PediatricRefeedingMonitor } from '../../../src/domain/calculators/PediatricRefeedingMonitor';
+
 // Presentation / Design System
 import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
@@ -39,6 +51,7 @@ import TextInputField from '../../../src/presentation/components/TextInputField'
 import Button from '../../../src/presentation/components/Button';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
+import { useSafePatientId } from '../../../src/presentation/hooks/useSafePatientId';
 
 // Helper for Mifflin St-Jeor BMR
 function calculateMifflinBMR(weight: number, height: number, age: number, isMale: boolean): number {
@@ -48,7 +61,7 @@ function calculateMifflinBMR(weight: number, height: number, age: number, isMale
 }
 
 export default function NCPDiabetesGatewayScreen() {
-  const { id: patientId } = useLocalSearchParams<{ id: string }>();
+  const patientId = useSafePatientId();
   const router = useRouter();
   const showToast = useToastStore((s) => s.showToast);
 
@@ -80,6 +93,41 @@ export default function NCPDiabetesGatewayScreen() {
   const [gestationalWeeks, setGestationalWeeks] = useState('24');
   const [prePregnancyBMI, setPrePregnancyBMI] = useState('24.5');
   const [prePregnancyWeight, setPrePregnancyWeight] = useState('65');
+
+  // Mode State
+  const [pediatricMode, setPediatricMode] = useState(false);
+  const [psychiatricMode, setPsychiatricMode] = useState(false);
+  const [pedAgeMonths, setPedAgeMonths] = useState('24');
+  const [pedWeightKg, setPedWeightKg] = useState('12');
+  const [pedHeightCm, setPedHeightCm] = useState('85');
+  const [pedGender, setPedGender] = useState<'MALE' | 'FEMALE'>('MALE');
+  const [pedCriticallyIll, setPedCriticallyIll] = useState(false);
+  const [pedHasFever, setPedHasFever] = useState(false);
+  const [pedHasDehydration, setPedHasDehydration] = useState(false);
+  const [pedOnIVFluids, setPedOnIVFluids] = useState(false);
+  const [pedRenalImpairment, setPedRenalImpairment] = useState(false);
+  const [pedLiverImpairment, setPedLiverImpairment] = useState(false);
+  const [pedOnCRRT, setPedOnCRRT] = useState(false);
+  const [pedPhosphorus, setPedPhosphorus] = useState('4.0');
+  const [pedPotassium, setPedPotassium] = useState('4.5');
+  const [pedMagnesium, setPedMagnesium] = useState('2.0');
+  const [pedMalnutritionDays, setPedMalnutritionDays] = useState('2');
+  const [pedPlannedKcal, setPedPlannedKcal] = useState('500');
+
+  // Psychiatric Mode State
+  const [psychDiagType, setPsychDiagType] = useState<'anorexia' | 'bulimia' | 'arfid' | 'psychotropic'>('anorexia');
+  const [psychWeight, setPsychWeight] = useState('55');
+  const [psychTargetWeight, setPsychTargetWeight] = useState('60');
+  const [psychBmi, setPsychBmi] = useState('17.5');
+  const [psychMedicalStability, setPsychMedicalStability] = useState<'stable' | 'unstable'>('stable');
+  const [psychRiskLevel, setPsychRiskLevel] = useState<'low' | 'moderate' | 'high'>('moderate');
+  const [psychBingeFreq, setPsychBingeFreq] = useState('3');
+  const [psychPurgeFreq, setPsychPurgeFreq] = useState('2');
+  const [psychFoodRestriction, setPsychFoodRestriction] = useState<'low' | 'moderate' | 'high'>('moderate');
+  const [psychAnxietyLevel, setPsychAnxietyLevel] = useState<'low' | 'moderate' | 'high'>('moderate');
+  const [psychMedication, setPsychMedication] = useState('lithium');
+  const [psychNutrient, setPsychNutrient] = useState('sodium');
+  const [psychDose, setPsychDose] = useState('600');
 
   // Overrides inputs
   const [calorieOverride, setCalorieOverride] = useState('');
@@ -206,16 +254,19 @@ export default function NCPDiabetesGatewayScreen() {
   // 1.3 DISPATCHING PIPELINE & VARIABLE PRE-CALCULATION
   const type1Outputs = useMemo(() => {
     if (diabetesType !== 'type_1') return null;
-    const tddVal = parseFloat(tdd) || 0;
-    const icrRes = InsulinCarbRatioEngine.calculateICR(tddVal);
+    const rawTdd = parseFloat(tdd ?? '');
+    const tddVal = (tdd && tdd.trim().length > 0 && !isNaN(rawTdd)) ? rawTdd : null;
+    const icrRes = tddVal !== null ? InsulinCarbRatioEngine.calculateICR(tddVal) : { icrValue: 0, isSafe: false, clinicalNote: 'TDD غير مدخل' };
     
-    const currentBGNum = parseFloat(postPrandialBG) || 0;
-    const targetBGNum = parseFloat(targetBG) || 100;
-    const isfRes = InsulinSensitivityEngine.calculateCorrection({
-      totalDailyDose: tddVal,
-      currentBloodGlucose: currentBGNum,
-      targetBloodGlucose: targetBGNum,
-    });
+    const currentBGNum = postPrandialBG ? parseFloat(postPrandialBG) : 0;
+    const targetBGNum = targetBG ? parseFloat(targetBG) : 100;
+    const isfRes = tddVal !== null
+      ? InsulinSensitivityEngine.calculateCorrection({
+          totalDailyDose: tddVal,
+          currentBloodGlucose: currentBGNum,
+          targetBloodGlucose: targetBGNum,
+        })
+      : { isfValue: 0, correctionDose: 0, isSafe: false, clinicalDirective: ['TDD غير مدخل'] };
 
     return {
       icr: icrRes,
@@ -225,8 +276,8 @@ export default function NCPDiabetesGatewayScreen() {
 
   const type2Outputs = useMemo(() => {
     if (diabetesType !== 'type_2') return null;
-    const activity = parseFloat(activityFactor) || 1.2;
-    const lossPct = parseFloat(targetWeightLossPercent) || 10;
+    const activity = safeParseFloat(activityFactor) || 1.2;
+    const lossPct = safeParseFloat(targetWeightLossPercent) || 10;
     
     return Type2DiabetesEngine.calculateType2Requirements({
       baselineREE: computedBmr,
@@ -238,11 +289,117 @@ export default function NCPDiabetesGatewayScreen() {
     });
   }, [diabetesType, computedBmr, activityFactor, weight, isMale, targetWeightLossPercent, hasInsulinResistance]);
 
+  // Pediatric Calculations
+  const safeParseFloat = (v: string): number => {
+    if (!v || v.trim() === '') return 0;
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  };
+
+  const safeParseInt = (v: string): number => {
+    if (!v || v.trim() === '') return 0;
+    const n = parseInt(v, 10);
+    return isNaN(n) ? 0 : n;
+  };
+
+  const pedEER = useMemo(() => {
+    if (!pediatricMode) return null;
+    return PediatricEERCalculator.calculate({
+      ageInMonths: safeParseInt(pedAgeMonths),
+      weightKg: safeParseFloat(pedWeightKg),
+      heightCm: safeParseFloat(pedHeightCm),
+      gender: pedGender,
+      isCriticallyIll: pedCriticallyIll,
+      hasFever: pedHasFever,
+    });
+  }, [pediatricMode, pedAgeMonths, pedWeightKg, pedHeightCm, pedGender, pedCriticallyIll, pedHasFever]);
+
+  const pedFluid = useMemo(() => {
+    if (!pediatricMode) return null;
+    return PediatricFluidRequirement.calculate({
+      weightKg: safeParseFloat(pedWeightKg),
+      ageInMonths: safeParseInt(pedAgeMonths),
+      hasDehydration: pedHasDehydration,
+      isOnIVFluids: pedOnIVFluids,
+    });
+  }, [pediatricMode, pedWeightKg, pedAgeMonths, pedHasDehydration, pedOnIVFluids]);
+
+  const pedProtein = useMemo(() => {
+    if (!pediatricMode) return null;
+    return PediatricProteinRequirement.calculate({
+      ageInMonths: safeParseInt(pedAgeMonths),
+      weightKg: safeParseFloat(pedWeightKg),
+      isCriticallyIll: pedCriticallyIll,
+      hasRenalImpairment: pedRenalImpairment,
+      hasLiverImpairment: pedLiverImpairment,
+      onCRRT: pedOnCRRT,
+    });
+  }, [pediatricMode, pedAgeMonths, pedWeightKg, pedCriticallyIll, pedRenalImpairment, pedLiverImpairment, pedOnCRRT]);
+
+  const pedRFS = useMemo(() => {
+    if (!pediatricMode) return null;
+    return PediatricRefeedingMonitor.evaluate({
+      serumPhosphorus: safeParseFloat(pedPhosphorus),
+      serumPotassium: safeParseFloat(pedPotassium),
+      serumMagnesium: safeParseFloat(pedMagnesium),
+      weightKg: safeParseFloat(pedWeightKg),
+      daysOfMalnutrition: safeParseInt(pedMalnutritionDays),
+      plannedKcal: safeParseFloat(pedPlannedKcal),
+    });
+  }, [pediatricMode, pedPhosphorus, pedPotassium, pedMagnesium, pedWeightKg, pedMalnutritionDays, pedPlannedKcal]);
+
+  // Psychiatric Calculations
+  const psychAnorexia = useMemo(() => {
+    if (!psychiatricMode || psychDiagType !== 'anorexia') return null;
+    return AnorexiaNutritionalRehab.calculate({
+      age: age,
+      weight: safeParseFloat(psychWeight),
+      targetWeight: safeParseFloat(psychTargetWeight),
+      bmi: safeParseFloat(psychBmi),
+      medicalStability: psychMedicalStability,
+      riskLevel: psychRiskLevel,
+    });
+  }, [psychiatricMode, psychDiagType, psychWeight, psychTargetWeight, psychBmi, psychMedicalStability, psychRiskLevel, age]);
+
+  const psychBulimia = useMemo(() => {
+    if (!psychiatricMode || psychDiagType !== 'bulimia') return null;
+    return BulimiaNutritionalPlan.calculate({
+      age: age,
+      weight: safeParseFloat(psychWeight),
+      height: height || 165, // default 165cm if not yet loaded
+      gender: ((patient?.gender as 'male' | 'female') || 'female'),
+      mealFrequency: 3,
+      bingeFrequency: safeParseInt(psychBingeFreq),
+      purgingFrequency: safeParseInt(psychPurgeFreq),
+      electrolytes: null,
+    });
+  }, [psychiatricMode, psychDiagType, psychWeight, psychBingeFreq, psychPurgeFreq, age, height, patient]);
+
+  const psychArfid = useMemo(() => {
+    if (!psychiatricMode || psychDiagType !== 'arfid') return null;
+    return EVAvoidantRestrictiveDiet.calculate({
+      age: age,
+      weight: safeParseFloat(psychWeight),
+      foodRestriction: psychFoodRestriction,
+      anxietyLevel: psychAnxietyLevel,
+      nutritionalDeficiency: ['iron'],
+    });
+  }, [psychiatricMode, psychDiagType, psychWeight, psychFoodRestriction, psychAnxietyLevel, age]);
+
+  const psychInteraction = useMemo(() => {
+    if (!psychiatricMode || psychDiagType !== 'psychotropic') return null;
+    return PsychotropicNutrientInteractions.calculate({
+      medication: psychMedication,
+      nutrient: psychNutrient,
+      dose: safeParseFloat(psychDose),
+    });
+  }, [psychiatricMode, psychDiagType, psychMedication, psychNutrient, psychDose]);
+
   const gestationalOutputs = useMemo(() => {
     if (diabetesType !== 'gestational') return null;
-    const preBMIVal = parseFloat(prePregnancyBMI) || 24.5;
-    const preWtVal = parseFloat(prePregnancyWeight) || 65;
-    const weeksVal = parseFloat(gestationalWeeks) || 24;
+    const preBMIVal = safeParseFloat(prePregnancyBMI) || 24.5;
+    const preWtVal = safeParseFloat(prePregnancyWeight) || 65;
+    const weeksVal = safeParseFloat(gestationalWeeks) || 24;
     const bmrVal = calculateMifflinBMR(preWtVal, height, age, false); // always female
 
     const gdmRes = GestationalDiabetesEngine.calculateGDMDynamics({
@@ -255,9 +412,9 @@ export default function NCPDiabetesGatewayScreen() {
     });
 
     const trackerRes = GestationalMetabolicTracker.evaluatePregnancyMetabolism({
-      fastingBloodGlucose: parseFloat(fastingBG) || 90,
-      twoHourPostPrandial: parseFloat(postPrandialBG) || 120,
-      hba1c: parseFloat(hba1c) || 5.8,
+      fastingBloodGlucose: safeParseFloat(fastingBG) || 90,
+      twoHourPostPrandial: safeParseFloat(postPrandialBG) || 120,
+      hba1c: safeParseFloat(hba1c) || 5.8,
       morningUrineKetonesPresent: ketonesPresent,
     });
 
@@ -270,10 +427,10 @@ export default function NCPDiabetesGatewayScreen() {
   // Real-time bolus and correction estimation for Carb exchange counter (Type 1)
   const realTimeInsulinEstimations = useMemo(() => {
     if (!type1Outputs) return { bolus: 0, correction: 0, total: 0 };
-    const plannedCarbsNum = parseFloat(plannedCarbs) || 0;
+    const plannedCarbsNum = safeParseFloat(plannedCarbs);
     
     // ICR factor (unit per grams)
-    const icrVal = parseFloat(icrOverride) || type1Outputs.icr.icrValue || 15;
+    const icrVal = safeParseFloat(icrOverride) || type1Outputs.icr.icrValue || 15;
     const estimatedBolus = icrVal > 0 ? plannedCarbsNum / icrVal : 0;
     
     // Correction dose
@@ -304,33 +461,33 @@ export default function NCPDiabetesGatewayScreen() {
         // Compile specialized metadata structure
         const specializedPayload = {
           diabetesType,
-          fastingBloodGlucose: parseFloat(fastingBG) || 0,
-          postPrandialBloodGlucose: parseFloat(postPrandialBG) || 0,
-          hba1c: parseFloat(hba1c) || 0,
+          fastingBloodGlucose: safeParseFloat(fastingBG),
+          postPrandialBloodGlucose: safeParseFloat(postPrandialBG),
+          hba1c: safeParseFloat(hba1c),
           morningUrineKetonesPresent: ketonesPresent && diabetesType === 'gestational',
           lastUpdatedTimestamp: Date.now(),
           clinicianSignature: signature.trim(),
           justificationText: justification.trim(),
-          
+
           // Type 1 specific fields
           ...(diabetesType === 'type_1' && {
-            totalDailyInsulinDose: parseFloat(tdd) || 0,
+            totalDailyInsulinDose: safeParseFloat(tdd),
             currentInsulinRegimen: insulinRegimen,
-            targetBloodGlucose: parseFloat(targetBG) || 100,
+            targetBloodGlucose: safeParseFloat(targetBG) || 100,
           }),
 
           // Type 2 specific fields
           ...(diabetesType === 'type_2' && {
             hasInsulinResistance,
-            activityFactor: parseFloat(activityFactor) || 1.2,
-            targetWeightLossPercent: parseFloat(targetWeightLossPercent) || 10,
+            activityFactor: safeParseFloat(activityFactor) || 1.2,
+            targetWeightLossPercent: safeParseFloat(targetWeightLossPercent) || 10,
           }),
 
           // Gestational specific fields
           ...(diabetesType === 'gestational' && {
-            gestationalWeeks: parseFloat(gestationalWeeks) || 0,
-            prePregnancyBMI: parseFloat(prePregnancyBMI) || 0,
-            prePregnancyWeightKg: parseFloat(prePregnancyWeight) || 0,
+            gestationalWeeks: safeParseFloat(gestationalWeeks),
+            prePregnancyBMI: safeParseFloat(prePregnancyBMI),
+            prePregnancyWeightKg: safeParseFloat(prePregnancyWeight),
           }),
 
           // Audited Override values
@@ -354,8 +511,10 @@ export default function NCPDiabetesGatewayScreen() {
           targetCals = parseFloat(calorieOverride);
         }
 
-        let targetCarbs = targetCals * 0.5 / 4; // default 50%
-        if (diabetesType === 'type_2' && type2Outputs) {
+        let targetCarbs = 0;
+        if (diabetesType === 'type_1' && type1Outputs) {
+          targetCarbs = Math.round(weight * 3);
+        } else if (diabetesType === 'type_2' && type2Outputs) {
           targetCarbs = type2Outputs.carbGrams;
         } else if (diabetesType === 'gestational' && gestationalOutputs) {
           targetCarbs = gestationalOutputs.dynamics.targetCarbGrams;
@@ -368,7 +527,6 @@ export default function NCPDiabetesGatewayScreen() {
         const targetFat = (targetCals - (targetCarbs * 4) - (targetPro * 4)) / 9;
 
         if (latestPlan) {
-          // Update the existing latest nutritional plan
           await latestPlan.update((record) => {
             record.specializedMetadata = metadataStr;
             record.targetCalories = Math.round(targetCals);
@@ -377,7 +535,6 @@ export default function NCPDiabetesGatewayScreen() {
             record.fatTarget = Math.round(targetFat);
           });
         } else {
-          // Create a new nutritional plan record
           await plansCollection.create((record) => {
             record.patientId = patientId;
             record.targetCalories = Math.round(targetCals);
@@ -431,7 +588,31 @@ export default function NCPDiabetesGatewayScreen() {
 
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
           
-          {/* Glycemic and Profile Inputs Card */}
+          {/* Mode Selector: Adult / Pediatric / Psychiatric */}
+          <ArabicText style={styles.label}>وضع التشغيل:</ArabicText>
+          <View style={styles.tabRow}>
+            {(['adult', 'pediatric', 'psychiatric'] as const).map((mode) => {
+              const isActive = mode === 'adult' ? (!pediatricMode && !psychiatricMode)
+                : mode === 'pediatric' ? pediatricMode
+                : psychiatricMode;
+              return (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                  onPress={() => {
+                    setPediatricMode(mode === 'pediatric');
+                    setPsychiatricMode(mode === 'psychiatric');
+                  }}
+                >
+                  <ArabicText bold={isActive} style={[styles.tabText, isActive && styles.tabTextActive]}>
+                    {mode === 'adult' ? 'بالغ' : mode === 'pediatric' ? 'أطفال' : 'نفسي'}
+                  </ArabicText>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {!pediatricMode && !psychiatricMode && (
           <View style={styles.card}>
             <ArabicText bold style={styles.cardTitle}>الملف الأيضي وحالة السكري</ArabicText>
             
@@ -562,11 +743,12 @@ export default function NCPDiabetesGatewayScreen() {
               </View>
             )}
           </View>
+          )}
 
           {/* 2. CONDITIONAL METABOLIC UI RENDERING MATRIX */}
 
           {/* PANEL A: TYPE 1 INSULIN STRATEGY CARD */}
-          {diabetesType === 'type_1' && type1Outputs && (
+          {!pediatricMode && !psychiatricMode && diabetesType === 'type_1' && type1Outputs && (
             <View style={styles.card}>
               <View style={styles.badgeRow}>
                 <View style={[styles.badge, { backgroundColor: colors.primary }]}>
@@ -634,7 +816,7 @@ export default function NCPDiabetesGatewayScreen() {
           )}
 
           {/* PANEL B: TYPE 2 METABOLIC DEFICIT CARD */}
-          {diabetesType === 'type_2' && type2Outputs && (
+          {!pediatricMode && !psychiatricMode && diabetesType === 'type_2' && type2Outputs && (
             <View style={styles.card}>
               <View style={styles.badgeRow}>
                 {type2Outputs.isFloorGuardTriggered ? (
@@ -687,7 +869,7 @@ export default function NCPDiabetesGatewayScreen() {
           )}
 
           {/* PANEL C: GESTATIONAL PROTECTION & KETONE HAZARD PANEL */}
-          {diabetesType === 'gestational' && gestationalOutputs && (
+          {!pediatricMode && !psychiatricMode && diabetesType === 'gestational' && gestationalOutputs && (
             <View style={styles.card}>
               <ArabicText bold style={styles.cardTitle}>متابعة الحمل والتمثيل الغذائي (Gestational)</ArabicText>
 
@@ -748,6 +930,7 @@ export default function NCPDiabetesGatewayScreen() {
           )}
 
           {/* 3. TRANSACTION WRAPPED OVERRIDE LAYER */}
+          {!pediatricMode && !psychiatricMode && (
           <View style={styles.card}>
             <ArabicText bold style={styles.cardTitle}>تعديل وتجاوز المعايير الغذائية (السريرية)</ArabicText>
             
@@ -789,6 +972,418 @@ export default function NCPDiabetesGatewayScreen() {
               variant="primary"
             />
           </View>
+          )}
+
+          {/* 4. PEDIATRIC CALCULATOR PANELS */}
+          {pediatricMode && (
+            <>
+              {/* PEDIATRIC INPUT CARD */}
+              <View style={styles.card}>
+                <ArabicText bold style={styles.cardTitle}>حسابات تغذية الأطفال (Pediatric)</ArabicText>
+                <View style={styles.grid}>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="العمر (شهر)" value={pedAgeMonths} onChangeText={setPedAgeMonths} keyboardType="numeric" />
+                  </View>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="الوزن (كغم)" value={pedWeightKg} onChangeText={setPedWeightKg} keyboardType="numeric" />
+                  </View>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="الطول (سم)" value={pedHeightCm} onChangeText={setPedHeightCm} keyboardType="numeric" />
+                  </View>
+                  <View style={styles.gridItem}>
+                    <ArabicText style={styles.label}>الجنس:</ArabicText>
+                    <View style={styles.tabRow}>
+                      {(['MALE', 'FEMALE'] as const).map((g) => (
+                        <TouchableOpacity
+                          key={g}
+                          style={[styles.tabButton, pedGender === g && styles.tabButtonActive]}
+                          onPress={() => setPedGender(g)}
+                        >
+                          <ArabicText bold={pedGender === g} style={[styles.tabText, pedGender === g && styles.tabTextActive]}>
+                            {g === 'MALE' ? 'ذكر' : 'أنثى'}
+                          </ArabicText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.switchRow}>
+                  <ArabicText style={styles.switchLabel}>حالة حرجة</ArabicText>
+                  <Switch value={pedCriticallyIll} onValueChange={setPedCriticallyIll} trackColor={{ false: '#334155', true: colors.primary }} thumbColor="#ffffff" />
+                </View>
+                <View style={styles.switchRow}>
+                  <ArabicText style={styles.switchLabel}>حمى</ArabicText>
+                  <Switch value={pedHasFever} onValueChange={setPedHasFever} trackColor={{ false: '#334155', true: colors.warning }} thumbColor="#ffffff" />
+                </View>
+                <View style={styles.switchRow}>
+                  <ArabicText style={styles.switchLabel}>جفاف (Dehydration)</ArabicText>
+                  <Switch value={pedHasDehydration} onValueChange={setPedHasDehydration} trackColor={{ false: '#334155', true: colors.warning }} thumbColor="#ffffff" />
+                </View>
+                <View style={styles.switchRow}>
+                  <ArabicText style={styles.switchLabel}>قصور كلوي</ArabicText>
+                  <Switch value={pedRenalImpairment} onValueChange={setPedRenalImpairment} trackColor={{ false: '#334155', true: colors.danger }} thumbColor="#ffffff" />
+                </View>
+                <View style={styles.switchRow}>
+                  <ArabicText style={styles.switchLabel}>قصور كبدي</ArabicText>
+                  <Switch value={pedLiverImpairment} onValueChange={setPedLiverImpairment} trackColor={{ false: '#334155', true: colors.danger }} thumbColor="#ffffff" />
+                </View>
+                <View style={styles.switchRow}>
+                  <ArabicText style={styles.switchLabel}>غسيل كلوي مستمر (CRRT)</ArabicText>
+                  <Switch value={pedOnCRRT} onValueChange={setPedOnCRRT} trackColor={{ false: '#334155', true: colors.primary }} thumbColor="#ffffff" />
+                </View>
+              </View>
+
+              {/* PEDIATRIC RFS INPUT CARD */}
+              <View style={styles.card}>
+                <ArabicText bold style={styles.cardTitle}>متابعة متلازمة إعادة التغذية للأطفال</ArabicText>
+                <View style={styles.grid}>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="الفوسفور (ملغم/دل)" value={pedPhosphorus} onChangeText={setPedPhosphorus} keyboardType="numeric" />
+                  </View>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="البوتاسيوم (ملغم/دل)" value={pedPotassium} onChangeText={setPedPotassium} keyboardType="numeric" />
+                  </View>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="المغنيسيوم (ملغم/دل)" value={pedMagnesium} onChangeText={setPedMagnesium} keyboardType="numeric" />
+                  </View>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="أيام سوء التغذية" value={pedMalnutritionDays} onChangeText={setPedMalnutritionDays} keyboardType="numeric" />
+                  </View>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="السعرات المخططة" value={pedPlannedKcal} onChangeText={setPedPlannedKcal} keyboardType="numeric" />
+                  </View>
+                </View>
+              </View>
+
+              {/* ENERGY OUTPUT */}
+              {pedEER && (
+                <View style={styles.card}>
+                  <ArabicText bold style={styles.cardTitle}>الطاقة (EER)</ArabicText>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={pedEER.isSafe ? styles.metricCard : [styles.metricCard, styles.metricCardWarning]}>
+                      <Text style={styles.metricVal}>{pedEER.eerKcal}</Text>
+                      <ArabicText style={styles.metricLabel}>سعرة/يوم</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{pedEER.kcalPerKg}</Text>
+                      <ArabicText style={styles.metricLabel}>سعرة/كغ/يوم</ArabicText>
+                    </View>
+                  </View>
+                  {!pedEER.isSafe && (
+                    <ArabicText style={[styles.helperText, { color: colors.danger }]}>{pedEER.appliedAdjustment}</ArabicText>
+                  )}
+                  <ArabicText style={styles.helperText}>{pedEER.appliedAdjustment}</ArabicText>
+                </View>
+              )}
+
+              {/* FLUID OUTPUT */}
+              {pedFluid && (
+                <View style={styles.card}>
+                  <ArabicText bold style={styles.cardTitle}>السوائل (Holliday-Segar)</ArabicText>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={pedFluid.isSafe ? styles.metricCard : [styles.metricCard, styles.metricCardWarning]}>
+                      <Text style={styles.metricVal}>{pedFluid.dailyFluidMl}</Text>
+                      <ArabicText style={styles.metricLabel}>مل/يوم</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{pedFluid.mlPerKg}</Text>
+                      <ArabicText style={styles.metricLabel}>مل/كغ/يوم</ArabicText>
+                    </View>
+                  </View>
+                  {!pedFluid.isSafe && <ArabicText style={[styles.helperText, { color: colors.danger }]}>{pedFluid.source}</ArabicText>}
+                  <ArabicText style={styles.helperText}>{pedFluid.source}</ArabicText>
+                </View>
+              )}
+
+              {/* PROTEIN OUTPUT */}
+              {pedProtein && (
+                <View style={styles.card}>
+                  <ArabicText bold style={styles.cardTitle}>البروتين (ESPGHAN/ESPEN)</ArabicText>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={pedProtein.isSafe ? styles.metricCard : [styles.metricCard, styles.metricCardWarning]}>
+                      <Text style={styles.metricVal}>{pedProtein.proteinGramsPerDay}</Text>
+                      <ArabicText style={styles.metricLabel}>غرام بروتين/يوم</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{pedProtein.gPerKg}</Text>
+                      <ArabicText style={styles.metricLabel}>غ/كغ/يوم</ArabicText>
+                    </View>
+                  </View>
+                  {!pedProtein.isSafe && <ArabicText style={[styles.helperText, { color: colors.danger }]}>{pedProtein.guidelineSource}</ArabicText>}
+                  <ArabicText style={styles.helperText}>{pedProtein.guidelineSource}</ArabicText>
+                </View>
+              )}
+
+              {/* RFS OUTPUT */}
+              {pedRFS && (
+                <View style={styles.card}>
+                  <ArabicText bold style={styles.cardTitle}>متلازمة إعادة التغذية للطفل</ArabicText>
+                  <View style={styles.badgeRow}>
+                    <View style={[styles.badge, {
+                      backgroundColor: pedRFS.riskTier === 'critical' ? colors.danger : pedRFS.riskTier === 'moderate' ? colors.warning : colors.success
+                    }]}>
+                      <ArabicText bold style={styles.badgeText}>
+                        {pedRFS.riskTier === 'critical' ? 'خطر شديد' : pedRFS.riskTier === 'moderate' ? 'خطر متوسط' : 'خطر منخفض'}
+                      </ArabicText>
+                    </View>
+                    <ArabicText bold style={styles.cardTitle}>حالة الطفل</ArabicText>
+                  </View>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{pedRFS.adjustedKcal}</Text>
+                      <ArabicText style={styles.metricLabel}>السعرات المعدلة/يوم</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{pedRFS.isCapApplied ? 'نعم' : 'لا'}</Text>
+                      <ArabicText style={styles.metricLabel}>تم تطبيق السقف</ArabicText>
+                    </View>
+                  </View>
+                  <View style={styles.alertList}>
+                    {pedRFS.alerts.map((alert, i) => (
+                      <ArabicText key={i} style={[styles.alertListItem, alert.includes('شديد') ? { color: colors.danger } : {}]}>• {alert}</ArabicText>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* 5. PSYCHIATRIC CALCULATOR PANELS */}
+          {psychiatricMode && (
+            <>
+              {/* PSYCHIATRIC DIAGNOSIS TYPE SELECTOR */}
+              <View style={styles.card}>
+                <ArabicText bold style={styles.cardTitle}>حسابات التغذية النفسية (Psychiatric)</ArabicText>
+                <ArabicText style={styles.label}>نوع الاضطراب:</ArabicText>
+                <View style={styles.tabRow}>
+                  {(['anorexia', 'bulimia', 'arfid', 'psychotropic'] as const).map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.tabButton,
+                        psychDiagType === type && styles.tabButtonActive,
+                        type === 'psychotropic' && { flex: 1.5 },
+                      ]}
+                      onPress={() => setPsychDiagType(type)}
+                    >
+                      <ArabicText
+                        bold={psychDiagType === type}
+                        style={[styles.tabText, psychDiagType === type && styles.tabTextActive]}
+                      >
+                        {type === 'anorexia' ? 'فقدان شهية' : type === 'bulimia' ? 'نهام' : type === 'arfid' ? 'ARFID' : 'تفاعل دوائي'}
+                      </ArabicText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.grid}>
+                  <View style={styles.gridItem}>
+                    <TextInputField label="الوزن (كغم)" value={psychWeight} onChangeText={setPsychWeight} keyboardType="numeric" />
+                  </View>
+                  {psychDiagType === 'anorexia' && (
+                    <>
+                      <View style={styles.gridItem}>
+                        <TextInputField label="الوزن المستهدف (كغم)" value={psychTargetWeight} onChangeText={setPsychTargetWeight} keyboardType="numeric" />
+                      </View>
+                      <View style={styles.gridItem}>
+                        <TextInputField label="مؤشر كتلة الجسم (BMI)" value={psychBmi} onChangeText={setPsychBmi} keyboardType="numeric" />
+                      </View>
+                    </>
+                  )}
+                  {psychDiagType === 'bulimia' && (
+                    <>
+                      <View style={styles.gridItem}>
+                        <TextInputField label="نوبات الشراهة/أسبوع" value={psychBingeFreq} onChangeText={setPsychBingeFreq} keyboardType="numeric" />
+                      </View>
+                      <View style={styles.gridItem}>
+                        <TextInputField label="نوبات التطهير/أسبوع" value={psychPurgeFreq} onChangeText={setPsychPurgeFreq} keyboardType="numeric" />
+                      </View>
+                    </>
+                  )}
+                  {psychDiagType === 'psychotropic' && (
+                    <>
+                      <View style={styles.gridItem}>
+                        <TextInputField label="الدواء" value={psychMedication} onChangeText={setPsychMedication} />
+                      </View>
+                      <View style={styles.gridItem}>
+                        <TextInputField label="المغذي" value={psychNutrient} onChangeText={setPsychNutrient} />
+                      </View>
+                      <View style={styles.gridItem}>
+                        <TextInputField label="الجرعة (ملغم/يوم)" value={psychDose} onChangeText={setPsychDose} keyboardType="numeric" />
+                      </View>
+                    </>
+                  )}
+                </View>
+                {psychDiagType === 'anorexia' && (
+                  <>
+                    <ArabicText style={styles.label}>الاستقرار الطبي:</ArabicText>
+                    <View style={styles.tabRow}>
+                      {(['stable', 'unstable'] as const).map((s) => (
+                        <TouchableOpacity
+                          key={s}
+                          style={[styles.tabButton, psychMedicalStability === s && styles.tabButtonActive]}
+                          onPress={() => setPsychMedicalStability(s)}
+                        >
+                          <ArabicText bold={psychMedicalStability === s} style={[styles.tabText, psychMedicalStability === s && styles.tabTextActive]}>
+                            {s === 'stable' ? 'مستقر' : 'غير مستقر'}
+                          </ArabicText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <ArabicText style={styles.label}>مستوى الخطورة:</ArabicText>
+                    <View style={styles.tabRow}>
+                      {(['low', 'moderate', 'high'] as const).map((r) => (
+                        <TouchableOpacity
+                          key={r}
+                          style={[styles.tabButton, psychRiskLevel === r && styles.tabButtonActive]}
+                          onPress={() => setPsychRiskLevel(r)}
+                        >
+                          <ArabicText bold={psychRiskLevel === r} style={[styles.tabText, psychRiskLevel === r && styles.tabTextActive]}>
+                            {r === 'low' ? 'منخفض' : r === 'moderate' ? 'متوسط' : 'مرتفع'}
+                          </ArabicText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+                {psychDiagType === 'arfid' && (
+                  <>
+                    <ArabicText style={styles.label}>مستوى تقييد الطعام:</ArabicText>
+                    <View style={styles.tabRow}>
+                      {(['low', 'moderate', 'high'] as const).map((r) => (
+                        <TouchableOpacity
+                          key={r}
+                          style={[styles.tabButton, psychFoodRestriction === r && styles.tabButtonActive]}
+                          onPress={() => setPsychFoodRestriction(r)}
+                        >
+                          <ArabicText bold={psychFoodRestriction === r} style={[styles.tabText, psychFoodRestriction === r && styles.tabTextActive]}>
+                            {r === 'low' ? 'خفيف' : r === 'moderate' ? 'متوسط' : 'شديد'}
+                          </ArabicText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <ArabicText style={styles.label}>مستوى القلق:</ArabicText>
+                    <View style={styles.tabRow}>
+                      {(['low', 'moderate', 'high'] as const).map((a) => (
+                        <TouchableOpacity
+                          key={a}
+                          style={[styles.tabButton, psychAnxietyLevel === a && styles.tabButtonActive]}
+                          onPress={() => setPsychAnxietyLevel(a)}
+                        >
+                          <ArabicText bold={psychAnxietyLevel === a} style={[styles.tabText, psychAnxietyLevel === a && styles.tabTextActive]}>
+                            {a === 'low' ? 'خفيف' : a === 'moderate' ? 'متوسط' : 'شديد'}
+                          </ArabicText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </View>
+
+              {/* ANOREXIA OUTPUT */}
+              {psychAnorexia && (
+                <View style={styles.card}>
+                  <View style={styles.badgeRow}>
+                    <View style={[styles.badge, { backgroundColor: psychAnorexia.supervisionLevel === 'inpatient' ? colors.danger : psychAnorexia.supervisionLevel === 'dayPatient' ? colors.warning : colors.success }]}>
+                      <ArabicText bold style={styles.badgeText}>
+                        {psychAnorexia.supervisionLevel === 'inpatient' ? 'منوم' : psychAnorexia.supervisionLevel === 'dayPatient' ? 'نهاري' : 'عيادة خارجية'}
+                      </ArabicText>
+                    </View>
+                    <ArabicText bold style={styles.cardTitle}>خطة التأهيل الغذائي (NICE CG9)</ArabicText>
+                  </View>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychAnorexia.startCalories}</Text>
+                      <ArabicText style={styles.metricLabel}>سعرات البداية/يوم</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychAnorexia.increasePerDay}</Text>
+                      <ArabicText style={styles.metricLabel}>زيادة/يوم (سعرة)</ArabicText>
+                    </View>
+                  </View>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychAnorexia.weeklyIncrease}</Text>
+                      <ArabicText style={styles.metricLabel}>زيادة الوزن/أسبوع (كغم)</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>
+                        {psychAnorexia.supervisionLevel === 'inpatient' ? 'منوم' : psychAnorexia.supervisionLevel === 'dayPatient' ? 'نهاري' : 'عيادة خارجية'}
+                      </Text>
+                      <ArabicText style={styles.metricLabel}>مستوى الإشراف</ArabicText>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* BULIMIA OUTPUT */}
+              {psychBulimia && (
+                <View style={styles.card}>
+                  <ArabicText bold style={styles.cardTitle}>الخطة الغذائية للنهام العصبي (APA 2022)</ArabicText>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychBulimia.targetCalories}</Text>
+                      <ArabicText style={styles.metricLabel}>السعرات المستهدفة/يوم</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychBulimia.mealFrequency + psychBulimia.snackFrequency}</Text>
+                      <ArabicText style={styles.metricLabel}>وجبات + سناك/يوم</ArabicText>
+                    </View>
+                  </View>
+                  <ArabicText style={styles.helperText}>{psychBulimia.regularitySchedule}</ArabicText>
+                </View>
+              )}
+
+              {/* ARFID OUTPUT */}
+              {psychArfid && (
+                <View style={styles.card}>
+                  <ArabicText bold style={styles.cardTitle}>خطة ARFID (DSM-5-TR)</ArabicText>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychArfid.targetCalories}</Text>
+                      <ArabicText style={styles.metricLabel}>سعرة/يوم</ArabicText>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychArfid.proteinGrams}</Text>
+                      <ArabicText style={styles.metricLabel}>غرام بروتين/يوم</ArabicText>
+                    </View>
+                  </View>
+                  <View style={styles.doubleMetricContainer}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricVal}>{psychArfid.exposureFoods}</Text>
+                      <ArabicText style={styles.metricLabel}>أطعمة جديدة/أسبوع</ArabicText>
+                    </View>
+                    <View style={[styles.metricCard, styles.estimationItemHighlight, { flex: 2 }]}>
+                      <ArabicText style={styles.estLabelHighlight}>{psychArfid.therapyType}</ArabicText>
+                      <ArabicText style={styles.metricLabel}>العلاج الموصى به</ArabicText>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* PSYCHOTROPIC INTERACTION OUTPUT */}
+              {psychInteraction && (
+                <View style={styles.card}>
+                  <View style={styles.badgeRow}>
+                    <View style={[styles.badge, {
+                      backgroundColor: psychInteraction.interactionLevel === 'severe' ? colors.danger : psychInteraction.interactionLevel === 'moderate' ? colors.warning : psychInteraction.interactionLevel === 'mild' ? '#14b8a6' : colors.success
+                    }]}>
+                      <ArabicText bold style={styles.badgeText}>
+                        {psychInteraction.interactionLevel === 'severe' ? 'شديد' : psychInteraction.interactionLevel === 'moderate' ? 'متوسط' : psychInteraction.interactionLevel === 'mild' ? 'خفيف' : 'لا يوجد'}
+                      </ArabicText>
+                    </View>
+                    <ArabicText bold style={styles.cardTitle}>تفاعل الدواء مع المغذيات (Maudsley)</ArabicText>
+                  </View>
+                  <View style={styles.alertList}>
+                    <ArabicText style={styles.alertListItem}>• القيد الغذائي: {psychInteraction.restriction}</ArabicText>
+                    <ArabicText style={styles.alertListItem}>• المراقبة: {psychInteraction.monitor}</ArabicText>
+                    {psychInteraction.alternative && (
+                      <ArabicText style={[styles.alertListItem, { color: colors.warning }]}>• بديل مقترح: {psychInteraction.alternative}</ArabicText>
+                    )}
+                  </View>
+                </View>
+              )}
+            </>
+          )}
 
         </ScrollView>
 

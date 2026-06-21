@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { RefeedingSyndromeMonitor } from '../RefeedingSyndromeMonitor';
 
 describe('RefeedingSyndromeMonitor', () => {
-  it('phosphorus 2.1, 60kg, planned 1200 -> critical, cap to 600', () => {
+  it('phosphorus 2.1, 60kg, planned 1200 -> critical, cap to 900', () => {
     const result = RefeedingSyndromeMonitor.evaluateRefeedingRisk({
       serumPhosphorus: 2.1,
       serumPotassium: 4.0,
@@ -14,8 +14,8 @@ describe('RefeedingSyndromeMonitor', () => {
 
     expect(result.riskTier).toBe('critical');
     expect(result.isCalorieCapTriggered).toBe(true);
-    expect(result.maxSafeCaloriesCeiling).toBe(600.00);
-    expect(result.adjustedCalories).toBe(600.00);
+    expect(result.maxSafeCaloriesCeiling).toBe(900.00);
+    expect(result.adjustedCalories).toBe(900.00);
     expect(result.isSafe).toBe(true);
   });
 
@@ -31,8 +31,8 @@ describe('RefeedingSyndromeMonitor', () => {
 
     expect(result.riskTier).toBe('critical');
     expect(result.isCalorieCapTriggered).toBe(true);
-    expect(result.maxSafeCaloriesCeiling).toBe(700.00);
-    expect(result.adjustedCalories).toBe(700.00);
+    expect(result.maxSafeCaloriesCeiling).toBe(1050.00);
+    expect(result.adjustedCalories).toBe(1050.00);
   });
 
   it('stable low-risk patient -> planned calories unchanged', () => {

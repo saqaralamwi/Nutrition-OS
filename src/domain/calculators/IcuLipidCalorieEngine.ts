@@ -20,7 +20,7 @@ export class IcuLipidCalorieEngine {
   public static calculateNetRequirements(input: IIcuLipidInput): IIcuLipidOutput {
     const { targetCalories, propofolInfusionRateMlHr, clevedipineInfusionRateMlHr } = input;
 
-    if (targetCalories <= 0 || propofolInfusionRateMlHr < 0) {
+    if (isNaN(targetCalories) || isNaN(propofolInfusionRateMlHr) || targetCalories <= 0 || propofolInfusionRateMlHr < 0) {
       return {
         propofolDailyVolumeMl: 0,
         totalHiddenLipidCalories: 0,

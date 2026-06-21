@@ -87,7 +87,7 @@ export default function ClinicalAuditScreen() {
         </View>
         
         <Text style={styles.criteriaDescription}>
-          المعيار: وزن المريض &gt;= 100 كجم ونسبة البروتين المحددة أقل من 1.2 جم/كجم من الوزن الفعلي.
+          المعيار: وزن المريض {" >= "} 100 كجم ونسبة البروتين المحددة أقل من 1.2 جم/كجم من الوزن الفعلي.
         </Text>
 
         {obeseLowProtein.length === 0 ? (
@@ -120,7 +120,7 @@ export default function ClinicalAuditScreen() {
                   <View style={styles.criticalNotice}>
                     <Ionicons name="alert-circle" size={14} color={colors.danger} style={{ marginLeft: 4 }} />
                     <Text style={styles.criticalNoticeText}>
-                      تنبيه: مستوى البروتين حرِج جدًا (&lt; 1.0 جم/كجم) لمرضى السمنة!
+                      تنبيه: مستوى البروتين حرِج جدًا ({" < "} 1.0 جم/كجم) لمرضى السمنة!
                     </Text>
                   </View>
                 )}

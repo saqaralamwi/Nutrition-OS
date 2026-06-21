@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontFamilies } from '../theme';
 
@@ -11,6 +11,7 @@ interface DatePickerFieldProps {
   required?: boolean;
   maximumDate?: Date;
   minimumDate?: Date;
+  disableFuture?: boolean;
 }
 
 export default function DatePickerField({
@@ -21,6 +22,7 @@ export default function DatePickerField({
   required = false,
   maximumDate,
   minimumDate,
+  disableFuture = false,
 }: DatePickerFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
 
@@ -57,14 +59,20 @@ export default function DatePickerField({
   ];
 
   const handleQuickDate = (days: number) => {
-    const d = new Date();
+    let d = new Date();
     d.setDate(d.getDate() + days);
+    if (disableFuture && d.getTime() > Date.now()) {
+      d = new Date();
+    }
     onChange(d);
     setShowPicker(false);
   };
 
   const handleConfirmScrollDate = () => {
-    const d = new Date(selectedYear, selectedMonth - 1, selectedDay);
+    let d = new Date(selectedYear, selectedMonth - 1, selectedDay);
+    if (disableFuture && d.getTime() > Date.now()) {
+      d = new Date();
+    }
     onChange(d);
     setShowPicker(false);
   };
@@ -85,29 +93,33 @@ export default function DatePickerField({
 
       {Platform.OS === 'web' ? (
         <View style={[styles.trigger, error && styles.triggerError]}>
-          <input
-            type="date"
+          <TextInput
+            {...(Platform.OS === 'web' ? { type: 'date' } : {})}
             style={{
               flex: 1,
-              background: 'transparent',
-              border: 'none',
+              backgroundColor: 'transparent',
+              borderWidth: 0,
               color: value ? colors.textPrimary : colors.textDisabled,
-              fontSize: '16px',
-              fontFamily: 'inherit',
+              fontSize: 16,
               textAlign: 'right',
-              outline: 'none',
               width: '100%',
-              cursor: 'pointer',
               padding: 0,
             }}
             value={value ? value.toISOString().split('T')[0] : ''}
-            onChange={(e) => {
-              if (e.target.value) {
-                onChange(new Date(e.target.value + 'T00:00:00'));
+            onChangeText={(text) => {
+              if (text) {
+                const picked = new Date(text + 'T00:00:00');
+                if (disableFuture && picked.getTime() > Date.now()) {
+                  onChange(new Date());
+                } else {
+                  onChange(picked);
+                }
               }
             }}
-            max={maximumDate ? maximumDate.toISOString().split('T')[0] : undefined}
-            min={minimumDate ? minimumDate.toISOString().split('T')[0] : undefined}
+            {...(Platform.OS === 'web' ? {
+              max: disableFuture ? new Date().toISOString().split('T')[0] : (maximumDate ? maximumDate.toISOString().split('T')[0] : undefined),
+              min: minimumDate ? minimumDate.toISOString().split('T')[0] : undefined
+            } : {})}
           />
           <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} style={{ marginLeft: spacing.xs }} />
         </View>

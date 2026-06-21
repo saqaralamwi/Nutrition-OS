@@ -17,7 +17,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, fontFamilies } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
-import { recognizeTextFromImage } from '../../../src/services/ocrService';
+// import { recognizeTextFromImage } from '../../../src/services/ocrService'; // REMOVED - service deleted during cleanup
 import { ParsedLabResult } from '../../../src/services/ocrTypes';
 import { getDatabase } from '../../../src/data/database';
 import { InterpretLabResultUseCase } from '../../../src/domain/use-cases/InterpretLabResultUseCase';
@@ -76,9 +76,10 @@ export default function OCRScannerScreen() {
 
       setCapturedImage(processed.uri);
 
-      // 3. Native OCR Extraction
-      const ocrData = await recognizeTextFromImage(processed.uri);
-      const results = parseMedicalLabText(ocrData.text);
+      // 3. Native OCR Extraction (DISABLED - ocrService was deleted)
+      // const ocrData = await recognizeTextFromImage(processed.uri);
+      // const results = parseMedicalLabText(ocrData.text);
+      const results: ParsedLabResult[] = [];
       
       setParsedResults(results);
       

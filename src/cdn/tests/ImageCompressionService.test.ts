@@ -1,18 +1,41 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { ImageCompressionService } from '../services/ImageCompressionService';
-import fs from 'fs';
-import path from 'path';
+import sharp from 'sharp';
 
 describe('ImageCompressionService', () => {
-  const testImageDir = path.join(__dirname, '..', '..', '..', '..', 'tests', 'images');
+  let testImageBuffer: Buffer;
+  let testImageBuffer2: Buffer;
+  let foodImageBuffer: Buffer;
 
-  beforeAll(() => {
-    if (!fs.existsSync(testImageDir)) {
-      fs.mkdirSync(testImageDir, { recursive: true });
-    }
+  beforeAll(async () => {
+    // Generate synthetic test images using sharp instead of requiring physical files
+    testImageBuffer = await sharp({
+      create: {
+        width: 200,
+        height: 200,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    }).jpeg().toBuffer();
+
+    testImageBuffer2 = await sharp({
+      create: {
+        width: 150,
+        height: 150,
+        channels: 3,
+        background: { r: 0, g: 255, b: 0 },
+      },
+    }).jpeg().toBuffer();
+
+    foodImageBuffer = await sharp({
+      create: {
+        width: 300,
+        height: 200,
+        channels: 3,
+        background: { r: 0, g: 0, b: 255 },
+      },
+    }).jpeg().toBuffer();
   });
-
-  const hasImage = (name: string) => fs.existsSync(path.join(testImageDir, name));
 
   test('calculateCompressionRatio - returns correct percentage', () => {
     const ratio = ImageCompressionService.calculateCompressionRatio(100000, 25000);
@@ -30,46 +53,35 @@ describe('ImageCompressionService', () => {
   });
 
   test('compressToWebP - compress image to WebP', async () => {
-    if (!hasImage('test-image.jpg')) return;
-    const imageBuffer = fs.readFileSync(path.join(testImageDir, 'test-image.jpg'));
-    const originalSize = imageBuffer.byteLength;
-
-    const compressed = await ImageCompressionService.compressToWebP(imageBuffer, 80);
+    const originalSize = testImageBuffer.byteLength;
+    const compressed = await ImageCompressionService.compressToWebP(testImageBuffer, 80);
     const compressedSize = compressed.byteLength;
-
     expect(compressedSize).toBeLessThan(originalSize);
     const ratio = ImageCompressionService.calculateCompressionRatio(originalSize, compressedSize);
     expect(ratio).toBeGreaterThan(50);
   });
 
   test('createThumbnail - create 50x50 thumbnail', async () => {
-    if (!hasImage('test-image.jpg')) return;
-    const imageBuffer = fs.readFileSync(path.join(testImageDir, 'test-image.jpg'));
-    const thumbnail = await ImageCompressionService.createThumbnail(imageBuffer, 50, 50);
+    const thumbnail = await ImageCompressionService.createThumbnail(testImageBuffer, 50, 50);
     expect(thumbnail.byteLength).toBeLessThan(5000);
   });
 
   test('createThumbnail - create 80x80 thumbnail', async () => {
-    if (!hasImage('test-image.jpg')) return;
-    const imageBuffer = fs.readFileSync(path.join(testImageDir, 'test-image.jpg'));
-    const thumbnail = await ImageCompressionService.createThumbnail(imageBuffer, 80, 80);
+    const thumbnail = await ImageCompressionService.createThumbnail(testImageBuffer, 80, 80);
     expect(thumbnail.byteLength).toBeLessThan(10000);
   });
 
   test('processImage - compress + thumbnails (Food)', async () => {
-    if (!hasImage('food-image.jpg')) return;
-    const imageBuffer = fs.readFileSync(path.join(testImageDir, 'food-image.jpg')) as Buffer;
-    const result = await ImageCompressionService.processImage(imageBuffer, 'food', 80);
+    const result = await ImageCompressionService.processImage(foodImageBuffer, 'food', 80);
     expect(result.compressedSize).toBeLessThan(result.originalSize);
     expect(result.thumbnailSize).toBeLessThan(5000);
     expect(result.compressionRatio).toBeGreaterThan(50);
   });
 
   test('processImagesBatch - batch processing', async () => {
-    if (!hasImage('food-image-1.jpg') || !hasImage('recipe-image-1.jpg')) return;
     const images = [
-      { buffer: fs.readFileSync(path.join(testImageDir, 'food-image-1.jpg')), type: 'food' as const },
-      { buffer: fs.readFileSync(path.join(testImageDir, 'recipe-image-1.jpg')), type: 'recipe' as const },
+      { buffer: testImageBuffer, type: 'food' as const },
+      { buffer: testImageBuffer2, type: 'recipe' as const },
     ];
     const results = await ImageCompressionService.processImagesBatch(images, 80);
     expect(results.every(r => r.success)).toBe(true);

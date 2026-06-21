@@ -28,7 +28,7 @@ import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { formatSafeDate } from '../../../src/utils/date';
 import { DrugNutrientInteractionRepository } from '../../../src/data/repositories/DrugNutrientInteractionRepository';
-import { DrugNutrientEngine, IDNIInteractionMatch } from '../../../src/utils/DrugNutrientEngine';
+import { DrugNutrientEngine, IDNIInteractionMatch } from '../../../src/domain/services/DrugNutrientEngine';
 import useClinicalAlerts from '../../../src/presentation/hooks/useClinicalAlerts';
 import ClinicalAlertsBanner from '../../../src/presentation/components/ClinicalAlertsBanner';
 
@@ -69,7 +69,7 @@ interface MedicationItemData {
   frequency: string;
   route: string;
   unit: string;
-  dniRisk: string;
+  dniRisk?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -167,9 +167,9 @@ export default function MedicationsScreen() {
       if (matches.length > 0) {
         const m = matches[0];
         setSelectedDni({
-          mechanism: m.mechanismDescription || 'تفاعل محتمل مع الغذاء',
+          mechanism: m.mechanismAr ?? m.mechanismEn ?? 'تفاعل محتمل مع الغذاء',
           severity: m.clinicalSeverity,
-          actionReq: String(m.dietaryActionRequired).toLowerCase() === 'true' || m.dietaryActionRequired === 'yes',
+          actionReq: !!(m.dietaryActionAr || m.dietaryActionEn),
         });
       } else {
         setSelectedDni(null);
@@ -201,10 +201,10 @@ export default function MedicationsScreen() {
     const records = await uc.execute(patientId);
     return records.map((r) => ({
       id: r.id!,
-      drugName: r.drugName,
+      drugName: r.drugName || '',
       dosage: r.dosage || '',
       frequency: r.frequency || '',
-      route: r.route,
+      route: r.route || '',
       unit: '',
       dniRisk: r.dniRisk,
       startDate: r.startDate,
@@ -233,6 +233,7 @@ export default function MedicationsScreen() {
     ]);
   }, [showToast]);
 
+  const [medRecordedAt, setMedRecordedAt] = useState<Date | null>(null);
   const [medStartDate, setMedStartDate] = useState<Date | null>(null);
   const [medEndDate, setMedEndDate] = useState<Date | null>(null);
 
@@ -249,6 +250,7 @@ export default function MedicationsScreen() {
         route: values.route,
         startDate: medStartDate?.toISOString() || undefined,
         endDate: medEndDate?.toISOString() || undefined,
+        recordedAt: medRecordedAt?.toISOString() || new Date().toISOString(),
         prescribingPhysician: values.prescribingPhysician || undefined,
         dniRisk: selectedDni?.severity || 'none',
         dniNotes: selectedDni?.mechanism || undefined,
@@ -257,6 +259,7 @@ export default function MedicationsScreen() {
       setMedications(fresh);
       setShowMedModal(false);
       medForm.reset();
+      setMedRecordedAt(null);
       setMedStartDate(null);
       setMedEndDate(null);
       setSelectedDni(null);
@@ -311,8 +314,8 @@ export default function MedicationsScreen() {
               >
                 <View style={styles.cardHeader}>
                   <ArabicText bold style={styles.cardTitle}>{med.drugName}</ArabicText>
-                  <View style={[styles.dniBadge, { backgroundColor: DNI_COLORS[med.dniRisk] || colors.textDisabled }]}>
-                    <ArabicText style={styles.dniBadgeText}>{DNI_LABELS[med.dniRisk] || med.dniRisk}</ArabicText>
+                  <View style={[styles.dniBadge, { backgroundColor: DNI_COLORS[med.dniRisk ?? ''] || colors.textDisabled }]}>
+                    <ArabicText style={styles.dniBadgeText}>{DNI_LABELS[med.dniRisk ?? ''] || med.dniRisk}</ArabicText>
                   </View>
                 </View>
                 <View style={styles.cardBody}>
@@ -346,7 +349,7 @@ export default function MedicationsScreen() {
           <ScrollView style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <ArabicText bold style={styles.modalTitle}>إضافة دواء جديد</ArabicText>
-              <TouchableOpacity onPress={() => { setShowMedModal(false); medForm.reset(); setMedStartDate(null); setMedEndDate(null); setSelectedDni(null); }}>
+              <TouchableOpacity onPress={() => { setShowMedModal(false); medForm.reset(); setMedRecordedAt(null); setMedStartDate(null); setMedEndDate(null); setSelectedDni(null); }}>
                 <Ionicons name="close" size={28} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
@@ -382,6 +385,13 @@ export default function MedicationsScreen() {
                 </View>
               </View>
 
+              <DatePickerField
+                label="تاريخ التسجيل (وقت الإعطاء الفعلي)"
+                value={medRecordedAt}
+                onChange={(d) => setMedRecordedAt(d)}
+                disableFuture
+              />
+
               <TextInputField label="الطبيب المصرح" value={medForm.watch('prescribingPhysician')} onChangeText={(v) => medForm.setValue('prescribingPhysician', v)} />
 
               {/* AUTOMATED DNI PREVIEW CARD */}
@@ -405,7 +415,7 @@ export default function MedicationsScreen() {
 
               <View style={styles.modalActions}>
                 <Button title="إضافة الدواء وتفعيل المراقبة" onPress={medForm.handleSubmit(handleAddMedication)} loading={isSavingMed} disabled={isSavingMed} />
-                <Button title="إلغاء" variant="secondary" onPress={() => { setShowMedModal(false); medForm.reset(); setMedStartDate(null); setMedEndDate(null); setSelectedDni(null); }} disabled={isSavingMed} />
+                <Button title="إلغاء" variant="secondary" onPress={() => { setShowMedModal(false); medForm.reset(); setMedRecordedAt(null); setMedStartDate(null); setMedEndDate(null); setSelectedDni(null); }} disabled={isSavingMed} />
               </View>
             </View>
           </ScrollView>

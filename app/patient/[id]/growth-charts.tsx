@@ -34,9 +34,16 @@ import ArabicText from '../../../src/presentation/components/ArabicText';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import {
   getReferenceData,
+  generateReferenceCurve,
   zScoreLabelAr,
   ReferenceDataPoint,
 } from '../../../src/domain/data/whoGrowthReference';
+import { getAdolescentRefData } from '../../../src/domain/data/adolescentRefData';
+import { getCdcRefData } from '../../../src/domain/data/cdcRefData';
+import type { GrowthStandard, IStuntingResult } from '../../../src/domain/calculators/PediatricZScoreEngine';
+import { PediatricZScoreEngine } from '../../../src/domain/calculators/PediatricZScoreEngine';
+import { Cdc2022ExtendedBmiEngine, BMI_EXTENDED_COLORS } from '../../../src/domain/calculators/Cdc2022ExtendedBmiEngine';
+import type { IExtendedBmiResult } from '../../../src/domain/calculators/Cdc2022ExtendedBmiEngine';
 
 type ChartIndicator = 'wfa' | 'lhfa' | 'bmifa';
 
@@ -138,11 +145,20 @@ function renderGrowthChart(
   domain: [number, number],
   zField: keyof PediatricGrowthChart,
   latestRecord: PediatricGrowthChart | null,
+  warningLineKey?: 'p15' | 'p85',
+  showTransitionBreak?: boolean,
 ) {
   return (
     <View style={styles.card} key={title}>
       <ArabicText bold style={styles.cardTitle}>📊 {title}</ArabicText>
       <ArabicText style={styles.cardSubtitle}>{subtitle}</ArabicText>
+      {showTransitionBreak && (
+        <View style={styles.transitionNote}>
+          <Text style={styles.transitionNoteText}>
+            ⚠️ انتقال المرجع: WHO 2006 (0–60 شهر) ← WHO 2007 للمراهقين (61–228 شهر)
+          </Text>
+        </View>
+      )}
 
       {data.length < 3 ? (
         <ArabicText style={styles.noDataText}>بيانات غير كافية لرسم المنحنى البياني</ArabicText>
@@ -153,6 +169,9 @@ function renderGrowthChart(
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis
                 dataKey="age"
+                type="number"
+                domain={[0, 228]}
+                ticks={[0, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192, 204, 216, 228]}
                 stroke="#94A3B8"
                 tick={{ fill: '#94A3B8', fontSize: 10, fontFamily: fontFamilies.regular }}
                 label={{ value: 'العمر (شهر)', position: 'insideBottom', offset: -4, fill: '#94A3B8', fontSize: 10 }}
@@ -170,7 +189,15 @@ function renderGrowthChart(
               <Line type="monotone" dataKey="p97" stroke={chartColors.p97} strokeWidth={1} strokeDasharray="4 2" dot={false} name="+3 SD" />
               <Line type="monotone" dataKey="p85" stroke={chartColors.p85} strokeWidth={1.5} strokeDasharray="3 2" dot={false} name="+2 SD" />
               <Line type="monotone" dataKey="p50" stroke={chartColors.p50} strokeWidth={2.5} dot={false} name="Median" />
-              <Line type="monotone" dataKey="p15" stroke={chartColors.p15} strokeWidth={1.5} strokeDasharray="3 2" dot={false} name="-2 SD" />
+              <Line
+                type="monotone"
+                dataKey="p15"
+                stroke={warningLineKey === 'p15' ? '#F97316' : chartColors.p15}
+                strokeWidth={warningLineKey === 'p15' ? 2.5 : 1.5}
+                strokeDasharray={warningLineKey === 'p15' ? '8 2' : '3 2'}
+                dot={false}
+                name={warningLineKey === 'p15' ? '⚠️ حذر التقزم (-2 SD)' : '-2 SD'}
+              />
               <Line type="monotone" dataKey="p3" stroke={chartColors.p3} strokeWidth={1} strokeDasharray="4 2" dot={false} name="-3 SD" />
               <Line
                 type="monotone"
@@ -217,9 +244,26 @@ export default function GrowthChartsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [stuntingResult, setStuntingResult] = useState<IStuntingResult | null>(null);
+  const [extendedBmiResult, setExtendedBmiResult] = useState<IExtendedBmiResult | null>(null);
+
+  const [selectedStandard, setSelectedStandard] = useState<GrowthStandard | null>(null);
 
   const gender = patient?.gender === 'female' ? 'female' : 'male';
   const ageMonths = patient ? Math.round(patient.age * 12) : 0;
+
+  const effectiveStandard: GrowthStandard = (() => {
+    if (selectedStandard) return selectedStandard;
+    if (ageMonths > 60 && ageMonths <= 228) return 'WHO_2007_Adolescent';
+    if (ageMonths >= 24) return 'CDC';
+    return 'WHO';
+  })();
+
+  const standardLabelAr = (() => {
+    if (effectiveStandard === 'WHO_2007_Adolescent') return 'WHO 2007 (5-19 سنة)';
+    if (effectiveStandard === 'CDC') return 'CDC 2022';
+    return 'WHO 2006';
+  })();
 
   useEffect(() => {
     setIsLoading(true);
@@ -251,9 +295,39 @@ export default function GrowthChartsScreen() {
     return () => stream.unsubscribe();
   }, [patientId]);
 
-  const wfaRef = useMemo(() => getReferenceData(gender, 'wfa'), [gender]);
-  const lhfaRef = useMemo(() => getReferenceData(gender, 'lhfa'), [gender]);
-  const bmifaRef = useMemo(() => getReferenceData(gender, 'bmifa'), [gender]);
+  const wfaRef = useMemo(() => {
+    if (effectiveStandard === 'WHO_2007_Adolescent') {
+      const infant = getReferenceData(gender, 'wfa');
+      const adolescent = generateReferenceCurve(getAdolescentRefData(gender, 'wfa'));
+      return [...infant, ...adolescent];
+    }
+    if (effectiveStandard === 'CDC') {
+      return generateReferenceCurve(getCdcRefData(gender, 'wfa'));
+    }
+    return getReferenceData(gender, 'wfa');
+  }, [gender, effectiveStandard]);
+
+  const lhfaRef = useMemo(() => {
+    if (effectiveStandard === 'WHO_2007_Adolescent') {
+      const infant = getReferenceData(gender, 'lhfa');
+      const adolescent = generateReferenceCurve(getAdolescentRefData(gender, 'lhfa'));
+      return [...infant, ...adolescent];
+    }
+    if (effectiveStandard === 'CDC') {
+      return generateReferenceCurve(getCdcRefData(gender, 'lhfa'));
+    }
+    return getReferenceData(gender, 'lhfa');
+  }, [gender, effectiveStandard]);
+
+  const bmifaRef = useMemo(() => {
+    if (effectiveStandard === 'WHO_2007_Adolescent') {
+      return generateReferenceCurve(getAdolescentRefData(gender, 'bmifa'));
+    }
+    if (effectiveStandard === 'CDC') {
+      return generateReferenceCurve(getCdcRefData(gender, 'bmifa'));
+    }
+    return getReferenceData(gender, 'bmifa');
+  }, [gender, effectiveStandard]);
 
   const wfaData = useMemo(
     () => mergeChartData(wfaRef, growthRecords, (r) => r.weightKg ?? null),
@@ -284,6 +358,33 @@ export default function GrowthChartsScreen() {
   const handleRefresh = useCallback(() => {
     setIsLoading(true);
   }, []);
+
+  useEffect(() => {
+    if (!latestRecord || !latestRecord.heightCm || latestRecord.heightCm <= 0) {
+      setStuntingResult(null);
+      return;
+    }
+    PediatricZScoreEngine.calculateStuntingIndex(
+      ageMonths,
+      latestRecord.heightCm,
+      gender,
+      effectiveStandard,
+    ).then(setStuntingResult);
+  }, [ageMonths, latestRecord, gender, effectiveStandard]);
+
+  const latestBmi = useMemo(() => {
+    if (!latestRecord?.weightKg || !latestRecord?.heightCm || latestRecord.heightCm <= 0) return null;
+    return latestRecord.weightKg / ((latestRecord.heightCm / 100) * (latestRecord.heightCm / 100));
+  }, [latestRecord]);
+
+  useEffect(() => {
+    if (latestBmi == null) {
+      setExtendedBmiResult(null);
+      return;
+    }
+    const result = Cdc2022ExtendedBmiEngine.calculateExtendedBmiMetrics(latestBmi, ageMonths, gender);
+    setExtendedBmiResult(result);
+  }, [latestBmi, ageMonths, gender]);
 
   if (isLoading && growthRecords.length === 0) {
     return (
@@ -321,7 +422,52 @@ export default function GrowthChartsScreen() {
               <ArabicText style={styles.demoText}>العمر: {patient.age} سنة ({ageMonths} شهر)</ArabicText>
               <ArabicText style={styles.demoText}>الجنس: {gender === 'male' ? 'ذكر' : 'أنثى'}</ArabicText>
             </View>
+            <ArabicText style={styles.demoText}>المرجع المعتمد: {standardLabelAr}</ArabicText>
             <ArabicText style={styles.demoText}>إجمالي القياسات المسجلة: {growthRecords.length}</ArabicText>
+          </View>
+        )}
+
+        {patient && (
+          <View style={styles.toggleCard}>
+            <ArabicText bold style={styles.toggleCardTitle}>اختيار مرجع مخططات النمو</ArabicText>
+            <View style={styles.tabToggleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.tabToggleButton,
+                  effectiveStandard === 'CDC' && styles.tabToggleButtonActive,
+                ]}
+                onPress={() => setSelectedStandard('CDC')}
+                activeOpacity={0.7}
+              >
+                <ArabicText
+                  bold={effectiveStandard === 'CDC'}
+                  style={[
+                    styles.tabToggleText,
+                    effectiveStandard === 'CDC' && styles.tabToggleTextActive,
+                  ]}
+                >
+                  مخطط CDC (الموسع)
+                </ArabicText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tabToggleButton,
+                  (effectiveStandard === 'WHO' || effectiveStandard === 'WHO_2007_Adolescent') && styles.tabToggleButtonActive,
+                ]}
+                onPress={() => setSelectedStandard(ageMonths > 60 ? 'WHO_2007_Adolescent' : 'WHO')}
+                activeOpacity={0.7}
+              >
+                <ArabicText
+                  bold={effectiveStandard !== 'CDC'}
+                  style={[
+                    styles.tabToggleText,
+                    effectiveStandard !== 'CDC' && styles.tabToggleTextActive,
+                  ]}
+                >
+                  مخطط WHO (القياسي)
+                </ArabicText>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -331,6 +477,7 @@ export default function GrowthChartsScreen() {
             gender={gender}
             ageMonths={ageMonths}
             onSave={handleRefresh}
+            standard={effectiveStandard}
           />
         )}
 
@@ -347,32 +494,111 @@ export default function GrowthChartsScreen() {
           <>
             {renderGrowthChart(
               'الوزن حسب العمر (Weight-for-Age)',
-              'منحنيات WHO - الخطوط: -3SD, -2SD, Median, +2SD, +3SD',
+              `منحنيات ${standardLabelAr} - الخطوط: -3SD, -2SD, Median, +2SD, +3SD`,
               wfaData,
               'الوزن (كجم)',
               [0, 30],
               'weightZScore',
               latestRecord,
+              undefined,
+              effectiveStandard === 'WHO_2007_Adolescent',
             )}
 
             {lhfaData.some((d) => d.patient != null) && renderGrowthChart(
               'الطول حسب العمر (Length/Height-for-Age)',
-              'منحنيات WHO - تقييم القزامة (Stunting)',
+              `منحنيات ${standardLabelAr} - تقييم القزامة (Stunting)`,
               lhfaData,
               'الطول (سم)',
               [40, 120],
               'heightZScore',
               latestRecord,
+              'p15',
+              effectiveStandard === 'WHO_2007_Adolescent',
+            )}
+
+            {stuntingResult && (
+              <View style={[styles.card, styles.stuntingCard]}>
+                <ArabicText bold style={styles.cardTitle}>🧬 مؤشر التقزم (Stunting Index)</ArabicText>
+                <View style={styles.stuntingRow}>
+                  <View style={styles.stuntingBadge}>
+                    <ArabicText style={styles.stuntingLabel}>Z-Score</ArabicText>
+                    <Text style={[styles.stuntingValue, {
+                      color: stuntingResult.level === 'severe' ? '#DC2626'
+                        : stuntingResult.level === 'moderate' ? '#F97316'
+                        : stuntingResult.level === 'at_risk' ? '#EAB308'
+                        : '#4ADE80',
+                    }]}>
+                      {stuntingResult.zScore.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.stuntingBadge}>
+                    <ArabicText style={styles.stuntingLabel}>التصنيف</ArabicText>
+                    <Text style={[styles.stuntingValue, {
+                      color: stuntingResult.level === 'severe' ? '#DC2626'
+                        : stuntingResult.level === 'moderate' ? '#F97316'
+                        : stuntingResult.level === 'at_risk' ? '#EAB308'
+                        : '#4ADE80',
+                    }]}>
+                      {stuntingResult.label}
+                    </Text>
+                  </View>
+                </View>
+                {stuntingResult.level !== 'normal' && (
+                  <View style={styles.stuntingDirective}>
+                    <Ionicons name="warning" size={16} color="#F97316" />
+                    <ArabicText style={styles.stuntingDirectiveText}>
+                      {stuntingResult.directive}
+                    </ArabicText>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {extendedBmiResult && extendedBmiResult.classification !== 'normal' && extendedBmiResult.classification !== 'unknown' && (
+              <View style={[styles.card, { borderColor: BMI_EXTENDED_COLORS[extendedBmiResult.classification], borderWidth: 1.5 }]}>
+                <ArabicText bold style={styles.cardTitle}>
+                  🧬 CDC 2022 التصنيف الموسع (Extended BMI)
+                </ArabicText>
+                <View style={styles.stuntingRow}>
+                  <View style={styles.stuntingBadge}>
+                    <ArabicText style={styles.stuntingLabel}>BMI: {extendedBmiResult.bmi.toFixed(1)}</ArabicText>
+                    <Text style={[styles.stuntingValue, { color: BMI_EXTENDED_COLORS[extendedBmiResult.classification] }]}>
+                      {extendedBmiResult.bmiP95Percent.toFixed(1)}% من 95th %ile
+                    </Text>
+                  </View>
+                  <View style={styles.stuntingBadge}>
+                    <ArabicText style={styles.stuntingLabel}>التصنيف</ArabicText>
+                    <Text style={[styles.stuntingValue, { color: BMI_EXTENDED_COLORS[extendedBmiResult.classification] }]}>
+                      {extendedBmiResult.classificationLabelAr}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.stuntingDirective, { borderColor: BMI_EXTENDED_COLORS[extendedBmiResult.classification], backgroundColor: '#1C1917' }]}>
+                  <Ionicons name="warning" size={16} color={BMI_EXTENDED_COLORS[extendedBmiResult.classification]} />
+                  <ArabicText style={[styles.stuntingDirectiveText, { color: BMI_EXTENDED_COLORS[extendedBmiResult.classification] }]}>
+                    {extendedBmiResult.classification === 'class_ii_severe_obesity'
+                      ? 'سمنة شديدة درجة ثانية — متابعة مكثفة، تقييم مضاعفات السمنة، تحويل لأخصائي غدد صماء أطفال'
+                      : extendedBmiResult.classification === 'class_iii_severe_obesity'
+                        ? 'سمنة شديدة درجة ثالثة — تدخل عاجل متعدد التخصصات، تقييم السكري/ارتفاع الضغط/الكبد الدهني'
+                        : 'متابعة منتظمة مع تقييم نمط الحياة والنظام الغذائي'}
+                  </ArabicText>
+                </View>
+              </View>
             )}
 
             {bmifaData.some((d) => d.patient != null) && renderGrowthChart(
               'مؤشر كتلة الجسم (BMI-for-Age)',
-              'منحنيات WHO - تقييم السمنة والهزال',
+              `منحنيات ${standardLabelAr} - تقييم السمنة والهزال`,
               bmifaData,
               'BMI (kg/m²)',
-              [10, 28],
+              [10, (() => {
+                const maxPatient = Math.max(...bmifaData.filter(d => d.patient != null).map(d => d.patient!));
+                return Math.max(28, Math.ceil(maxPatient / 5) * 5 + 5);
+              })()],
               'bmiZScore',
               latestRecord,
+              undefined,
+              effectiveStandard === 'WHO_2007_Adolescent',
             )}
 
             {growthRecords.length > 0 && (
@@ -421,7 +647,10 @@ export default function GrowthChartsScreen() {
             <View style={styles.card}>
               <ArabicText bold style={styles.cardTitle}>📘 توجيهات سريرية</ArabicText>
               <ArabicText style={styles.clinicalNote}>
-                • يعتمد النظام على معايير منظمة الصحة العالمية (WHO 2006).{'\n'}
+                • المرجع المعتمد: {standardLabelAr}.{'\n'}
+                {'\n'}• الأطفال {'<'} 24 شهراً: WHO 2006 (وزن/طول/BMI حسب العمر).{'\n'}
+                {'\n'}• الأطفال 24–60 شهراً: CDC 2022 (وزن/طول/BMI حسب العمر).{'\n'}
+                {'\n'}• المراهقون 5–19 سنة: WHO 2007 (مؤشر كتلة الجسم فقط).{'\n'}
                 {'\n'}• Z-Score {'<'} -2 يشير إلى نقص النمو ويتطلب تقييماً فورياً.{'\n'}
                 {'\n'}• Z-Score {'>'} +2 يشير إلى زيادة مفرطة في الوزن/السمنة.{'\n'}
                 {'\n'}• المنحنيات: أحمر = ±3SD, برتقالي = ±2SD, أخضر = Median.{'\n'}
@@ -651,5 +880,104 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: spacing.sm,
     fontFamily: fontFamilies.regular,
+  },
+  stuntingCard: {
+    borderColor: '#F97316',
+    borderWidth: 1.5,
+  },
+  stuntingRow: {
+    flexDirection: 'row-reverse',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  stuntingBadge: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  stuntingLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontFamily: fontFamilies.regular,
+    marginBottom: 4,
+  },
+  stuntingValue: {
+    fontSize: 16,
+    fontFamily: fontFamilies.bold,
+  },
+  stuntingDirective: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    backgroundColor: '#1C1917',
+    borderRadius: 8,
+    padding: spacing.sm,
+  },
+  stuntingDirectiveText: {
+    fontSize: 12,
+    color: '#F97316',
+    flex: 1,
+    fontFamily: fontFamilies.regular,
+    textAlign: 'right',
+  },
+  transitionNote: {
+    backgroundColor: '#1E1B2E',
+    borderRadius: 6,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#7C3AED',
+    borderStyle: 'dashed' as any,
+  },
+  transitionNoteText: {
+    fontSize: 10,
+    color: '#A78BFA',
+    textAlign: 'center',
+    fontFamily: fontFamilies.regular,
+  },
+  toggleCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  toggleCardTitle: {
+    fontSize: 14,
+    color: '#F8FAFC',
+    textAlign: 'right',
+    marginBottom: spacing.sm,
+    fontFamily: fontFamilies.bold,
+  },
+  tabToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  tabToggleButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  tabToggleButtonActive: {
+    backgroundColor: '#1A5276',
+  },
+  tabToggleText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontFamily: fontFamilies.regular,
+  },
+  tabToggleTextActive: {
+    color: '#F8FAFC',
   },
 });

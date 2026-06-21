@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text } from 'react-native';
 
 interface EducationContent {
   id: string;
@@ -43,13 +44,13 @@ export function EducationPage(): React.ReactElement {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+    <View className="space-y-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-800 arabic">المحتوى التعليمي</h2>
         <p className="text-gray-600 arabic mt-2">مواد تعليمية لتحسين صحتك وتغذيتك</p>
-      </div>
+      </View>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <View className="flex gap-2 overflow-x-auto pb-2">
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
@@ -63,36 +64,36 @@ export function EducationPage(): React.ReactElement {
             {CATEGORY_LABELS[cat]}
           </button>
         ))}
-      </div>
+      </View>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <View className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map((item) => (
-          <div
+          <View
             key={item.id}
             className={`bg-white border rounded-lg p-5 transition hover:shadow-lg cursor-pointer ${
               item.viewed ? 'border-gray-200' : 'border-primary-300 bg-primary-50/30'
             }`}
             onClick={() => toggleViewed(item.id)}
           >
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <span className="text-xs bg-primary-100 text-primary-800 px-2 py-1 rounded arabic">
+            <View className="flex items-start justify-between mb-2">
+              <View>
+                <Text className="text-xs bg-primary-100 text-primary-800 px-2 py-1 rounded arabic">
                   {item.categoryAr}
-                </span>
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded mr-2 arabic">
+                </Text>
+                <Text className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded mr-2 arabic">
                   {item.typeAr}
-                </span>
-              </div>
+                </Text>
+              </View>
               {!item.viewed && (
-                <span className="w-2 h-2 bg-red-500 rounded-full" title="جديد" />
+                <Text className="w-2 h-2 bg-red-500 rounded-full" title="جديد" />
               )}
-            </div>
+            </View>
             <h3 className="font-semibold text-gray-800 arabic text-lg mb-1">{item.titleAr}</h3>
             <p className="text-sm text-gray-600">{item.titleEn}</p>
             <p className="text-sm text-gray-500 arabic mt-2">{item.summaryAr}</p>
-          </div>
+          </View>
         ))}
-      </div>
-    </div>
+      </View>
+    </View>
   );
 }

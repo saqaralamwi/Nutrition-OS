@@ -8,7 +8,7 @@ export class InsulinCarbRatioEngine {
   private static readonly RULE_OF_500 = 500;
 
   public static calculateICR(totalDailyDose: number): IICRCalculationResult {
-    if (totalDailyDose <= 0 || !isFinite(totalDailyDose)) {
+    if (isNaN(totalDailyDose) || totalDailyDose <= 0 || !isFinite(totalDailyDose)) {
       return {
         icrValue: 0,
         isSafe: false,

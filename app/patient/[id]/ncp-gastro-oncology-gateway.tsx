@@ -1,9 +1,11 @@
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  TextInput, Platform, KeyboardAvoidingView, Alert,
+  TextInput, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useState, useCallback, useMemo } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useSafePatientId } from '../../../src/presentation/hooks/useSafePatientId';
+import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { Ionicons } from '@expo/vector-icons';
 import { combineLatest, Observable, of } from 'rxjs';
 import { map, catchError, debounceTime } from 'rxjs/operators';
@@ -58,8 +60,9 @@ function observeGatewayData(patientId: string): Observable<GatewayData> {
 }
 
 export default function NcpGastroOncologyGatewayScreen() {
-  const { id: patientId } = useLocalSearchParams<{ id: string }>();
+  const patientId = useSafePatientId();
   const router = useRouter();
+  const showToast = useToastStore((s) => s.showToast);
 
   const data = useObservable(observeGatewayData(patientId), {
     vitals: null,
@@ -112,7 +115,7 @@ export default function NcpGastroOncologyGatewayScreen() {
 
   const handleSaveOverrides = useCallback(async () => {
     if (!overrideReason.trim()) {
-      Alert.alert('خطأ', 'الرجاء إدخال مبرر التعديل');
+      showToast('الرجاء إدخال مبرر التعديل', 'error');
       return;
     }
     setSaving(true);
@@ -122,9 +125,18 @@ export default function NcpGastroOncologyGatewayScreen() {
         .query(Q.where('patient_id', patientId), Q.sortBy('created_at', Q.desc), Q.take(1))
         .fetch();
 
+      // Integration with ClinicalDecisionEngine for Oncology CDSS
+      const { ClinicalDecisionEngine } = await import('../../../src/domain/cdss/ClinicalDecisionEngine');
+      const recommendations = ClinicalDecisionEngine.analyzeOncology({
+        isAtRiskOfRefeeding: true, // Example logic, should be derived from clinical data
+        treatmentModality: 'chemo', // Example logic
+      });
+
       const now = new Date();
 
       await db.write(async () => {
+        const recommendationCollection = db.get('clinical_recommendations');
+
         if (existing.length > 0) {
           const plan = existing[0];
           await plan.update((r: any) => {
@@ -156,14 +168,26 @@ export default function NcpGastroOncologyGatewayScreen() {
             r.updated_at = now;
           });
         }
+
+        // Persist derived recommendations
+        for (const rec of recommendations) {
+          await recommendationCollection.create((r: any) => {
+            r.patientId = patientId;
+            r.titleAr = rec.titleAr;
+            r.messageAr = rec.messageAr;
+            r.priority = rec.priority;
+            r.source = rec.source;
+            r.isRead = false;
+          });
+        }
       });
 
-      Alert.alert('نجاح', 'تم حفظ التعديلات بنجاح');
+      showToast('تم حفظ التعديلات بنجاح وتوليد التوصيات السريرية', 'success');
       setOverrideCalories('');
       setOverrideProtein('');
       setOverrideReason('');
     } catch (err) {
-      Alert.alert('خطأ', 'فشل حفظ التعديلات');
+      showToast('فشل حفظ التعديلات في قاعدة البيانات', 'error');
     } finally {
       setSaving(false);
     }

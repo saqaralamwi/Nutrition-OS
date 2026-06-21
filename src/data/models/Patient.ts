@@ -78,14 +78,11 @@ export default class Patient extends Model {
   @field('status') status!: string;
   @field('notes') notes!: string;
   @field('incomplete_sections') incompleteSections!: string;
-  @field('name') name?: string;
   @field('name_ar') nameAr?: string;
-  @field('birth_date') birthDate?: string;
   @field('blood_type') bloodType?: string;
   @field('clinical_tags') clinicalTags?: string;
   @field('clinical_tags_ar') clinicalTagsAr?: string;
   @field('mrn') mrn?: string;
-  @field('phone_ar') phoneAr?: string;
   @field('address') address?: string;
   @field('address_ar') addressAr?: string;
   @field('occupation') occupation?: string;
@@ -95,6 +92,7 @@ export default class Patient extends Model {
   @field('marital_status') maritalStatus?: string;
   @field('religion') religion?: string;
   @field('created_by') createdBy?: string;
+  @field('is_pediatric') isPediatric?: boolean;
   @date('deleted_at') deletedAt?: Date;
 
   @children('discharge_summaries') dischargeSummaries?: DischargeSummary[];

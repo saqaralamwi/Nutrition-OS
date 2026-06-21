@@ -37,6 +37,7 @@ import { colors, spacing, safeHeaderPaddingTop, fontFamilies } from '../../../sr
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import Button from '../../../src/presentation/components/Button';
+import { HiddenWhenSandbox } from '../../../src/presentation/components/HiddenWhenSandbox';
 import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
 import { useAuthStore } from '../../../src/presentation/stores/authStore';
@@ -764,15 +765,17 @@ export default function BurnAssessmentScreen() {
             required
           />
 
-          <Button
-            title="اعتماد وحقن خطة إنعاش الحروق والهدم الأيضي"
-            onPress={handleSavePlan}
-            disabled={isCommitDisabled || !signature.trim()}
-            loading={isSaving}
-            variant={isLockoutActive ? 'danger' : 'primary'}
-            icon={<Ionicons name="pulse" size={20} color="#F8FAFC" />}
-            style={styles.commitButton}
-          />
+          <HiddenWhenSandbox>
+            <Button
+              title="اعتماد وحقن خطة إنعاش الحروق والهدم الأيضي"
+              onPress={handleSavePlan}
+              disabled={isCommitDisabled || !signature.trim()}
+              loading={isSaving}
+              variant={isLockoutActive ? 'danger' : 'primary'}
+              icon={<Ionicons name="pulse" size={20} color="#F8FAFC" />}
+              style={styles.commitButton}
+            />
+          </HiddenWhenSandbox>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

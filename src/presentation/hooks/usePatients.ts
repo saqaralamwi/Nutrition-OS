@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Patient, PatientGender, PatientStatus, PatientType } from '../../domain/entities/Patient';
 import { PatientRepository } from '../../data/repositories/PatientRepository';
 import { observePatients } from '../../data/repositories/ReactiveQuery';
@@ -56,12 +56,15 @@ function toDomain(model: PatientModel): Patient {
 export function usePatients(whereClause?: any): UsePatientsReturn {
   const [error, setError] = useState<string | null>(null);
 
-  // Memoize the observable to prevent resubscription on every render
+  // Stable reference to prevent resubscription on every render
+  const whereClauseRef = useRef(whereClause);
+  whereClauseRef.current = whereClause;
+
   const patientsObservable = useMemo(() => {
-    return observePatients(whereClause).pipe(
+    return observePatients(whereClauseRef.current).pipe(
       map((models) => models.map(toDomain))
     );
-  }, [JSON.stringify(whereClause)]);
+  }, [whereClauseRef.current]);
 
   // Subscribes to patients stream
   const patients = useObservable(patientsObservable);

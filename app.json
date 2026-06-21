@@ -25,10 +25,11 @@
       "package": "com.alumawi.clinicaladcn",
       "versionCode": 1,
       "permissions": [
-        "CAMERA",
-        "INTERNET",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -54,10 +55,13 @@
       [
         "rn-mlkit-ocr",
         {
-          "ocrModels": ["latin"],
+          "ocrModels": [
+            "latin"
+          ],
           "ocrUseBundled": true
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "router": {
@@ -65,8 +69,9 @@
         "root": "./app"
       },
       "eas": {
-        "projectId": "75cbdc8b-145f-40b3-9962-3efaa7977257"
+        "projectId": "edac1478-744d-410a-9248-75d867185297"
       }
-    }
+    },
+    "owner": "saqaralamwi1"
   }
 }

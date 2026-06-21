@@ -768,7 +768,7 @@ export default function IcuCriticalCareScreen() {
               {state.conflictResult.arabicResolutionDirectives.map((directive: string, index: number) => (
                 <View key={index} style={styles.directiveRow}>
                   <Ionicons
-                    name={state.conflictResult.requiresMultidisciplinarySignOff ? "shield-alert" : "shield-checkmark"}
+                    name={state.conflictResult.requiresMultidisciplinarySignOff ? "shield-outline" : "shield-checkmark"}
                     size={20}
                     color={state.conflictResult.requiresMultidisciplinarySignOff ? "#EF4444" : "#10B981"}
                   />

@@ -9,6 +9,7 @@ import {
   ListRenderItemInfo,
   Platform,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCallback, useState, useEffect, useMemo } from 'react';
@@ -37,6 +38,8 @@ export default function PatientListScreen() {
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [showIntakeModal, setShowIntakeModal] = useState(false);
 
   const filteredPatients = useMemo(() => {
     let result = [...patients];
@@ -537,10 +540,23 @@ export default function PatientListScreen() {
 
   const handlePatientPress = useCallback(
     (patient: Patient) => {
-      router.push(`/patient/${patient.id}`);
+      setSelectedPatient(patient);
+      setShowIntakeModal(true);
     },
-    [router]
+    []
   );
+
+  const handleInitialAssessment = useCallback(() => {
+    if (!selectedPatient) return;
+    setShowIntakeModal(false);
+    router.push(`/patient/${selectedPatient.id}`);
+  }, [selectedPatient, router]);
+
+  const handleMonitoringEvaluation = useCallback(() => {
+    if (!selectedPatient) return;
+    setShowIntakeModal(false);
+    router.push(`/patient/${selectedPatient.id}/monitoring`);
+  }, [selectedPatient, router]);
 
   const handleDeletePress = useCallback(
     (id: string, name: string) => {
@@ -726,6 +742,64 @@ export default function PatientListScreen() {
         }
       />
 
+      <Modal
+        visible={showIntakeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowIntakeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectedPatient?.fullName || ''}
+              </Text>
+              <Text style={styles.modalSubtitle}>
+                {selectedPatient?.fileNumber || ''}
+              </Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowIntakeModal(false)}
+              >
+                <Ionicons name="close" size={24} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalOptions}>
+              <TouchableOpacity
+                style={styles.modalOptionCard}
+                onPress={handleInitialAssessment}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.modalOptionIcon, { backgroundColor: '#3B82F6' + '20' }]}>
+                  <Ionicons name="clipboard-outline" size={28} color="#3B82F6" />
+                </View>
+                <View style={styles.modalOptionTextCol}>
+                  <Text style={styles.modalOptionTitle}>تقييم وتشخيص مبدئي</Text>
+                  <Text style={styles.modalOptionDesc}>Initial Assessment</Text>
+                </View>
+                <Ionicons name="chevron-back" size={20} color="#64748B" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalOptionCard}
+                onPress={handleMonitoringEvaluation}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.modalOptionIcon, { backgroundColor: '#10B981' + '20' }]}>
+                  <Ionicons name="pulse-outline" size={28} color="#10B981" />
+                </View>
+                <View style={styles.modalOptionTextCol}>
+                  <Text style={styles.modalOptionTitle}>المتابعة والتقييم</Text>
+                  <Text style={styles.modalOptionDesc}>Monitoring & Evaluation</Text>
+                </View>
+                <Ionicons name="chevron-back" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push('/patient/new')}
@@ -733,6 +807,18 @@ export default function PatientListScreen() {
         accessibilityLabel="إضافة مريض جديد"
       >
         <Ionicons name="add" size={28} color={colors.primaryContrast} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.sandboxFab}
+        onPress={() => router.push('/patient/sandbox')}
+        activeOpacity={0.8}
+        accessibilityLabel="الاستكشاف السريري"
+      >
+        <View style={styles.sandboxFabInner}>
+          <Ionicons name="flask-outline" size={22} color="#fff" />
+          <Text style={styles.sandboxFabText}>الاستكشاف السريري</Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -890,6 +976,82 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'ThmanyahSans-Medium',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    padding: spacing.md,
+  },
+  modalContainer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'ThmanyahSans-Bold',
+    color: '#F8FAFC',
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    fontFamily: 'ThmanyahSans-Medium',
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    start: spacing.md,
+    padding: spacing.xs,
+    zIndex: 1,
+  },
+  modalOptions: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  modalOptionCard: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  modalOptionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOptionTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  modalOptionTitle: {
+    fontSize: 16,
+    fontFamily: 'ThmanyahSans-Bold',
+    color: '#F8FAFC',
+    textAlign: 'right',
+  },
+  modalOptionDesc: {
+    fontSize: 12,
+    fontFamily: 'ThmanyahSans-Regular',
+    color: '#64748B',
+    textAlign: 'right',
+  },
   fab: {
     position: 'absolute',
     bottom: 24,
@@ -902,5 +1064,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 6,
     boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+  },
+  sandboxFab: {
+    position: 'absolute',
+    bottom: 24,
+    end: 24,
+    backgroundColor: '#7C3AED',
+    borderRadius: 28,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg,
+    elevation: 8,
+    boxShadow: '0 4px 12px rgba(124,58,237,0.5)',
+    borderWidth: 1,
+    borderColor: '#A78BFA',
+  },
+  sandboxFabInner: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sandboxFabText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'ThmanyahSans-Bold',
   },
 });

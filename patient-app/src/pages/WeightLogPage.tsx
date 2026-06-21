@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text } from 'react-native';
 
 interface WeightLogItem {
   id: string;
@@ -58,17 +59,17 @@ export function WeightLogPage(): React.ReactElement {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+    <View className="space-y-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-800 arabic">الوزن</h2>
         <p className="text-gray-600 arabic mt-2">تسجيل ومتابعة الوزن ومؤشر كتلة الجسم</p>
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">تسجيل وزن جديد</h3>
 
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
+        <View className="grid grid-cols-2 gap-4 mb-6">
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">الوزن (كغم)</label>
             <input
               type="number"
@@ -79,8 +80,8 @@ export function WeightLogPage(): React.ReactElement {
               max="300"
               step="0.1"
             />
-          </div>
-          <div>
+          </View>
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">الطول (سم)</label>
             <input
               type="number"
@@ -90,18 +91,18 @@ export function WeightLogPage(): React.ReactElement {
               min="50"
               max="250"
             />
-          </div>
-        </div>
+          </View>
+        </View>
 
-        <div className="bg-primary-50 rounded-lg p-4 mb-4 text-center">
-          <div className="text-5xl font-bold text-primary-700" style={{ direction: 'ltr' }}>
+        <View className="bg-primary-50 rounded-lg p-4 mb-4 text-center">
+          <View className="text-5xl font-bold text-primary-700" style={{ direction: 'ltr' }}>
             {bmi}
-          </div>
-          <div className={`text-lg font-semibold ${category.color} arabic mt-1`}>{category.label}</div>
-          <div className="text-sm text-gray-600 arabic mt-1">مؤشر كتلة الجسم (BMI)</div>
-        </div>
+          </View>
+          <View className={`text-lg font-semibold ${category.color} arabic mt-1`}>{category.label}</View>
+          <View className="text-sm text-gray-600 arabic mt-1">مؤشر كتلة الجسم (BMI)</View>
+        </View>
 
-        <div className="mb-4">
+        <View className="mb-4">
           <label className="block text-sm font-medium text-gray-700 arabic mb-2">ملاحظات</label>
           <textarea
             value={notes}
@@ -110,7 +111,7 @@ export function WeightLogPage(): React.ReactElement {
             rows={2}
             placeholder="أي ملاحظات..."
           />
-        </div>
+        </View>
 
         <button
           onClick={saveLog}
@@ -118,33 +119,33 @@ export function WeightLogPage(): React.ReactElement {
         >
           حفظ الوزن
         </button>
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">سجل الوزن</h3>
         {logs.length === 0 ? (
-          <div className="text-center text-gray-500 arabic py-8">لا توجد قراءات مسجلة</div>
+          <View className="text-center text-gray-500 arabic py-8">لا توجد قراءات مسجلة</View>
         ) : (
-          <div className="space-y-3">
+          <View className="space-y-3">
             {logs.map((log) => (
-              <div key={log.id} className="border border-gray-200 rounded-lg p-4 flex items-center justify-between">
-                <div>
-                  <div className="text-xl font-bold text-gray-800" style={{ direction: 'ltr' }}>
-                    {log.weight} <span className="text-sm font-normal text-gray-500">كغم</span>
-                  </div>
-                  <div className="text-sm text-gray-500 arabic">
+              <View key={log.id} className="border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+                <View>
+                  <View className="text-xl font-bold text-gray-800" style={{ direction: 'ltr' }}>
+                    {log.weight} <Text className="text-sm font-normal text-gray-500">كغم</Text>
+                  </View>
+                  <View className="text-sm text-gray-500 arabic">
                     BMI: {log.bmi} - {getBmiCategory(log.bmi).label}
-                  </div>
-                </div>
-                <div className="text-left text-sm text-gray-500">
-                  <div>{formatDate(log.logDate)}</div>
-                  <div>{formatTime(log.logDate)}</div>
-                </div>
-              </div>
+                  </View>
+                </View>
+                <View className="text-left text-sm text-gray-500">
+                  <View>{formatDate(log.logDate)}</View>
+                  <View>{formatTime(log.logDate)}</View>
+                </View>
+              </View>
             ))}
-          </div>
+          </View>
         )}
-      </div>
-    </div>
+      </View>
+    </View>
   );
 }

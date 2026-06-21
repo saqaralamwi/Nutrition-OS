@@ -11,6 +11,7 @@ export interface SocialHistoryRecord {
   cigarettesPerDay?: number;
   yearsSmoked?: number;
   alcoholSubstanceUse: string;
+  khatChewing?: string;
   physicalActivity: string;
   activityDescription?: string;
   dietaryHistory?: string;

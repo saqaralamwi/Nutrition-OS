@@ -11,6 +11,7 @@ export interface SocialHistory {
   cigarettesPerDay: number | null;
   yearsSmoked: number | null;
   alcoholSubstanceUse: string;
+  khatChewing: string | null;
   physicalActivity: string;
   activityDescription: string | null;
   dietaryHistory: string | null;

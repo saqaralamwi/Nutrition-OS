@@ -89,7 +89,7 @@ vi.mock('@nozbe/watermelondb/adapters/lokijs', async (importOriginal) => {
 import { describe, test, expect, beforeEach } from 'vitest';
 import { getDatabase, resetDatabase } from '../../database';
 import { Q } from '@nozbe/watermelondb';
-import CalculationModel from '../models/Calculation';
+import CalculationModel from '../../models/Calculation';
 import {
   CalculationRepository,
   createCalculation,

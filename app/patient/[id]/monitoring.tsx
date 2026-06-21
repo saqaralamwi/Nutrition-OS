@@ -534,7 +534,7 @@ export default function MonitoringScreen() {
                 const hasMetabolic = record.bloodGlucose !== undefined || record.hba1c !== undefined;
 
                 return (
-                  <View key={record.id} style={styles.labCard}>
+                  <View key={`lab-${record.id}`} style={styles.labCard}>
                     <View style={styles.labCardHeader}>
                       <View style={styles.labHeaderInfo}>
                         <Ionicons name="flask" size={16} color={colors.primary} />
@@ -1354,3 +1354,4 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
+;

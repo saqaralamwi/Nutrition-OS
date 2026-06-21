@@ -23,6 +23,7 @@ export interface MedicationRecord {
   notesAr?: string;
   hiddenCalories?: number;
 
+  recordedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }

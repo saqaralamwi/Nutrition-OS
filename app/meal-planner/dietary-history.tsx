@@ -36,33 +36,60 @@ export default function DietaryHistoryRoute() {
     );
   }
 
-  const handleSaveAndPlan = async () => {
-    // Session data committed to DB in DietaryHistoryAssessment via onSaveSession
-    // Then navigate to intervention planner
-    router.push(`/meal-planner/smart-planner?patientId=${patientId}`);
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
           title: 'تقييم التاريخ التغذوي (24h Recall)',
-          headerRight: () => (
-            <Text
-              style={styles.headerNavLink}
-              onPress={handleSaveAndPlan}
-            >
-              التخطيط الذكي ←
-            </Text>
-          ),
         }}
       />
       <DietaryHistoryAssessment
         patientId={patientId}
         masterFoods={masterFoods}
-        targets={{ calories: 0, protein: 0, carbs: 0, fat: 0, fluidMl: 0 }}
-        onSaveSession={async () => {
-          // DB commit handled externally
+        targets={{ calories: 2000, protein: 75, carbs: 250, fat: 65, fluidMl: 2000 }}
+        onSaveSession={async (session, items) => {
+          try {
+            const { getDatabase } = await import('../../src/data/database');
+            const db = await getDatabase();
+            await db.write(async () => {
+              const sessionRecord = await db.get('patient_dietary_history_sessions').create((r: any) => {
+                r.patientId = session.patientId || patientId;
+                r.interviewDate = session.interviewDate || Date.now();
+                r.dayType = session.dayType;
+                r.reliabilityScore = session.reliabilityScore;
+                r.totalComputedCalories = session.totalComputedCalories;
+                r.totalComputedProtein = session.totalComputedProtein;
+                r.totalFluidIntakeMl = session.totalFluidIntakeMl;
+                r.recordedAt = new Date(session.recordedAt || Date.now());
+              });
+
+              for (const item of items) {
+                await db.get('patient_dietary_history_items').create((r: any) => {
+                  r.sessionId = sessionRecord.id;
+                  r.mealSlotType = item.mealSlotType;
+                  r.consumptionTime = item.consumptionTime;
+                  r.foodExchangeId = item.foodExchangeId;
+                  r.customReportedName = item.customReportedName;
+                  r.servingUnitUsed = item.servingUnitUsed;
+                  r.servingsConsumed = item.servingsConsumed;
+                  r.derivedFluidMl = item.derivedFluidMl;
+                  r.derivedCalories = item.derivedCalories;
+                  r.derivedProtein = item.derivedProtein;
+                  r.derivedCarbs = item.derivedCarbs;
+                  r.derivedFat = item.derivedFat;
+                });
+              }
+            });
+
+            const { useToastStore } = await import('../../src/presentation/stores/toastStore');
+            useToastStore.getState().showToast('تم حفظ جلسة التاريخ التغذوي بنجاح', 'success');
+
+            router.push(`/meal-planner/smart-planner?patientId=${patientId}`);
+          } catch (err) {
+            console.error('Failed to save session data:', err);
+            const { useToastStore } = await import('../../src/presentation/stores/toastStore');
+            useToastStore.getState().showToast('حدث خطأ أثناء حفظ الجلسة في قاعدة البيانات', 'error');
+          }
         }}
       />
     </SafeAreaView>

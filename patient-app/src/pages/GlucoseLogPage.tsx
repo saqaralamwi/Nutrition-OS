@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text } from 'react-native';
 
 interface GlucoseLogItem {
   id: string;
@@ -66,20 +67,20 @@ export function GlucoseLogPage(): React.ReactElement {
   const level = getLevel(value, measurementType);
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+    <View className="space-y-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-800 arabic">سكر الدم</h2>
         <p className="text-gray-600 arabic mt-2">تسجيل قراءات سكر الدم اليومية</p>
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">تسجيل قراءة جديدة</h3>
 
-        <div className="mb-6 text-center">
-          <div className="text-6xl font-bold arabic mb-2" style={{ direction: 'ltr' }}>
+        <View className="mb-6 text-center">
+          <View className="text-6xl font-bold arabic mb-2" style={{ direction: 'ltr' }}>
             {value}
-            <span className="text-2xl text-gray-500 mr-2">mg/dL</span>
-          </div>
+            <Text className="text-2xl text-gray-500 mr-2">mg/dL</Text>
+          </View>
           <input
             type="range"
             value={value}
@@ -88,11 +89,11 @@ export function GlucoseLogPage(): React.ReactElement {
             max="400"
             className="w-full h-2 bg-primary-100 rounded-lg appearance-none cursor-pointer accent-primary-600"
           />
-          <div className={`text-lg font-semibold ${level.color} arabic mt-2`}>{level.label}</div>
-        </div>
+          <View className={`text-lg font-semibold ${level.color} arabic mt-2`}>{level.label}</View>
+        </View>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
+        <View className="grid grid-cols-2 gap-4 mb-4">
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">نوع القياس</label>
             <select
               value={measurementType}
@@ -103,8 +104,8 @@ export function GlucoseLogPage(): React.ReactElement {
                 <option key={t.value} value={t.value}>{t.labelAr}</option>
               ))}
             </select>
-          </div>
-          <div>
+          </View>
+          <View>
             <label className="block text-sm font-medium text-gray-700 arabic mb-2">قبل/بعد الوجبة</label>
             <select
               value={beforeMeal ? 'before' : 'after'}
@@ -114,10 +115,10 @@ export function GlucoseLogPage(): React.ReactElement {
               <option value="before">قبل الوجبة</option>
               <option value="after">بعد الوجبة</option>
             </select>
-          </div>
-        </div>
+          </View>
+        </View>
 
-        <div className="mb-4">
+        <View className="mb-4">
           <label className="block text-sm font-medium text-gray-700 arabic mb-2">ملاحظات</label>
           <textarea
             value={notes}
@@ -126,7 +127,7 @@ export function GlucoseLogPage(): React.ReactElement {
             rows={2}
             placeholder="أي ملاحظات إضافية..."
           />
-        </div>
+        </View>
 
         <button
           onClick={saveLog}
@@ -134,38 +135,38 @@ export function GlucoseLogPage(): React.ReactElement {
         >
           حفظ القراءة
         </button>
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">القراءات السابقة</h3>
         {logs.length === 0 ? (
-          <div className="text-center text-gray-500 arabic py-8">لا توجد قراءات مسجلة</div>
+          <View className="text-center text-gray-500 arabic py-8">لا توجد قراءات مسجلة</View>
         ) : (
-          <div className="space-y-3">
+          <View className="space-y-3">
             {logs.map((log) => {
               const lvl = getLevel(log.value, log.measurementType);
               return (
-                <div key={log.id} className="border border-gray-200 rounded-lg p-4 flex items-center justify-between">
-                  <div>
-                    <div className={`text-xl font-bold ${lvl.color}`} style={{ direction: 'ltr' }}>
-                      {log.value} <span className="text-sm">mg/dL</span>
-                    </div>
-                    <div className="text-sm text-gray-600 arabic mt-1">
+                <View key={log.id} className="border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+                  <View>
+                    <View className={`text-xl font-bold ${lvl.color}`} style={{ direction: 'ltr' }}>
+                      {log.value} <Text className="text-sm">mg/dL</Text>
+                    </View>
+                    <View className="text-sm text-gray-600 arabic mt-1">
                       {log.measurementTypeAr} - {log.beforeMeal ? 'قبل الأكل' : 'بعد الأكل'}
-                    </div>
-                  </div>
-                  <div className="text-left text-sm text-gray-500">
-                    <div>{formatTime(log.logDate)}</div>
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${lvl.color} bg-gray-100`}>
+                    </View>
+                  </View>
+                  <View className="text-left text-sm text-gray-500">
+                    <View>{formatTime(log.logDate)}</View>
+                    <Text className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${lvl.color} bg-gray-100`}>
                       {lvl.label}
-                    </span>
-                  </div>
-                </div>
+                    </Text>
+                  </View>
+                </View>
               );
             })}
-          </div>
+          </View>
         )}
-      </div>
-    </div>
+      </View>
+    </View>
   );
 }

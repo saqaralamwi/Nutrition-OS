@@ -28,7 +28,7 @@ export class ParenteralNutritionEngine {
   public static calculateParenteralFeed(input: IParenteralInput): IParenteralOutput {
     const { targetCalories, targetProteinGrams, totalFluidLimitMl, routeType } = input;
 
-    if (targetCalories <= 0 || targetProteinGrams <= 0 || totalFluidLimitMl <= 0) {
+    if (isNaN(targetCalories) || isNaN(targetProteinGrams) || isNaN(totalFluidLimitMl) || targetCalories <= 0 || targetProteinGrams <= 0 || totalFluidLimitMl <= 0) {
       return ParenteralNutritionEngine.safeFallback(['الرجاء التحقق من المدخلات؛ القيم يجب أن تكون أكبر من الصفر']);
     }
 

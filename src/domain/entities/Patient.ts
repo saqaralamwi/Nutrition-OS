@@ -22,6 +22,17 @@ export interface Patient {
   status: PatientStatus;
   notes: string | null;
   incompleteSections?: string[] | null;
+  nameAr?: string | null;
+  mrn?: string | null;
+  bloodType?: string | null;
+  clinicalTags?: string | null;
+  clinicalTagsAr?: string | null;
+  address?: string | null;
+  addressAr?: string | null;
+  occupation?: string | null;
+  education?: string | null;
+  religion?: string | null;
+  isPediatric?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,4 +55,17 @@ export interface CreatePatientInput {
   notes?: string | null;
   status?: PatientStatus;
   incompleteSections?: string[] | null;
+  nameAr?: string | null;
+  mrn?: string | null;
+  bloodType?: string | null;
+  clinicalTags?: string | null;
+  clinicalTagsAr?: string | null;
+  address?: string | null;
+  addressAr?: string | null;
+  occupation?: string | null;
+  education?: string | null;
+  religion?: string | null;
+  weightKg?: number;
+  heightCm?: number;
+  isPediatric?: boolean;
 }

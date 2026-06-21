@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 
 const getPinKey = (profileId: string) => `clinical_nutrition_pin_${profileId}`;
@@ -12,8 +13,11 @@ interface SecurityState {
   biometricsEnabled: boolean;
   isBiometricsSupported: boolean;
   lastActiveTime: number;
+  isLoading: boolean;
+  error: string | null;
 
   initSecurity: (profileId: string) => Promise<void>;
+  hashPin: (pin: string) => Promise<string>;
   setPIN: (profileId: string, pin: string) => Promise<void>;
   verifyPIN: (profileId: string, pin: string) => Promise<boolean>;
   enableBiometrics: (profileId: string, enabled: boolean) => Promise<void>;
@@ -30,8 +34,11 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   biometricsEnabled: false,
   isBiometricsSupported: false,
   lastActiveTime: Date.now(),
+  isLoading: false,
+  error: null,
 
   initSecurity: async (profileId: string) => {
+    set({ isLoading: true, error: null });
     try {
       const pinKey = getPinKey(profileId);
       const bioKey = getBiometricKey(profileId);
@@ -65,33 +72,50 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         hasPIN: pinExists,
         biometricsEnabled: bioEnabled,
         isBiometricsSupported: hasHardware && isEnrolled,
-        isLocked: pinExists, // Automatically lock if PIN exists
+        isLocked: pinExists,
+        isLoading: false,
       });
     } catch (e) {
       console.error('Security initialization failed:', e);
+      set({ isLoading: false, error: e instanceof Error ? e.message : 'Security initialization failed' });
     }
   },
 
+  hashPin: async (pin: string): Promise<string> => {
+    return await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      pin
+    );
+  },
+
   setPIN: async (profileId: string, pin: string) => {
-    const pinKey = getPinKey(profileId);
-    if (Platform.OS === 'web') {
-      localStorage.setItem(pinKey, pin);
-    } else {
-      await SecureStore.setItemAsync(pinKey, pin);
+    set({ isLoading: true, error: null });
+    try {
+      const pinKey = getPinKey(profileId);
+      const hashed = await get().hashPin(pin);
+      if (Platform.OS === 'web') {
+        localStorage.setItem(pinKey, hashed);
+      } else {
+        await SecureStore.setItemAsync(pinKey, hashed);
+      }
+      set({ hasPIN: true, isLocked: false, isLoading: false });
+    } catch (e) {
+      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to set PIN' });
     }
-    set({ hasPIN: true, isLocked: false });
   },
 
   verifyPIN: async (profileId: string, pin: string) => {
     const pinKey = getPinKey(profileId);
-    let storedPin: string | null = null;
+    let storedHash: string | null = null;
     if (Platform.OS === 'web') {
-      storedPin = localStorage.getItem(pinKey);
+      storedHash = localStorage.getItem(pinKey);
     } else {
-      storedPin = await SecureStore.getItemAsync(pinKey);
+      storedHash = await SecureStore.getItemAsync(pinKey);
     }
-    
-    if (storedPin === pin) {
+    if (!storedHash) return false;
+
+    const inputHash = await get().hashPin(pin);
+    if (storedHash === inputHash) {
       set({ isLocked: false });
       return true;
     }
@@ -99,13 +123,18 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   },
 
   enableBiometrics: async (profileId: string, enabled: boolean) => {
-    const bioKey = getBiometricKey(profileId);
-    if (Platform.OS === 'web') {
-      localStorage.setItem(bioKey, String(enabled));
-    } else {
-      await SecureStore.setItemAsync(bioKey, String(enabled));
+    set({ isLoading: true, error: null });
+    try {
+      const bioKey = getBiometricKey(profileId);
+      if (Platform.OS === 'web') {
+        localStorage.setItem(bioKey, String(enabled));
+      } else {
+        await SecureStore.setItemAsync(bioKey, String(enabled));
+      }
+      set({ biometricsEnabled: enabled, isLoading: false });
+    } catch (e) {
+      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to update biometrics' });
     }
-    set({ biometricsEnabled: enabled });
   },
 
   authenticateBiometrics: async (profileId: string) => {
@@ -145,16 +174,21 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   },
 
   clearSecurity: async (profileId: string) => {
-    const pinKey = getPinKey(profileId);
-    const bioKey = getBiometricKey(profileId);
+    set({ isLoading: true, error: null });
+    try {
+      const pinKey = getPinKey(profileId);
+      const bioKey = getBiometricKey(profileId);
 
-    if (Platform.OS === 'web') {
-      localStorage.removeItem(pinKey);
-      localStorage.removeItem(bioKey);
-    } else {
-      await SecureStore.deleteItemAsync(pinKey);
-      await SecureStore.deleteItemAsync(bioKey);
+      if (Platform.OS === 'web') {
+        localStorage.removeItem(pinKey);
+        localStorage.removeItem(bioKey);
+      } else {
+        await SecureStore.deleteItemAsync(pinKey);
+        await SecureStore.deleteItemAsync(bioKey);
+      }
+      set({ hasPIN: false, biometricsEnabled: false, isLocked: false, isLoading: false });
+    } catch (e) {
+      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to clear security' });
     }
-    set({ hasPIN: false, biometricsEnabled: false, isLocked: false });
   },
 }));

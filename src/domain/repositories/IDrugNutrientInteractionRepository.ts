@@ -2,8 +2,10 @@ export interface DrugNutrientInteractionRecord {
   id?: string;
   activeIngredient: string;
   clinicalSeverity: string;
-  mechanismDescription?: string;
-  dietaryActionRequired?: string;
+  mechanismAr?: string;
+  mechanismEn?: string;
+  dietaryActionAr?: string;
+  dietaryActionEn?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -1,6 +1,16 @@
 import { Model } from '@nozbe/watermelondb';
 import { field, date, readonly } from '@nozbe/watermelondb/decorators';
 
+export interface IClinicalNotes {
+  benefits: string[];
+  contraindications: string[];
+  servingRecommendation: {
+    condition: string;
+    amount: string;
+    note?: string;
+  }[];
+}
+
 export default class Food extends Model {
   static table = 'foods';
 
@@ -78,7 +88,17 @@ export default class Food extends Model {
   @field('source') source?: string;
   @field('version') version?: number;
   @field('created_by') createdBy?: string;
+  @field('clinical_notes') clinicalNotes?: string;
 
   @readonly @date('created_at') createdAt!: Date;
   @readonly @date('updated_at') updatedAt!: Date;
+
+  get parsedClinicalNotes(): IClinicalNotes | null {
+    if (!this.clinicalNotes) return null;
+    try {
+      return JSON.parse(this.clinicalNotes) as IClinicalNotes;
+    } catch {
+      return null;
+    }
+  }
 }

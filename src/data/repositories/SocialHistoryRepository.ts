@@ -17,6 +17,7 @@ function toRecord(model: SocialHistoryModel): SocialHistoryRecord {
     cigarettesPerDay: model.cigarettesPerDay ?? undefined,
     yearsSmoked: model.yearsSmoked ?? undefined,
     alcoholSubstanceUse: model.alcoholSubstanceUse,
+    khatChewing: model.khatChewing || undefined,
     physicalActivity: model.physicalActivity,
     activityDescription: model.activityDescription || undefined,
     dietaryHistory: model.dietaryHistory || undefined,
@@ -57,6 +58,7 @@ export class SocialHistoryRepository implements ISocialHistoryRepository {
           r.cigarettesPerDay = record.cigarettesPerDay ?? 0;
           r.yearsSmoked = record.yearsSmoked ?? 0;
           r.alcoholSubstanceUse = record.alcoholSubstanceUse;
+          r.khatChewing = record.khatChewing ?? '';
           r.physicalActivity = record.physicalActivity;
           r.activityDescription = record.activityDescription ?? '';
           r.dietaryHistory = record.dietaryHistory ?? '';
@@ -82,6 +84,7 @@ export class SocialHistoryRepository implements ISocialHistoryRepository {
         r.cigarettesPerDay = record.cigarettesPerDay ?? 0;
         r.yearsSmoked = record.yearsSmoked ?? 0;
         r.alcoholSubstanceUse = record.alcoholSubstanceUse;
+        r.khatChewing = record.khatChewing ?? '';
         r.physicalActivity = record.physicalActivity;
         r.activityDescription = record.activityDescription ?? '';
         r.dietaryHistory = record.dietaryHistory ?? '';

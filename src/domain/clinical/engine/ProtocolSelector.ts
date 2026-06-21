@@ -1,4 +1,4 @@
-import { Patient } from '../../../entities/Patient';
+import { Patient } from '../../entities/Patient';
 import { ClinicalProtocol, PatientCategory } from '../types';
 import { ProtocolRegistry } from '../protocols/ProtocolRegistry';
 

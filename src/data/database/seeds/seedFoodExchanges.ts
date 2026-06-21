@@ -240,7 +240,7 @@ const ALL_FOODS: FoodExchangeSeed[] = [
   ...COMPOSITE_DISHES,
 ];
 
-function prepareFoodRecord(collection: Collection, food: FoodExchangeSeed): any {
+function prepareFoodRecord(collection: Collection<any>, food: FoodExchangeSeed): any {
   return collection.prepareCreate((record: any) => {
     record._raw.exchange_group = food.exchangeGroup;
     record._raw.food_name_ar = food.foodNameAr;

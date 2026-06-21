@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text } from 'react-native';
 import { SearchInput } from '../components/SearchInput';
 import { FoodCard } from '../components/FoodCard';
 
@@ -83,13 +84,13 @@ export function FoodLogPage(): React.ReactElement {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+    <View className="space-y-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-800 arabic">سجل الطعام</h2>
         <p className="text-gray-600 arabic mt-2">تسجيل الطعام اليومي مع حساب السعرات والمكونات</p>
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">إضافة طعام</h3>
 
         <SearchInput
@@ -100,7 +101,7 @@ export function FoodLogPage(): React.ReactElement {
         />
 
         {searchedFoods.length > 0 && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <View className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {searchedFoods.slice(0, 6).map((food) => (
               <FoodCard
                 key={food.id}
@@ -109,12 +110,12 @@ export function FoodLogPage(): React.ReactElement {
                 onSelect={() => setSelectedFood(food)}
               />
             ))}
-          </div>
+          </View>
         )}
 
         {selectedFood && (
-          <div className="mt-6 space-y-4">
-            <div>
+          <View className="mt-6 space-y-4">
+            <View>
               <label className="block text-sm font-medium text-gray-700 arabic mb-2">
                 الكمية: {amount} غم
               </label>
@@ -126,9 +127,9 @@ export function FoodLogPage(): React.ReactElement {
                 max="1000"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
+            </View>
 
-            <div>
+            <View>
               <label className="block text-sm font-medium text-gray-700 arabic mb-2">نوع الوجبة</label>
               <select
                 value={mealType}
@@ -140,29 +141,29 @@ export function FoodLogPage(): React.ReactElement {
                 <option value="dinner">عشاء</option>
                 <option value="snack">وجبة خفيفة</option>
               </select>
-            </div>
+            </View>
 
-            <div className="bg-primary-50 rounded-lg p-4">
+            <View className="bg-primary-50 rounded-lg p-4">
               <h4 className="font-semibold text-gray-800 arabic mb-2">المكونات الغذائية</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                <div>
-                  <span className="text-gray-600">سعرات: </span>
-                  <span className="font-semibold text-primary-700">{caloriesForAmount.toFixed(1)} kcal</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">بروتين: </span>
-                  <span className="font-semibold text-primary-700">{((selectedFood.protein * amount) / 100).toFixed(1)} غم</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">كربوهيدرات: </span>
-                  <span className="font-semibold text-primary-700">{((selectedFood.carbs * amount) / 100).toFixed(1)} غم</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">دهون: </span>
-                  <span className="font-semibold text-primary-700">{((selectedFood.fat * amount) / 100).toFixed(1)} غم</span>
-                </div>
-              </div>
-            </div>
+              <View className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                <View>
+                  <Text className="text-gray-600">سعرات: </Text>
+                  <Text className="font-semibold text-primary-700">{caloriesForAmount.toFixed(1)} kcal</Text>
+                </View>
+                <View>
+                  <Text className="text-gray-600">بروتين: </Text>
+                  <Text className="font-semibold text-primary-700">{((selectedFood.protein * amount) / 100).toFixed(1)} غم</Text>
+                </View>
+                <View>
+                  <Text className="text-gray-600">كربوهيدرات: </Text>
+                  <Text className="font-semibold text-primary-700">{((selectedFood.carbs * amount) / 100).toFixed(1)} غم</Text>
+                </View>
+                <View>
+                  <Text className="text-gray-600">دهون: </Text>
+                  <Text className="font-semibold text-primary-700">{((selectedFood.fat * amount) / 100).toFixed(1)} غم</Text>
+                </View>
+              </View>
+            </View>
 
             <button
               onClick={saveFoodLog}
@@ -170,38 +171,38 @@ export function FoodLogPage(): React.ReactElement {
             >
               حفظ في السجل
             </button>
-          </div>
+          </View>
         )}
-      </div>
+      </View>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <View className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-semibold text-gray-800 arabic mb-4">سجل الطعام اليومي</h3>
 
         {logs.length === 0 ? (
-          <div className="text-center text-gray-500 arabic py-8">لا يوجد طعام مسجل اليوم</div>
+          <View className="text-center text-gray-500 arabic py-8">لا يوجد طعام مسجل اليوم</View>
         ) : (
-          <div className="space-y-4">
+          <View className="space-y-4">
             {logs.map((log) => (
-              <div key={log.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
+              <View key={log.id} className="border border-gray-200 rounded-lg p-4">
+                <View className="flex items-center justify-between">
+                  <View>
                     <h4 className="font-semibold text-gray-800 arabic">{log.food_name_ar}</h4>
                     <p className="text-sm text-gray-600">{log.food_name_en}</p>
-                  </div>
-                  <div className="text-right">
+                  </View>
+                  <View className="text-right">
                     <p className="font-semibold text-primary-700">{log.calories.toFixed(1)} kcal</p>
                     <p className="text-sm text-gray-600">{log.amount} {log.unit_ar}</p>
-                  </div>
-                </div>
-                <div className="mt-2 text-sm text-gray-600">
-                  <span className="bg-primary-100 px-2 py-1 rounded arabic">{log.meal_type_ar}</span>
-                  <span className="ml-2">{new Date(log.log_date).toLocaleTimeString('ar-YE')}</span>
-                </div>
-              </div>
+                  </View>
+                </View>
+                <View className="mt-2 text-sm text-gray-600">
+                  <Text className="bg-primary-100 px-2 py-1 rounded arabic">{log.meal_type_ar}</Text>
+                  <Text className="ml-2">{new Date(log.log_date).toLocaleTimeString('ar-YE')}</Text>
+                </View>
+              </View>
             ))}
-          </div>
+          </View>
         )}
-      </div>
-    </div>
+      </View>
+    </View>
   );
 }

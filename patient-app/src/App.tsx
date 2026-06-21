@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { View } from 'react-native';
 import { Navigation } from './components/Navigation';
 import { FoodLogPage } from './pages/FoodLogPage';
 import { GlucoseLogPage } from './pages/GlucoseLogPage';
@@ -11,7 +12,7 @@ import { ProfilePage } from './pages/ProfilePage';
 
 export function App(): React.ReactElement {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <View className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="container mx-auto px-4 py-6">
         <Routes>
@@ -25,6 +26,6 @@ export function App(): React.ReactElement {
           <Route path="/profile" element={<ProfilePage />} />
         </Routes>
       </main>
-    </div>
+    </View>
   );
 }

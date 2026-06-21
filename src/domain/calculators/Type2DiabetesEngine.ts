@@ -28,7 +28,7 @@ const FAT_KCAL_PER_G = 9;
 
 export class Type2DiabetesEngine {
   public static calculateType2Requirements(input: IType2DietInput): IType2DietOutput {
-    if (input.baselineREE <= 0 || input.weightKg <= 0 || input.activityFactor < 1.0) {
+    if (isNaN(input.baselineREE) || isNaN(input.weightKg) || isNaN(input.activityFactor) || input.baselineREE <= 0 || input.weightKg <= 0 || input.activityFactor < 1.0) {
       return {
         totalEnergyExpenditure: 0,
         targetCalories: 0,

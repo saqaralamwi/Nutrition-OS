@@ -7,22 +7,24 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
+
 import { colors, spacing, safeHeaderPaddingTop } from '../../../src/presentation/theme';
 import ArabicText from '../../../src/presentation/components/ArabicText';
 import TextInputField from '../../../src/presentation/components/TextInputField';
 import DropdownField from '../../../src/presentation/components/DropdownField';
 import Button from '../../../src/presentation/components/Button';
 import TripleActionFooter from '../../../src/presentation/components/TripleActionFooter';
-import { usePatientStore } from '../../../src/presentation/stores/patientStore';
 import { useToastStore } from '../../../src/presentation/stores/toastStore';
+import { useSafePatientId } from '../../../src/presentation/hooks/useSafePatientId';
 import NutritionTemplateSelector from '../../../src/presentation/components/NutritionTemplateSelector';
 import type { NutritionTemplate } from '../../../src/domain/entities/NutritionTemplate';
+import { useClinicalSequence, ClinicalStep } from '../../../src/presentation/hooks/useClinicalSequence';
 
 const NUTRITION_DIAGNOSIS_OPTIONS = [
   { label: 'سوء التغذية', value: 'malnutrition' },
@@ -119,16 +121,17 @@ const interventionSchema = z.object({
 type InterventionFormData = z.infer<typeof interventionSchema>;
 
 export default function InterventionScreen() {
-  const { id: patientId } = useLocalSearchParams<{ id: string }>();
+  const patientId = useSafePatientId();
   const router = useRouter();
   const showToast = useToastStore((s) => s.showToast);
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [assessmentComplete, setAssessmentComplete] = useState(false);
-  const [missingModules, setMissingModules] = useState<string[]>([]);
   const [existingId, setExistingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Consume Strict Clinical Sequence Hook
+  const sequence = useClinicalSequence(patientId);
 
   const {
     handleSubmit,
@@ -161,30 +164,19 @@ export default function InterventionScreen() {
   });
 
   useEffect(() => {
-    loadData();
+    setIsDataLoaded(false);
   }, [patientId]);
 
-  async function loadData() {
+  useEffect(() => {
+    if (!sequence.isLoading && sequence.isComplete && !isDataLoaded) {
+      loadInterventionData();
+    }
+  }, [sequence.isLoading, sequence.isComplete, isDataLoaded]);
+
+  async function loadInterventionData() {
     try {
-      setIsLoading(true);
-
-      const [assessmentMod, interventionMod] = await Promise.all([
-        import('../../../src/domain/use-cases/ValidateAssessmentCompleteUseCase'),
-        import('../../../src/domain/use-cases/GetActiveInterventionUseCase'),
-      ]);
-
-      const assessmentUC = new assessmentMod.ValidateAssessmentCompleteUseCase();
-      const result = await assessmentUC.execute(patientId);
-
-      if (!result.complete) {
-        setAssessmentComplete(false);
-        setMissingModules(result.missingModules);
-        return;
-      }
-
-      setAssessmentComplete(true);
-
-      const getUC = new interventionMod.GetActiveInterventionUseCase();
+      const { GetActiveInterventionUseCase } = await import('../../../src/domain/use-cases/GetActiveInterventionUseCase');
+      const getUC = new GetActiveInterventionUseCase();
       const existing = await getUC.execute(patientId);
 
       if (existing) {
@@ -209,10 +201,9 @@ export default function InterventionScreen() {
           comments: existing.comments || '',
         });
       }
+      setIsDataLoaded(true);
     } catch {
       showToast('فشل تحميل البيانات', 'error');
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -307,46 +298,111 @@ export default function InterventionScreen() {
 
   const w = watch;
 
-  if (isLoading) {
+  if (sequence.isLoading && !isDataLoaded) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <ArabicText style={styles.loadingText}>جاري التحقق من اكتمال التقييم...</ArabicText>
+        <ArabicText style={styles.loadingText}>جاري التحقق من المسار السريري...</ArabicText>
       </View>
     );
   }
 
-  if (!assessmentComplete) {
+  // Render strict Smart Progress Timeline UI if clinical sequence is incomplete
+  if (!sequence.isComplete) {
     return (
       <View style={styles.flex}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Ionicons name="clipboard-outline" size={24} color={colors.primaryContrast} />
-            <ArabicText bold style={styles.headerTitle}>خطة التدخل التغذوي</ArabicText>
+            <Ionicons name="git-network-outline" size={24} color={colors.primaryContrast} />
+            <ArabicText bold style={styles.headerTitle}>مسار التقييم السريري الصارم</ArabicText>
           </View>
         </View>
-        <View style={styles.blockingContainer}>
+        <ScrollView contentContainerStyle={styles.blockingScroll} style={styles.container}>
           <View style={styles.blockingIcon}>
-            <Ionicons name="alert-circle" size={64} color={colors.danger} />
+            <Ionicons name="git-commit-outline" size={64} color={colors.accentTeal} />
           </View>
-          <ArabicText bold style={styles.blockingTitle}>التقييم غير مكتمل</ArabicText>
+          <ArabicText bold style={styles.blockingTitle}>تسلسل خطوات التقييم الإلزامي</ArabicText>
           <ArabicText style={styles.blockingSubtitle}>
-            يجب إكمال جميع خطوات التقييم التالية قبل إنشاء خطة التدخل:
+            يجب إكمال الخطوات السريرية بالترتيب التالي لتجنب الأخطاء وبناء خطة تدخل تغذوي دقيقة:
           </ArabicText>
-          <View style={styles.missingList}>
-            {missingModules.map((mod, idx) => (
-              <View key={idx} style={styles.missingItem}>
-                <Ionicons name="close-circle" size={20} color={colors.danger} />
-                <ArabicText style={styles.missingItemText}>{mod}</ArabicText>
-              </View>
-            ))}
+
+          <View style={styles.timelineContainer}>
+            {sequence.steps.map((step, index) => {
+              const isFinished = step.status === 'complete';
+              const isCurrent = step.status === 'current';
+              const isLocked = step.status === 'locked';
+
+              return (
+                <View key={`timeline-step-${step.id}`} style={styles.timelineItemRow}>
+                  {/* Timeline Node Connector Line */}
+                  {index < sequence.steps.length - 1 && (
+                    <View 
+                      style={[
+                        styles.timelineLine,
+                        { backgroundColor: isFinished ? colors.success : colors.border }
+                      ]} 
+                    />
+                  )}
+
+                  {/* Step Card with Right-to-Left contents */}
+                  <View 
+                    style={[
+                      styles.stepTimelineCard,
+                      isCurrent && styles.stepTimelineCardCurrent,
+                      isLocked && styles.stepTimelineCardLocked
+                    ]}
+                  >
+                    <View style={styles.stepCardHeader}>
+                      <View style={[
+                        styles.nodeIndicator,
+                        isFinished && { backgroundColor: colors.success },
+                        isCurrent && { backgroundColor: colors.accentTeal },
+                        isLocked && { backgroundColor: colors.surfaceSecondary }
+                      ]}>
+                        <Ionicons 
+                          name={isFinished ? "checkmark-circle" : isCurrent ? "ellipse" : "lock-closed"} 
+                          size={18} 
+                          color={isFinished || isCurrent ? colors.primaryContrast : colors.textDisabled} 
+                        />
+                      </View>
+                      
+                      <View style={styles.stepTextContainer}>
+                        <ArabicText bold style={[
+                          styles.stepTitleText,
+                          isLocked && { color: colors.textDisabled }
+                        ]}>
+                          {step.titleAr}
+                        </ArabicText>
+                        <ArabicText style={styles.stepDescText}>
+                          {step.descriptionAr}
+                        </ArabicText>
+                      </View>
+                    </View>
+
+                    {/* Prominent Action Button for the FIRST incomplete step */}
+                    {isCurrent && sequence.nextRequiredRoute && (
+                      <TouchableOpacity 
+                        style={styles.pulsingActionBtn}
+                        onPress={() => router.push(sequence.nextRequiredRoute as string)}
+                        activeOpacity={0.8}
+                      >
+                        <ArabicText bold style={styles.pulsingActionBtnText}>ابدأ التقييم</ArabicText>
+                        <Ionicons name="arrow-back" size={16} color={colors.primaryContrast} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </View>
+
           <Button
-            title="العودة للمريض"
+            title="العودة لملف المريض"
             onPress={() => router.back()}
             variant="secondary"
+            style={styles.backButton}
           />
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -615,55 +671,111 @@ const styles = StyleSheet.create({
   halfInput: {
     flex: 1,
   },
-  actions: {
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
   spacer: {
     height: 40,
   },
-  blockingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  blockingScroll: {
+    padding: spacing.lg,
     alignItems: 'center',
-    padding: spacing.xl,
+    paddingBottom: 40,
     backgroundColor: colors.surfaceSecondary,
-    gap: spacing.md,
   },
   blockingIcon: {
     marginBottom: spacing.md,
+    marginTop: spacing.sm,
   },
   blockingTitle: {
     fontSize: 22,
-    color: colors.danger,
+    color: colors.textPrimary,
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   blockingSubtitle: {
     fontSize: 15,
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xl,
   },
-  missingList: {
+  timelineContainer: {
     width: '100%',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.xs,
   },
-  missingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  timelineItemRow: {
+    position: 'relative',
+    paddingBottom: spacing.xl,
+    width: '100%',
+  },
+  timelineLine: {
+    position: 'absolute',
+    right: 25,
+    top: 30,
+    width: 2,
+    height: '100%',
+    zIndex: 1,
+  },
+  stepTimelineCard: {
     backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
+    marginRight: 0,
+    width: '100%',
+    zIndex: 2,
   },
-  missingItemText: {
-    fontSize: 15,
-    color: colors.textPrimary,
+  stepTimelineCardCurrent: {
+    borderColor: colors.accentTeal,
+    backgroundColor: colors.surfaceElevated,
+  },
+  stepTimelineCardLocked: {
+    opacity: 0.5,
+    borderColor: colors.border,
+  },
+  stepCardHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  nodeIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.textDisabled,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepTextContainer: {
     flex: 1,
+    gap: 2,
+  },
+  stepTitleText: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    textAlign: 'right',
+  },
+  stepDescText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'right',
+  },
+  pulsingActionBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.accentTeal,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    marginTop: spacing.md,
+  },
+  pulsingActionBtnText: {
+    color: colors.primaryContrast,
+    fontSize: 14,
+  },
+  backButton: {
+    marginTop: spacing.md,
+    width: '100%',
   },
   templateBtn: {
     flexDirection: 'row',

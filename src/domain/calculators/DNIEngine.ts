@@ -132,8 +132,8 @@ export class DNIEngine {
         affectedNutrient: known?.affectedNutrient ?? DNIEngine.inferNutrient(r),
         type: known?.type ?? DNIEngine.inferType(r, severity),
         severity,
-        mechanismAr: r.mechanismDescription ?? '',
-        recommendationAr: r.dietaryActionRequired ?? '',
+        mechanismAr: r.mechanismAr ?? r.mechanismEn ?? '',
+        recommendationAr: r.dietaryActionAr ?? r.dietaryActionEn ?? '',
       };
     });
   }
@@ -151,8 +151,8 @@ export class DNIEngine {
 
   private static inferNutrient(record: DrugNutrientInteractionRecord): string {
     const txt = [
-      record.mechanismDescription ?? '',
-      record.dietaryActionRequired ?? '',
+      record.mechanismEn ?? record.mechanismAr ?? '',
+      record.dietaryActionEn ?? record.dietaryActionAr ?? '',
     ]
       .join(' ')
       .toLowerCase();
@@ -179,8 +179,8 @@ export class DNIEngine {
     severity: DNISeverity,
   ): DNIInteractionType {
     const txt = [
-      record.mechanismDescription ?? '',
-      record.dietaryActionRequired ?? '',
+      record.mechanismEn ?? record.mechanismAr ?? '',
+      record.dietaryActionEn ?? record.dietaryActionAr ?? '',
     ]
       .join(' ')
       .toLowerCase();

@@ -18,8 +18,10 @@ export interface IPatientRepository {
   search(query: PatientSearchQuery): Promise<Patient[]>;
   findAll(sortOrder?: SortOrder): Promise<Patient[]>;
   create(input: CreatePatientInput): Promise<Patient>;
-  update(patient: Patient): Promise<void>;
-  delete(id: string): Promise<void>;
+  update(patient: Patient): Promise<{ success: boolean; patient?: Patient }>;
+  delete(id: string): Promise<{ success: boolean }>;
   count(): Promise<number>;
   generateFileNumber(): Promise<string>;
+  sync(id: string): Promise<{ success: boolean; error?: string }>;
+  syncAll(): Promise<{ success: boolean; syncedCount: number; failedCount: number }>;
 }

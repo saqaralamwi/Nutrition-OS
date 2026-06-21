@@ -13,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontFamilies, fontSizes, lineHeights } from '../src/presentation/theme';
+import { colors, spacing, fontFamilies, fontSizes, lineHeights, safeHeaderPaddingTop } from '../src/presentation/theme';
 import ArabicText from '../src/presentation/components/ArabicText';
 import TextInputField from '../src/presentation/components/TextInputField';
 import DropdownField from '../src/presentation/components/DropdownField';
@@ -434,8 +434,8 @@ export default function SettingsScreen() {
               <Switch
                 value={themeMode === 'night'}
                 onValueChange={(value) => setThemeMode(value ? 'night' : 'morning')}
-                trackColor={{ false: '#E2E8F0', true: '#1B6B4A' }}
-                thumbColor={themeMode === 'night' ? '#10B981' : '#64748B'}
+                trackColor={{ false: colors.border, true: colors.success }}
+                thumbColor={themeMode === 'night' ? colors.success : colors.textDisabled}
               />
             </View>
           </Animated.View>
@@ -502,8 +502,8 @@ export default function SettingsScreen() {
                 value={biometricsEnabled}
                 onValueChange={handleBiometricToggle}
                 disabled={!isBiometricsSupported}
-                trackColor={{ false: '#334155', true: '#1B6B4A' }}
-                thumbColor={biometricsEnabled ? '#10B981' : '#94A3B8'}
+                trackColor={{ false: colors.border, true: colors.success }}
+                thumbColor={biometricsEnabled ? colors.success : colors.textSecondary}
               />
             </View>
           </Animated.View>
@@ -818,7 +818,7 @@ const cloudStyles = StyleSheet.create({
   },
   infoText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontFamily: fontFamilies.medium,
     flex: 1,
     textAlign: 'right',
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'android' ? 40 : 20,
+    paddingTop: safeHeaderPaddingTop,
     paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
     backgroundColor: 'transparent',
@@ -962,10 +962,10 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.bold,
   },
   card: {
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
     padding: spacing.lg,
     marginTop: spacing.md,
   },
@@ -992,7 +992,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1B6B4A',
+    backgroundColor: colors.success,
     borderRadius: 8,
     paddingVertical: spacing.md,
     gap: spacing.sm,
@@ -1006,7 +1006,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#334155',
+    backgroundColor: colors.border,
     marginVertical: spacing.md,
   },
   securityRowContainer: {
@@ -1021,27 +1021,27 @@ const styles = StyleSheet.create({
   },
   securityLabel: {
     fontSize: 14,
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontFamily: fontFamilies.bold,
     textAlign: 'right',
   },
   securitySubLabel: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontFamily: fontFamilies.medium,
     marginTop: 2,
     textAlign: 'right',
   },
   removePinBtn: {
-    backgroundColor: '#EF444420',
+    backgroundColor: colors.danger + '20',
     borderWidth: 1,
-    borderColor: '#EF444435',
+    borderColor: colors.danger + '35',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   removePinBtnText: {
-    color: '#EF4444',
+    color: colors.danger,
     fontSize: 13,
     fontFamily: fontFamilies.bold,
   },
@@ -1059,16 +1059,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: colors.borderLight,
     borderRadius: 6,
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
+    backgroundColor: colors.surfaceSecondary,
+    color: colors.textPrimary,
     fontSize: 16,
     textAlign: 'center',
     fontFamily: fontFamilies.bold,
   },
   activatePinBtn: {
-    backgroundColor: '#1B6B4A',
+    backgroundColor: colors.success,
     borderRadius: 6,
     paddingHorizontal: 16,
     height: 44,
@@ -1076,7 +1076,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activatePinBtnText: {
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: fontFamilies.bold,
   },
@@ -1086,14 +1086,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.md,
     borderRadius: 8,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
     marginBottom: spacing.sm,
     gap: spacing.md,
   },
   profileItemActive: {
-    borderColor: '#10B981',
+    borderColor: colors.success,
     borderWidth: 1.5,
   },
   profileItemInfo: {
@@ -1101,12 +1101,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   profileItemName: {
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: fontFamilies.bold,
   },
   profileItemDesc: {
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontSize: 12,
     fontFamily: fontFamilies.medium,
     marginTop: 2,
@@ -1115,26 +1115,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#10B98115',
+    backgroundColor: colors.success + '15',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
   activeBadgeText: {
-    color: '#10B981',
+    color: colors.success,
     fontSize: 12,
     fontFamily: fontFamilies.bold,
   },
   switchProfileBtn: {
-    backgroundColor: '#1B6B4A20',
+    backgroundColor: colors.success + '20',
     borderWidth: 1,
-    borderColor: '#1B6B4A40',
+    borderColor: colors.success + '40',
     borderRadius: 6,
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
   switchProfileBtnText: {
-    color: '#1B6B4A',
+    color: colors.success,
     fontSize: 13,
     fontFamily: fontFamilies.bold,
   },
@@ -1143,7 +1143,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#1B6B4A',
+    borderColor: colors.success,
     borderStyle: 'dashed',
     borderRadius: 8,
     paddingVertical: 10,
@@ -1151,22 +1151,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   addProfileBtnText: {
-    color: '#1B6B4A',
+    color: colors.success,
     fontSize: 14,
     fontFamily: fontFamilies.bold,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.md,
   },
   modalContent: {
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: colors.borderLight,
     width: '100%',
     maxWidth: 360,
     maxHeight: '90%',
@@ -1178,10 +1178,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 16,
     fontFamily: fontFamilies.bold,
   },
@@ -1193,7 +1193,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1B6B4A',
+    backgroundColor: colors.success,
     borderRadius: 8,
     paddingVertical: spacing.md,
     gap: spacing.sm,
@@ -1201,7 +1201,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   saveNewProfileBtnText: {
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 15,
     fontFamily: fontFamilies.bold,
   },
@@ -1209,7 +1209,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1B6B4A',
+    backgroundColor: colors.success,
     borderRadius: 8,
     paddingVertical: spacing.md,
     gap: spacing.sm,
@@ -1217,7 +1217,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   backupBtnText: {
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 15,
     fontFamily: fontFamilies.bold,
   },
@@ -1225,7 +1225,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceCard,
     borderWidth: 1.5,
     borderColor: colors.danger,
     borderRadius: 8,
@@ -1241,7 +1241,7 @@ const styles = StyleSheet.create({
   },
   restoreWarningText: {
     fontSize: 14,
-    color: '#F8FAFCCC',
+    color: colors.textPrimary + 'CC',
     fontFamily: fontFamilies.medium,
     lineHeight: fontSizes.sm * lineHeights.relaxed,
     textAlign: 'right',
@@ -1251,19 +1251,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: colors.border,
   },
   restoreCancelBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#334155',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 8,
     paddingVertical: spacing.md,
     minHeight: 48,
   },
   restoreCancelBtnText: {
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: fontFamilies.bold,
   },
@@ -1279,7 +1279,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   restoreConfirmBtnText: {
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: fontFamilies.bold,
   },

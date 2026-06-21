@@ -11,7 +11,7 @@ interface AiPlanCardProps {
   onClose?: () => void;
 }
 
-export default function AiPlanCard({ plan, loading, error, latencyMs, onClose }: AiPlanCardProps) {
+export default function AiPlanCard({ plan: rawPlan, loading, error, latencyMs, onClose }: AiPlanCardProps) {
   if (loading) {
     return (
       <View style={styles.container}>
@@ -34,7 +34,8 @@ export default function AiPlanCard({ plan, loading, error, latencyMs, onClose }:
     );
   }
 
-  if (!plan) return null;
+  if (!rawPlan) return null;
+  const plan = rawPlan as any;
 
   return (
     <View style={styles.container}>
@@ -89,7 +90,7 @@ export default function AiPlanCard({ plan, loading, error, latencyMs, onClose }:
       {plan.recommendations.length > 0 && (
         <View style={styles.listBlock}>
           <Text style={[styles.sectionLabel, { color: colors.success }]}>توصيات:</Text>
-          {plan.recommendations.map((r, i) => (
+          {plan.recommendations.map((r: any, i: number) => (
             <Text key={i} style={styles.listItem}>✓ {r}</Text>
           ))}
         </View>
@@ -98,7 +99,7 @@ export default function AiPlanCard({ plan, loading, error, latencyMs, onClose }:
       {plan.restrictions.length > 0 && (
         <View style={styles.listBlock}>
           <Text style={[styles.sectionLabel, { color: colors.danger }]}>محظورات:</Text>
-          {plan.restrictions.map((r, i) => (
+          {plan.restrictions.map((r: any, i: number) => (
             <Text key={i} style={[styles.listItem, { color: colors.danger }]}>✗ {r}</Text>
           ))}
         </View>

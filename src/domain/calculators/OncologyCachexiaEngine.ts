@@ -28,7 +28,7 @@ export class OncologyCachexiaEngine {
       isRefractoryOncologyStatus,
     } = input;
 
-    if (weightKg <= 0 || bmi <= 0 || unintentionalWeightLossPercent < 0) {
+    if (isNaN(weightKg) || isNaN(bmi) || isNaN(unintentionalWeightLossPercent) || weightKg <= 0 || bmi <= 0 || unintentionalWeightLossPercent < 0) {
       return {
         cachexiaStage: 'stable',
         recommendedCaloriesDaily: 0,

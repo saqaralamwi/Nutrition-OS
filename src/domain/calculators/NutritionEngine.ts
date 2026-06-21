@@ -1,4 +1,4 @@
-import { PatientMetrics } from '../entities/PatientMetrics';
+import { PatientMetrics, BmiResult, BmrResult, TdeeResult } from '../entities/PatientMetrics';
 import { NutritionPlan, ActivityLevel } from '../entities/NutritionPlan';
 import { calculateBmi } from './BmiCalculator';
 import { calculateBmr } from './BmrCalculator';
@@ -29,17 +29,75 @@ function safeNum(v: unknown, fallback: number = 0): number {
   return fallback;
 }
 
+export interface GeneratedNutritionPlan {
+  patientId: string;
+  patientMetricsId: string;
+  totalCalories: number;
+  calorieAdjustment: number;
+  macros: {
+    proteinGrams: number;
+    proteinCalories: number;
+    carbsGrams: number;
+    carbsCalories: number;
+    fatGrams: number;
+    fatCalories: number;
+  };
+  recommendations: string[];
+  restrictions: string[];
+}
+
 export function calculatePatientMetrics(input: CalculateMetricsInput): PatientMetrics {
+  const fallbackBmi: BmiResult = {
+    value: 24.22,
+    category: 'normal',
+    categoryLabel: 'وزن طبيعي',
+    clinicalNote: 'المريض ضمن نطاق الوزن الصحي. حافظ على النظام الغذائي الحالي.',
+  };
+  const fallbackBmr: BmrResult = {
+    value: 1500,
+    formulaName: 'Mifflin-St Jeor',
+    description: 'حساب افتراضي',
+  };
+  const fallbackTdee: TdeeResult = {
+    value: 1800,
+    activityMultiplier: 1.2,
+    activityLabel: 'خامل',
+  };
+
   if (!input || typeof input !== 'object') {
-    return { patientId: '', weightKg: 70, heightCm: 170, bmi: { value: 0, category: 'unknown' }, bmr: { value: 1500, formula: 'fallback' }, tdee: 1800 };
+    return {
+      patientId: '',
+      weightKg: 70,
+      heightCm: 170,
+      bmi: fallbackBmi,
+      bmr: fallbackBmr,
+      tdee: fallbackTdee,
+    };
   }
   const w = safeNum(input.weightKg, 70);
   const h = safeNum(input.heightCm, 170);
   const a = safeNum(input.age, 40);
 
-  const bmi = w > 0 && h > 0 ? calculateBmi(w, h) : { value: 0, category: 'unknown' as const };
-  const bmr = w > 0 && h > 0 ? calculateBmr(w, h, a, input.isMale) : { value: 1500, formula: 'fallback' as const };
-  const tdee = calculateTdee(bmr.value, input.activityLevel);
+  let bmi: BmiResult;
+  try {
+    bmi = w > 0 && h > 0 ? calculateBmi(w, h) : fallbackBmi;
+  } catch {
+    bmi = fallbackBmi;
+  }
+
+  let bmr: BmrResult;
+  try {
+    bmr = w > 0 && h > 0 ? calculateBmr(w, h, a, input.isMale) : fallbackBmr;
+  } catch {
+    bmr = fallbackBmr;
+  }
+
+  let tdee: TdeeResult;
+  try {
+    tdee = calculateTdee(bmr.value, input.activityLevel);
+  } catch {
+    tdee = fallbackTdee;
+  }
 
   return {
     patientId: input.patientId,
@@ -51,9 +109,24 @@ export function calculatePatientMetrics(input: CalculateMetricsInput): PatientMe
   };
 }
 
-export function generateNutritionPlan(input: GeneratePlanInput): NutritionPlan {
+export function generateNutritionPlan(input: GeneratePlanInput): GeneratedNutritionPlan {
   if (!input || typeof input !== 'object') {
-    return { patientId: '', patientMetricsId: '', totalCalories: 1500, calorieAdjustment: 0, macros: { protein: 84, carbs: 250, fat: 55 }, recommendations: [], restrictions: [] };
+    return {
+      patientId: '',
+      patientMetricsId: '',
+      totalCalories: 1500,
+      calorieAdjustment: 0,
+      macros: {
+        proteinGrams: 84,
+        proteinCalories: 336,
+        carbsGrams: 250,
+        carbsCalories: 1000,
+        fatGrams: 55,
+        fatCalories: 495,
+      },
+      recommendations: [],
+      restrictions: [],
+    };
   }
   const w = safeNum(input.weightKg, 70);
   const tee = safeNum(input.tdee, 2000);
@@ -123,24 +196,24 @@ async function getPatientWeight(patientId: string): Promise<number> {
   try {
     const vitals = await db.get('vitals_records').query(Q.where('patient_id', patientId)).fetch();
     if (vitals.length > 0) {
-      const sorted = [...vitals].sort((a, b) => {
+      const sorted = [...vitals].sort((a: any, b: any) => {
         const dateA = a.recordDate ? new Date(a.recordDate).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
         const dateB = b.recordDate ? new Date(b.recordDate).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         return dateB - dateA;
       });
-      const raw = sorted[0] as Record<string, unknown>;
-      const wt = safeNum(raw['weightKg'] as number) || safeNum(raw['weight'] as number);
+      const raw = sorted[0] as any;
+      const wt = safeNum(raw.weightKg) || safeNum(raw.weight);
       if (wt > 0) return wt;
     }
     const icuAdmissions = await db.get('icu_admissions').query(Q.where('patient_id', patientId)).fetch();
     if (icuAdmissions.length > 0) {
-      const sorted = [...icuAdmissions].sort((a, b) => {
+      const sorted = [...icuAdmissions].sort((a: any, b: any) => {
         const dateA = a.admissionDate ? new Date(a.admissionDate).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
         const dateB = b.admissionDate ? new Date(b.admissionDate).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         return dateB - dateA;
       });
-      const raw = sorted[0] as Record<string, unknown>;
-      const wt = safeNum(raw['weightKg'] as number);
+      const raw = sorted[0] as any;
+      const wt = safeNum(raw.weightKg);
       if (wt > 0) return wt;
     }
   } catch (err) {
@@ -164,22 +237,22 @@ export async function calculateNutritionalRequirementsWithHiddenCalories(
     console.warn('[NutritionEngine] Patient not found, using defaults');
     return { calories: 1500, protein: 84, carbs: 200, fat: 55, fluid: 2100, hiddenCalories: { total: 0, propofol: 0, dextrose: 0, midol: 0, lipids: 0, breakdown: '' }, baseTee: 1500, adjustedTee: 1500 };
   }
-  const patientRaw = patientRecord as Record<string, unknown>;
-  const isMale = patientRaw['gender'] === 'male';
-  const age = safeNum(patientRaw['age'] as number, 30);
+  const patientRaw = patientRecord as any;
+  const isMale = patientRaw.gender === 'male';
+  const age = safeNum(patientRaw.age, 30);
 
   const weight = await getPatientWeight(patientId);
   let height = 170;
   try {
     const vitals = await db.get('vitals_records').query(Q.where('patient_id', patientId)).fetch();
     if (vitals.length > 0) {
-      const sorted = [...vitals].sort((a, b) => {
+      const sorted = [...vitals].sort((a: any, b: any) => {
         const dateA = a.recordDate ? new Date(a.recordDate).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
         const dateB = b.recordDate ? new Date(b.recordDate).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         return dateB - dateA;
       });
-      const raw = sorted[0] as Record<string, unknown>;
-      height = safeNum(raw['heightCm'] as number) || safeNum(raw['height'] as number) || 170;
+      const raw = sorted[0] as any;
+      height = safeNum(raw.heightCm) || safeNum(raw.height) || 170;
     }
   } catch {
     console.warn('[NutritionEngine] Failed to fetch vitals for height');

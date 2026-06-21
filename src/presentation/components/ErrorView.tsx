@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../theme';
+import { colors, spacing, fontFamilies } from '../theme';
 
 interface ErrorViewProps {
   message: string;
@@ -36,6 +36,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.lg,
     lineHeight: 24,
+    fontFamily: fontFamilies.regular,
   },
   retryButton: {
     flexDirection: 'row',
@@ -45,6 +46,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 4,
     borderRadius: 8,
     gap: spacing.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   retryText: {
     fontSize: 15,
